@@ -14,7 +14,7 @@ export type {
 
 export type { ActiveEffect } from './effect';
 
-export type { ActionDefinition } from './action';
+export type { ActionDefinition, RequirementCheck } from './action';
 
 export type { EngineContext } from './context';
 export { withTags } from './context';
@@ -24,9 +24,29 @@ export { EngineRegistry } from './registry';
 
 export {
   requirementsMet,
+  codeRequirementsMet,
   costsPayable,
   anyResultPossible,
   isActionAvailable,
   executeAction,
   executeActionSafe,
 } from './evaluate';
+
+export type { EngineState, EngineStateJSON } from './state';
+export {
+  createEngineState,
+  engineStateToJSON,
+  engineStateFromJSON,
+  toEngineContext,
+  withEngineTags,
+  withEngineTick,
+} from './state';
+
+export type { EngineCommand } from './command';
+
+export type { ReduceEngineOptions } from './reduce';
+export {
+  reduceEngineState,
+  reduceEngineCommands,
+  foldEngineCommands,
+} from './reduce';

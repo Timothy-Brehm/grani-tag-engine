@@ -1,4 +1,4 @@
-import type { ActionDefinition } from './action';
+import type { ActionDefinition, RequirementCheck } from './action';
 import type { ActiveEffect } from './effect';
 import type { EngineContext } from './context';
 import type { EngineRegistry } from './registry';
@@ -11,6 +11,14 @@ export function requirementsMet<THost>(
   context: EngineContext<THost>,
 ): boolean {
   return requirements.every((req) => registry.isRequirementMet(req, context));
+}
+
+/** Evaluate host-code predicates attached to a TypeScript-defined action. */
+export function codeRequirementsMet<THost>(
+  checks: readonly RequirementCheck<THost>[] | undefined,
+  context: EngineContext<THost>,
+): boolean {
+  return checks?.every((check) => check(context)) ?? true;
 }
 
 /** True when every cost canHappen (original CostsCanPay). */
@@ -37,11 +45,12 @@ export function anyResultPossible<THost>(
  */
 export function isActionAvailable<THost>(
   registry: EngineRegistry<THost>,
-  action: ActionDefinition,
+  action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): boolean {
   return (
     requirementsMet(registry, action.requirements, context) &&
+    codeRequirementsMet(action.codeRequirements, context) &&
     costsPayable(registry, action.costs, context) &&
     anyResultPossible(registry, action.results, context)
   );

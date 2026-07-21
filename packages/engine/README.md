@@ -12,18 +12,24 @@ npm install grani-tag-engine
 
 ```ts
 import {
-  TagCollection,
+  createEngineState,
   createTag,
   EngineRegistry,
+  reduceEngineState,
   isActionAvailable,
-  executeAction,
+  toEngineContext,
 } from 'grani-tag-engine';
 
-const tags = TagCollection.create([
-  createTag({ name: 'ready', effects: [] }),
-]);
 const registry = new EngineRegistry().createBuiltinAdaptors();
-const ctx = { tags, host: {} };
+let state = createEngineState({
+  tags: [createTag({ name: 'ready', effects: [] })],
+});
+
+state = reduceEngineState(
+  state,
+  { type: 'tick' },
+  { registry, host: {} },
+);
 
 const action = {
   name: 'unlock',
@@ -33,9 +39,42 @@ const action = {
   sideEffects: [],
 };
 
-if (isActionAvailable(registry, action, ctx)) {
-  const next = executeAction(registry, action, ctx);
+if (isActionAvailable(registry, action, toEngineContext(state, {}))) {
+  state = reduceEngineState(
+    state,
+    { type: 'execute-action', action },
+    { registry, host: {} },
+  );
 }
 ```
+
+React runners: install `@grani/react` for `EngineProvider` / `useGameLoop`, or call `reduceEngineState` from your own store.
+
+## Custom requirements
+
+Serializable host requirements are registered by type:
+
+```ts
+type LevelRequirement = { type: 'my-game/level'; minimum: number };
+
+registry.registerRequirement(
+  'my-game/level',
+  (requirement: LevelRequirement, context) =>
+    context.host.level >= requirement.minimum,
+);
+```
+
+Actions defined in TypeScript can also provide runtime-only predicates:
+
+```ts
+const action = {
+  // requirements/costs/results...
+  codeRequirements: [
+    (context) => context.host.specialScenarioIsActive,
+  ],
+};
+```
+
+Functions are not serializable; use registered requirement types for JSON content.
 
 Built with tsup (ESM + `.d.ts`). Tests via Vitest.

@@ -2,44 +2,44 @@
 
 Monorepo for the framework-neutral **grani-tag-engine** library and related tools.
 
-License: GPL-3.0-or-later (inferred from Astrevno-GameFileEditor).
-
 ## Status
 
-**First-stage extraction — not complete.** The engine API and workspace layout are scaffolded; Astrevno content schemas are intentionally not in this repo yet. Expect API polish as consumers integrate.
+**Extraction in progress.** Core API, `EngineState` + command reduce, and optional `@grani/react` bindings exist. Astrevno nests engine state and dispatches tag/tick commands; game-specific effects and `Update` closures are still migrating.
 
 ## Workspace layout
 
 | Path | Package | Role |
 |------|---------|------|
-| `packages/engine` | `grani-tag-engine` | Publishable tag / requirement / effect / action engine |
+| `packages/engine` | `grani-tag-engine` | Publishable tag / requirement / effect / action engine + state reduce |
+| `packages/react` | `@grani/react` | Optional React provider, hooks, game loop |
 | `packages/schema-tools` | `@grani/schema-tools` | AJV helpers, schema MVP generation, validation messages |
 | `apps/schema-editor` | `@grani/schema-editor` | JSON Schema–driven file editor (Vite + React + MUI) |
 
-**Planned (not scaffolded):** `packages/content-schema` — Astrevno-specific schemas stay out of this extraction for now; they will live in a dedicated package later, not under this tree today.
+**Planned (not scaffolded):** `packages/content-schema` — domain schemas later; Astrevno-specific definitions stay out of the engine package.
 
 ## Engine API overview
 
 - **Tags** — named entities with optional description/label and passive `TagEffect` list
 - **TagCollection** — immutable set of tags (idempotent add-by-name, remove, filter, `sumEffectStrength`)
-- **Requirements** — serializable discriminated unions (`free`, `forbidden`, `tag`, plus open `type` extensions)
-- **Effects** — passive on tags; active effects on actions (costs / results / sideEffects)
-- **Actions** — definition with requirements, costs, results, sideEffects
-- **Registry** — adaptor pattern for custom requirement/effect types; builtins via `createBuiltinAdaptors()`
-- **Evaluate** — `isActionAvailable`, `executeAction` / `executeActionSafe` over immutable `EngineContext`
+- **EngineState** — `{ tags, tick }` with JSON serialize helpers
+- **EngineCommand** — plain commands (`add-tag`, `tick`, `execute-action`, …)
+- **reduceEngineState** — pure transitions given a registry + host
+- **Requirements / Effects / Actions** — serializable definitions + registry adaptors
+- **`@grani/react`** — `EngineProvider`, `useEngineDispatch`, `useGameLoop`, …
 
-## Astrevno usage (planned)
+## Astrevno usage
 
-1. Depend on published `grani-tag-engine` like any npm package.
-2. For local development against this workspace:
+1. Depend on published `grani-tag-engine` (optional until first publish; sibling bootstrap via `preinstall`).
+2. Nest `engine: EngineState` in game state; dispatch commands instead of mutating tag managers in place.
+3. For local development against this workspace:
 
 ```bash
 cd packages/engine && npm run build
 cd /path/to/astrevno
-npm link ../grani-tag-engine/packages/engine --no-save
+npm run link:engine
 ```
 
-Do not copy Astrevno game schemas into this repo.
+Or from this repo: `npm run link:astrevno`.
 
 ## Commands
 

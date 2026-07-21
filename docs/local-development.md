@@ -44,6 +44,12 @@ Or: `npm run dev -w @grani/schema-editor`.
 
 Preview production build: `npm run preview -w @grani/schema-editor` after `npm run build -w @grani/schema-editor`.
 
+## React adapter (`@grani/react`)
+
+Built with the workspace (`npm run build -w @grani/react`). Peer dependency: React 18+.
+
+Host apps that already own a store can call `reduceEngineState` directly (Astrevno does this). Use `EngineProvider` when the engine slice is the React store.
+
 ## Linking into Astrevno
 
 From this repo:
@@ -59,3 +65,4 @@ npm run link:engine
 ```
 
 Both use `npm link --no-save`, so `package.json` keeps the published dependency while `node_modules` points at the local build. Unlink with `npm run unlink:astrevno` or Astrevno's `npm run unlink:engine`, then `npm install` in Astrevno.
+

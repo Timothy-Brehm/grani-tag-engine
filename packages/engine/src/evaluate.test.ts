@@ -7,6 +7,7 @@ import {
   executeAction,
   executeActionSafe,
   isActionAvailable,
+  codeRequirementsMet,
   requirementsMet,
 } from './evaluate';
 
@@ -85,5 +86,38 @@ describe('registry builtins and actions', () => {
     });
     expect(next.tags.get('fancy')?.description).toBe('from catalog');
     expect(next.tags.sumEffectStrength('glow')).toBe(4);
+  });
+
+  it('supports registered host requirements and code-only checks', () => {
+    type Host = { level: number; enabled: boolean };
+    type LevelRequirement = {
+      type: 'example/level';
+      minimum: number;
+    };
+    const hostRegistry = new EngineRegistry<Host>()
+      .createBuiltinAdaptors()
+      .registerRequirement(
+        'example/level',
+        (requirement: LevelRequirement, context) =>
+          context.host.level >= requirement.minimum,
+      );
+    const context = {
+      tags: TagCollection.create(),
+      host: { level: 4, enabled: true },
+    };
+
+    expect(
+      requirementsMet(
+        hostRegistry,
+        [{ type: 'example/level', minimum: 3 }],
+        context,
+      ),
+    ).toBe(true);
+    expect(
+      codeRequirementsMet(
+        [(ctx) => ctx.host.enabled, (ctx) => ctx.host.level < 5],
+        context,
+      ),
+    ).toBe(true);
   });
 });
