@@ -1,0 +1,37 @@
+{
+  "name": "@grani/schema-tools",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AJV and JSON Schema helpers for Grani tooling",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.2.2",
+    "vitest": "^1.2.0"
+  },
+  "sideEffects": false
+}

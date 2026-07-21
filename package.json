@@ -1,0 +1,24 @@
+{
+  "name": "grani-tag-engine-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Workspace for the grani-tag-engine library and related tools",
+  "license": "GPL-3.0-or-later",
+  "packageManager": "npm@10.4.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w grani-tag-engine && npm run build -w @grani/schema-tools && npm run build -w @grani/schema-editor",
+    "test": "npm run test -w grani-tag-engine && npm run test -w @grani/schema-tools",
+    "lint": "npm run lint -w grani-tag-engine && npm run lint -w @grani/schema-tools && npm run lint -w @grani/schema-editor",
+    "dev:schema-editor": "npm run dev -w @grani/schema-editor",
+    "link:local": "node scripts/link-local.mjs",
+    "link:astrevno": "node scripts/link-local.mjs --consumer ../astrevno",
+    "unlink:astrevno": "node scripts/unlink-local.mjs --consumer ../astrevno"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
+}
