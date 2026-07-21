@@ -46,10 +46,16 @@ Preview production build: `npm run preview -w @grani/schema-editor` after `npm r
 
 ## Linking into Astrevno
 
+From this repo:
+
 ```bash
-npm run build -w grani-tag-engine
-# from the Astrevno project:
-npm link /absolute/path/to/grani-tag-engine/packages/engine --no-save
+npm run link:astrevno
 ```
 
-Prefer `--no-save` so the Astrevno lockfile keeps the published dependency name while you override locally.
+From Astrevno:
+
+```bash
+npm run link:engine
+```
+
+Both use `npm link --no-save`, so `package.json` keeps the published dependency while `node_modules` points at the local build. Unlink with `npm run unlink:astrevno` or Astrevno's `npm run unlink:engine`, then `npm install` in Astrevno.
