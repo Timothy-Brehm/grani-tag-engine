@@ -9,6 +9,7 @@ import {
   engineStateToJSON,
 } from './state';
 import { createTag } from './tag';
+import { ProcessesNotImplementedError } from './process';
 
 describe('EngineState and reduceEngineState', () => {
   const registry = new EngineRegistry().createBuiltinAdaptors();
@@ -62,5 +63,19 @@ describe('EngineState and reduceEngineState', () => {
     );
     expect(next.tags.has('old')).toBe(false);
     expect(next.tags.has('new')).toBe(true);
+  });
+
+  it('fails explicitly for reserved process commands', () => {
+    expect(() =>
+      reduceEngineState(
+        createEngineState(),
+        {
+          type: 'set-process-allocation',
+          processId: 'factory/metal',
+          allocation: 1,
+        },
+        options,
+      ),
+    ).toThrow(ProcessesNotImplementedError);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from './state';
 import { executeAction, executeActionSafe } from './evaluate';
 import { TagCollection } from './tag-collection';
+import { clearProcessPool, setProcessAllocation } from './process';
 
 export type ReduceEngineOptions<THost = unknown> = {
   readonly registry: EngineRegistry<THost>;
@@ -20,7 +21,7 @@ export type ReduceEngineOptions<THost = unknown> = {
  */
 export function reduceEngineState<THost = unknown>(
   state: EngineState,
-  command: EngineCommand,
+  command: EngineCommand<THost>,
   options: ReduceEngineOptions<THost>,
 ): EngineState {
   switch (command.type) {
@@ -42,6 +43,13 @@ export function reduceEngineState<THost = unknown>(
           : executeAction(options.registry, command.action, ctx);
       return withEngineTags(state, nextCtx.tags);
     }
+    case 'set-process-allocation':
+      return setProcessAllocation({
+        processId: command.processId,
+        allocation: command.allocation,
+      });
+    case 'clear-process-pool':
+      return clearProcessPool(command.poolId);
     default: {
       const _exhaustive: never = command;
       return _exhaustive;
@@ -51,7 +59,7 @@ export function reduceEngineState<THost = unknown>(
 
 export function reduceEngineCommands<THost = unknown>(
   state: EngineState,
-  commands: readonly EngineCommand[],
+  commands: readonly EngineCommand<THost>[],
   options: ReduceEngineOptions<THost>,
 ): EngineState {
   return commands.reduce(
@@ -62,7 +70,7 @@ export function reduceEngineCommands<THost = unknown>(
 
 /** Convenience: empty engine + reduce a command list. */
 export function foldEngineCommands<THost = unknown>(
-  commands: readonly EngineCommand[],
+  commands: readonly EngineCommand<THost>[],
   options: ReduceEngineOptions<THost>,
   initial: EngineState = createEngineState(),
 ): EngineState {

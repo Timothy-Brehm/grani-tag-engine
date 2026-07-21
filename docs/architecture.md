@@ -40,6 +40,21 @@ AstrevnoState { engine: EngineState; character; cards; ... }
 - `codeRequirements` are runtime-only and must not be written to JSON. Prefer a
   registered type whenever authored content needs the check.
 
+## Actions and future processes
+
+- An **action** is one atomic execution. The engine does not assume it came
+  from a button and does not throttle manual actions to one per tick.
+- A future **process** is a persistent allocation that attempts an action once
+  per tick.
+- Process pools unify the planned toggle cases:
+  - `primary`: fixed capacity, defaulting to one active process.
+  - `typed`: host-derived capacity, such as `factoryCount`.
+- Allocation is numeric so multiple factories can eventually run the same
+  output process.
+- `ProcessDefinition`, `ProcessPoolDefinition`, and selection types are
+  reserved now. `set-process-allocation` and `clear-process-pool` explicitly
+  throw `ProcessesNotImplementedError` until scheduling semantics are built.
+
 ## Engine design notes
 
 - Small stable interfaces; discriminated unions for serializable requirements.
@@ -50,8 +65,28 @@ AstrevnoState { engine: EngineState; character; cards; ... }
 
 ## Extraction status
 
-- Done: core tags/actions API, EngineState + reduce, `@grani/react`, Astrevno nests `engine` and dispatches tag add / tick.
-- Remaining: move more effect/requirement adaptors into registries, retire Astrevno `Update` closures, action execution via engine commands, shared calculated selectors.
+- Done: core tags/actions API, EngineState + reduce, `@grani/react`, Astrevno nests `engine`, uses a pure host reducer, registers serializable effects, and routes action ordering through `execute-action`.
+- Remaining: implement processes and move reusable calculated selectors into the engine when another game needs them.
+
+## TODO (deferred): batching entities
+
+This is intentionally outside the current extraction scope.
+
+- Evaluate replacing the Astrevno-specific `Character` concept with a generic
+  batching entity that can own stats, pools, tags, and available actions.
+- Treat Character/Player, Landing Ship, and Emergency Supply Crate as entity
+  definitions or instances sharing state mechanics.
+- Keep their very different rendering in an Astrevno presentation registry;
+  the engine must not know React components or view layouts.
+- Distinguish the entity that owns an action (`sourceEntityId`) from entities
+  affected by its effects (`targetEntityId`).
+- Prefer composition/capabilities over an entity inheritance hierarchy.
+- Regain readable mutation calls with semantic command factories or a
+  dispatch-backed UI façade, for example
+  `dispatch(entityCommands.adjustPool(entityId, pool, delta))`. Do not put
+  updater functions back into serializable state.
+- Revisit this only after a second concrete entity/game demonstrates which
+  fields and behaviors are truly engine-generic.
 
 ## Non-goals
 

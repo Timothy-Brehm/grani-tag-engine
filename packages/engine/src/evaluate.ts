@@ -66,7 +66,7 @@ export function isActionAvailable<THost>(
  */
 export function executeAction<THost>(
   registry: EngineRegistry<THost>,
-  action: ActionDefinition,
+  action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): EngineContext<THost> {
   let next = context;
@@ -88,7 +88,7 @@ export function executeAction<THost>(
  */
 export function executeActionSafe<THost>(
   registry: EngineRegistry<THost>,
-  action: ActionDefinition,
+  action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): EngineContext<THost> {
   let next = context;

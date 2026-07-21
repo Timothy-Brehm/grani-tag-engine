@@ -77,4 +77,11 @@ const action = {
 
 Functions are not serializable; use registered requirement types for JSON content.
 
+## Reserved process API
+
+Recurring toggles will be modeled as processes that allocate capacity from a
+`primary` or host-derived `typed` pool and attempt an ordinary action per tick.
+The definitions and commands are exported now, but process commands throw
+`ProcessesNotImplementedError` until scheduling is implemented.
+
 Built with tsup (ESM + `.d.ts`). Tests via Vitest.

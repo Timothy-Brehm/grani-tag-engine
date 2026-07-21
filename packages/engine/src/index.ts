@@ -44,6 +44,19 @@ export {
 
 export type { EngineCommand } from './command';
 
+export type {
+  ProcessPoolKind,
+  ProcessCapacity,
+  ProcessPoolDefinition,
+  ProcessDefinition,
+  ProcessSelection,
+} from './process';
+export {
+  ProcessesNotImplementedError,
+  setProcessAllocation,
+  clearProcessPool,
+} from './process';
+
 export type { ReduceEngineOptions } from './reduce';
 export {
   reduceEngineState,
