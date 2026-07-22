@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://grani.dev/schemas/entity-catalog.json",
+  "title": "EntityCatalog",
+  "description": "Catalog of engine entity definitions, actions, requirements, and effects",
+  "type": "object",
+  "required": ["entities"],
+  "additionalProperties": false,
+  "properties": {
+    "entities": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/EntityDefinition" }
+    }
+  },
+  "definitions": {
+    "EntityScope": {
+      "type": "string",
+      "enum": ["actor", "source", "target"]
+    },
+    "TagEffect": {
+      "type": "object",
+      "required": ["type", "name", "strength"],
+      "properties": {
+        "type": { "type": "string" },
+        "name": { "type": "string" },
+        "strength": { "type": "number" },
+        "stat": { "type": "string" },
+        "pool": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "Tag": {
+      "type": "object",
+      "required": ["name", "effects"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "label": { "type": "string" },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/TagEffect" }
+        }
+      }
+    },
+    "Requirement": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        {
+          "properties": { "type": { "const": "free" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "properties": { "type": { "const": "forbidden" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "tag" },
+            "tagName": { "type": "string" },
+            "exists": { "type": "boolean" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "tagName", "exists"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "stat" },
+            "stat": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "stat", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "pool-max" },
+            "pool": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "pool", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "entity-count" },
+            "definitionId": { "type": "string" },
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          },
+          "required": ["type", "definitionId"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ActiveEffect": {
+      "type": "object",
+      "required": ["type", "name", "strength"],
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "adjust-pool" },
+            "name": { "type": "string" },
+            "strength": { "type": "number" },
+            "pool": { "type": "string" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "name", "strength", "pool"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "grant-tag" },
+            "name": { "type": "string" },
+            "strength": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "name", "strength"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "spawn-entity" },
+            "name": { "type": "string" },
+            "strength": { "type": "number" },
+            "definitionId": { "type": "string" },
+            "entityId": { "type": "string" }
+          },
+          "required": ["type", "name", "strength", "definitionId"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ActionDefinition": {
+      "type": "object",
+      "required": ["name", "requirements", "costs", "results", "sideEffects"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "label": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "requirements": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Requirement" }
+        },
+        "costs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        },
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        },
+        "sideEffects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        }
+      }
+    },
+    "EntityDefinition": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "description": { "type": "string" },
+        "initialTags": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Tag" }
+        },
+        "initialPools": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActionDefinition" }
+        },
+        "maxActive": { "type": "integer", "minimum": 0 },
+        "maxCreated": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

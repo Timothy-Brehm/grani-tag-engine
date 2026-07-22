@@ -2,6 +2,11 @@ export interface TagEffect {
   readonly type: string;
   readonly name: string;
   readonly strength: number;
+  /** Optional payload for `stat` effects. */
+  readonly stat?: string;
+  /** Optional payload for `pool-max` / regen effects. */
+  readonly pool?: string;
+  readonly [key: string]: unknown;
 }
 
 export interface Tag<TEffect extends TagEffect = TagEffect> {

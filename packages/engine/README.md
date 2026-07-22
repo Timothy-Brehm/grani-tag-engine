@@ -1,6 +1,6 @@
 # grani-tag-engine
 
-Framework-neutral tag, requirement, effect, and action evaluation library.
+Framework-neutral tag, entity, requirement, effect, and action evaluation library.
 
 ## Install
 
@@ -13,17 +13,23 @@ npm install grani-tag-engine
 ```ts
 import {
   createEngineState,
+  createTaggedEntity,
   createTag,
   EngineRegistry,
   reduceEngineState,
   isActionAvailable,
   toEngineContext,
+  upsertEntity,
 } from 'grani-tag-engine';
 
 const registry = new EngineRegistry().createBuiltinAdaptors();
-let state = createEngineState({
-  tags: [createTag({ name: 'ready', effects: [] })],
-});
+let state = upsertEntity(
+  createEngineState(),
+  createTaggedEntity({
+    id: 'player',
+    tags: [createTag({ name: 'ready', effects: [] })],
+  }),
+);
 
 state = reduceEngineState(
   state,
@@ -39,14 +45,22 @@ const action = {
   sideEffects: [],
 };
 
-if (isActionAvailable(registry, action, toEngineContext(state, {}))) {
+if (
+  isActionAvailable(
+    registry,
+    action,
+    toEngineContext(state, {}, { actorEntityId: 'player' }),
+  )
+) {
   state = reduceEngineState(
     state,
-    { type: 'execute-action', action },
+    { type: 'execute-action', action, actorEntityId: 'player' },
     { registry, host: {} },
   );
 }
 ```
+
+Entity definitions, `adjust-pool`, and `spawn-entity` are builtins. Register definitions with `registry.registerEntityDefinition(...)`.
 
 React runners: install `@grani/react` for `EngineProvider` / `useGameLoop`, or call `reduceEngineState` from your own store.
 
@@ -64,18 +78,7 @@ registry.registerRequirement(
 );
 ```
 
-Actions defined in TypeScript can also provide runtime-only predicates:
-
-```ts
-const action = {
-  // requirements/costs/results...
-  codeRequirements: [
-    (context) => context.host.specialScenarioIsActive,
-  ],
-};
-```
-
-Functions are not serializable; use registered requirement types for JSON content.
+Actions defined in TypeScript can also provide runtime-only predicates via `codeRequirements` (not serializable).
 
 ## Reserved process API
 

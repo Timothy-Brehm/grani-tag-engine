@@ -8,18 +8,49 @@ export type {
   FreeRequirement,
   ForbiddenRequirement,
   TagRequirement,
+  StatRequirement,
+  PoolMaxRequirement,
+  EntityCountRequirement,
   BuiltinRequirement,
   Requirement,
 } from './requirement';
 
-export type { ActiveEffect } from './effect';
+export type {
+  ActiveEffect,
+  AdjustPoolEffect,
+  GrantTagEffect,
+  SpawnEntityEffect,
+} from './effect';
 
 export type { ActionDefinition, RequirementCheck } from './action';
 
-export type { EngineContext } from './context';
-export { withTags } from './context';
+export type {
+  EntityScope,
+  EntityPoolMap,
+  EntityInstance,
+  EntityInstanceJSON,
+  EntityDefinition,
+} from './entity';
+export {
+  createEntityInstance,
+  entityInstanceToJSON,
+  entityInstanceFromJSON,
+  withEntityTags,
+  withEntityPools,
+  adjustEntityPool,
+  instantiateEntity,
+} from './entity';
 
-export type { RequirementAdaptor, EffectAdaptor } from './registry';
+export type { EngineContext } from './context';
+export {
+  withTags,
+  withEngineState,
+  withScopedEntity,
+  getScopedEntity,
+  resolveScopedEntityId,
+} from './context';
+
+export type { RequirementAdaptor, EffectAdaptor, HostWithTagCatalog } from './registry';
 export { EngineRegistry } from './registry';
 
 export {
@@ -32,17 +63,36 @@ export {
   executeActionSafe,
 } from './evaluate';
 
-export type { EngineState, EngineStateJSON } from './state';
+export type { EngineState, EngineStateJSON, ActionRoles } from './state';
 export {
   createEngineState,
   engineStateToJSON,
   engineStateFromJSON,
   toEngineContext,
-  withEngineTags,
   withEngineTick,
+  withEngineEntities,
+  withEngineSpawnCounts,
+  withPrimaryEntityId,
+  upsertEntity,
+  removeEntity,
+  createTaggedEntity,
 } from './state';
 
 export type { EngineCommand } from './command';
+
+export {
+  sumTagEffectStrength,
+  sumTaggedFieldStrength,
+  selectEntity,
+  selectEntitiesByDefinition,
+  selectStatValue,
+  selectPoolMax,
+  selectPoolCurrent,
+  selectActiveCount,
+  selectSpawnCount,
+  selectPrimaryEntity,
+  selectPrimaryEntityId,
+} from './selectors';
 
 export type {
   ProcessPoolKind,

@@ -6,90 +6,79 @@ Extract a **framework-neutral** tag/requirement/effect/action evaluation core fr
 
 ## Layers
 
-1. **`grani-tag-engine`** — pure TypeScript library: tags, immutable collections, requirements, effects, actions, registry adaptors, `EngineState`, commands, and `reduceEngineState`.
+1. **`grani-tag-engine`** — pure TypeScript library: tags, entities, requirements, effects, actions, registry adaptors, `EngineState`, commands, and `reduceEngineState`.
 2. **`@grani/react`** — optional React adapter: `EngineProvider`, dispatch hooks, selectors, `useGameLoop`. Peer-depends on React; does not belong in the core package.
 3. **`@grani/schema-tools`** — generic JSON Schema utilities (AJV compile/validate, `$ref` resolve, MVP generation, validation HTML messages). No UI.
-4. **`@grani/schema-editor`** — optional Vite app for editing schema-backed JSON; may consume schema-tools.
-5. **Planned `content-schema`** — not present yet. Domain schemas stay out of the engine runtime package.
+4. **`@grani/content-schema`** — canonical Draft-07 schemas and types for entity catalogs, actions, requirements, and effects.
+5. **`@grani/schema-editor`** — optional Vite app for editing schema-backed JSON; may consume schema-tools and content-schema.
 
 ## State model
 
 ```ts
 // Core (serializable)
-EngineState { tags: TagCollection; tick: number }
+EngineState {
+  tick: number
+  entities: Map<id, EntityInstance>  // tags + pools per entity
+  spawnCounts: Record<definitionId, number>
+  primaryEntityId?: string           // e.g. the player; optional default actor
+}
 
-// Host game composes
-AstrevnoState { engine: EngineState; character; cards; ... }
+EntityInstance { id, definitionId, tags, pools }
+
+// Host game composes presentation around entities
+AstrevnoState {
+  engine: EngineState
+  boardPositions: Record<entityId, position>
+  selectedEntityIds / window config
+}
 ```
 
 - Engine transitions are pure: `reduceEngineState(state, command, { registry, host })`.
-- Commands are plain data (`add-tag`, `remove-tag`, `tick`, `execute-action`, …).
+- Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, …).
+- Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
+- Costs/results default to the **actor**; source-state requirements default to the **source**.
+- `primaryEntityId` is a first-class engine pointer (typically the player). Hosts may use it as the default actor; presentation still lives in the host.
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
-- Derived values (stats from tags) belong in selectors / host `Calculated` until shared.
+- Derived values (stats / pool maxima from tags) live in engine selectors.
 
-## Requirement extension model
+## Entity presentation
 
-- Engine builtins (`free`, `forbidden`, `tag`) have stable shared semantics.
-- Games add serializable requirement types with
-  `registry.registerRequirement('game/type', adaptor)`.
-- Namespaced custom types keep game rules out of the engine while remaining
-  compatible with JSON content and the schema editor.
-- TypeScript-defined actions may additionally use `codeRequirements`, an array
-  of `(EngineContext) => boolean` predicates.
-- `codeRequirements` are runtime-only and must not be written to JSON. Prefer a
-  registered type whenever authored content needs the check.
+- The engine owns entity definitions and instance mechanics.
+- Host games own presentation registries: card visuals, left/right panel renderers, board layout.
+- The Astrevno **player** is one entity. The Player card and Character Sheet are two presentations of that entity.
+
+## Requirement / effect builtins
+
+- Requirements: `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`
+- Effects: `grant-tag`, `adjust-pool`, `spawn-entity`
+- Games may still register namespaced custom types when needed.
+- TypeScript-defined actions may use `codeRequirements` (runtime-only, not for JSON).
 
 ## Actions and future processes
 
 - An **action** is one atomic execution. The engine does not assume it came
   from a button and does not throttle manual actions to one per tick.
 - A future **process** is a persistent allocation that attempts an action once
-  per tick.
-- Process pools unify the planned toggle cases:
-  - `primary`: fixed capacity, defaulting to one active process.
-  - `typed`: host-derived capacity, such as `factoryCount`.
-- Allocation is numeric so multiple factories can eventually run the same
-  output process.
-- `ProcessDefinition`, `ProcessPoolDefinition`, and selection types are
-  reserved now. `set-process-allocation` and `clear-process-pool` explicitly
-  throw `ProcessesNotImplementedError` until scheduling semantics are built.
+  per tick (`primary` / `typed` pools). Still reserved; commands throw
+  `ProcessesNotImplementedError`.
 
 ## Engine design notes
 
 - Small stable interfaces; discriminated unions for serializable requirements.
-- Registry + adaptor pattern for host-specific requirement/effect semantics.
-- `EngineContext<THost>` is the evaluation view of `EngineState` + host payload.
-- Context updates are immutable (`withTags`, effect adaptors return new context).
+- Registry + adaptor pattern for builtins and host-specific extensions.
+- Entity definitions are registered on `EngineRegistry`.
+- `EngineContext` carries full `EngineState` plus actor/source/target roles.
+- Context updates are immutable.
 - `executeAction` mirrors original FireAction ordering: pay all costs, apply all results, apply all sideEffects. `executeActionSafe` re-checks `canHappen` per effect.
 
 ## Extraction status
 
-- Done: core tags/actions API, EngineState + reduce, `@grani/react`, Astrevno nests `engine`, uses a pure host reducer, registers serializable effects, and routes action ordering through `execute-action`.
-- Remaining: implement processes and move reusable calculated selectors into the engine when another game needs them.
-
-## TODO (deferred): batching entities
-
-This is intentionally outside the current extraction scope.
-
-- Evaluate replacing the Astrevno-specific `Character` concept with a generic
-  batching entity that can own stats, pools, tags, and available actions.
-- Treat Character/Player, Landing Ship, and Emergency Supply Crate as entity
-  definitions or instances sharing state mechanics.
-- Keep their very different rendering in an Astrevno presentation registry;
-  the engine must not know React components or view layouts.
-- Distinguish the entity that owns an action (`sourceEntityId`) from entities
-  affected by its effects (`targetEntityId`).
-- Prefer composition/capabilities over an entity inheritance hierarchy.
-- Regain readable mutation calls with semantic command factories or a
-  dispatch-backed UI façade, for example
-  `dispatch(entityCommands.adjustPool(entityId, pool, delta))`. Do not put
-  updater functions back into serializable state.
-- Revisit this only after a second concrete entity/game demonstrates which
-  fields and behaviors are truly engine-generic.
+- Done: core tags/actions API, entity-owned state, content-schema, `@grani/react`, Astrevno local link override.
+- Remaining: Astrevno migration onto entity instances; processes; richer presentation façades.
 
 ## Non-goals
 
 - Complete parity with every Astrevno gameplay rule in one step
-- Shipping Astrevno content schemas inside the engine package
 - React bindings inside `packages/engine`
+- Engine knowledge of card layout, Character Sheet, or panel chrome
