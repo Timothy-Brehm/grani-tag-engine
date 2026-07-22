@@ -1,0 +1,93 @@
+export type EntityScope = 'actor' | 'source' | 'target';
+
+export type TagEffectJSON = {
+  type: string;
+  name: string;
+  strength: number;
+  stat?: string;
+  pool?: string;
+  [key: string]: unknown;
+};
+
+export type TagJSON = {
+  name: string;
+  description?: string;
+  label?: string;
+  effects: TagEffectJSON[];
+};
+
+export type RequirementJSON =
+  | { type: 'free' }
+  | { type: 'forbidden' }
+  | {
+      type: 'tag';
+      tagName: string;
+      exists: boolean;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'stat';
+      stat: string;
+      amount: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'pool-max';
+      pool: string;
+      amount: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'entity-count';
+      definitionId: string;
+      min?: number;
+      max?: number;
+    };
+
+export type ActiveEffectJSON =
+  | {
+      type: 'adjust-pool';
+      name: string;
+      strength: number;
+      pool: string;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'grant-tag';
+      name: string;
+      strength: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'spawn-entity';
+      name: string;
+      strength: number;
+      definitionId: string;
+      entityId?: string;
+    };
+
+export type ActionDefinitionJSON = {
+  name: string;
+  description?: string;
+  label?: string;
+  sourceId?: string;
+  requirements: RequirementJSON[];
+  costs: ActiveEffectJSON[];
+  results: ActiveEffectJSON[];
+  sideEffects: ActiveEffectJSON[];
+};
+
+export type EntityDefinitionJSON = {
+  id: string;
+  displayName?: string;
+  description?: string;
+  initialTags?: TagJSON[];
+  initialPools?: Record<string, number>;
+  actions?: ActionDefinitionJSON[];
+  maxActive?: number;
+  maxCreated?: number;
+};
+
+export type EntityCatalog = {
+  entities: EntityDefinitionJSON[];
+};

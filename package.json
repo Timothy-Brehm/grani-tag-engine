@@ -10,9 +10,9 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w grani-tag-engine && npm run build -w @grani/schema-tools && npm run build -w @grani/react && npm run build -w @grani/schema-editor",
-    "test": "npm run test -w grani-tag-engine && npm run test -w @grani/schema-tools && npm run test -w @grani/react",
-    "lint": "npm run lint -w grani-tag-engine && npm run lint -w @grani/schema-tools && npm run lint -w @grani/react && npm run lint -w @grani/schema-editor",
+    "build": "npm run build -w grani-tag-engine && npm run build -w @grani/schema-tools && npm run build -w @grani/content-schema && npm run build -w @grani/react && npm run build -w @grani/schema-editor",
+    "test": "npm run test -w grani-tag-engine && npm run test -w @grani/schema-tools && npm run test -w @grani/content-schema && npm run test -w @grani/react",
+    "lint": "npm run lint -w grani-tag-engine && npm run lint -w @grani/schema-tools && npm run lint -w @grani/content-schema && npm run lint -w @grani/react && npm run lint -w @grani/schema-editor",
     "dev:schema-editor": "npm run dev -w @grani/schema-editor",
     "link:local": "node scripts/link-local.mjs",
     "link:astrevno": "node scripts/link-local.mjs --consumer ../astrevno",

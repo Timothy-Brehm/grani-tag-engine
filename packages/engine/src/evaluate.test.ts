@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionDefinition } from './action';
 import { EngineRegistry } from './registry';
-import { TagCollection } from './tag-collection';
 import { createTag } from './tag';
 import {
   executeAction,
@@ -10,15 +9,26 @@ import {
   codeRequirementsMet,
   requirementsMet,
 } from './evaluate';
+import {
+  createEngineState,
+  createTaggedEntity,
+  toEngineContext,
+  upsertEntity,
+} from './state';
 
 describe('registry builtins and actions', () => {
   const registry = new EngineRegistry().createBuiltinAdaptors();
 
+  function playerContext(tags = [createTag({ name: 'marked', effects: [] })]) {
+    const state = upsertEntity(
+      createEngineState(),
+      createTaggedEntity({ id: 'player', tags }),
+    );
+    return toEngineContext(state, {}, { actorEntityId: 'player' });
+  }
+
   it('evaluates free, forbidden, and tag requirements', () => {
-    const ctx = {
-      tags: TagCollection.create([createTag({ name: 'marked', effects: [] })]),
-      host: {},
-    };
+    const ctx = playerContext();
     expect(requirementsMet(registry, [{ type: 'free' }], ctx)).toBe(true);
     expect(requirementsMet(registry, [{ type: 'forbidden' }], ctx)).toBe(false);
     expect(
@@ -40,10 +50,10 @@ describe('registry builtins and actions', () => {
       results: [{ type: 'grant-tag', name: 'bonus', strength: 1 }],
       sideEffects: [],
     };
-    const ctx = { tags: TagCollection.create(), host: {} };
+    const ctx = playerContext([]);
     expect(isActionAvailable(registry, action, ctx)).toBe(true);
     const next = executeAction(registry, action, ctx);
-    expect(next.tags.has('bonus')).toBe(true);
+    expect(next.engine.entities.get('player')?.tags.has('bonus')).toBe(true);
     expect(isActionAvailable(registry, action, next)).toBe(false);
   });
 
@@ -58,11 +68,11 @@ describe('registry builtins and actions', () => {
       ],
       sideEffects: [{ type: 'grant-tag', name: 'b', strength: 1 }],
     };
-    const ctx = { tags: TagCollection.create(), host: {} };
-    const next = executeActionSafe(registry, action, ctx);
-    expect(next.tags.has('a')).toBe(true);
-    expect(next.tags.has('b')).toBe(true);
-    expect(next.tags.size).toBe(2);
+    const next = executeActionSafe(registry, action, playerContext([]));
+    const tags = next.engine.entities.get('player')!.tags;
+    expect(tags.has('a')).toBe(true);
+    expect(tags.has('b')).toBe(true);
+    expect(tags.size).toBe(2);
   });
 
   it('uses host tagCatalog when granting', () => {
@@ -80,12 +90,18 @@ describe('registry builtins and actions', () => {
       results: [{ type: 'grant-tag', name: 'fancy', strength: 1 }],
       sideEffects: [],
     };
-    const next = executeAction(registry, action, {
-      tags: TagCollection.create(),
-      host: { tagCatalog: catalog },
-    });
-    expect(next.tags.get('fancy')?.description).toBe('from catalog');
-    expect(next.tags.sumEffectStrength('glow')).toBe(4);
+    const state = upsertEntity(
+      createEngineState(),
+      createTaggedEntity({ id: 'player', tags: [] }),
+    );
+    const next = executeAction(
+      registry,
+      action,
+      toEngineContext(state, { tagCatalog: catalog }, { actorEntityId: 'player' }),
+    );
+    const fancy = next.engine.entities.get('player')?.tags.get('fancy');
+    expect(fancy?.description).toBe('from catalog');
+    expect(fancy && next.engine.entities.get('player')!.tags.sumEffectStrength('glow')).toBe(4);
   });
 
   it('supports registered host requirements and code-only checks', () => {
@@ -101,10 +117,15 @@ describe('registry builtins and actions', () => {
         (requirement: LevelRequirement, context) =>
           context.host.level >= requirement.minimum,
       );
-    const context = {
-      tags: TagCollection.create(),
-      host: { level: 4, enabled: true },
-    };
+    const state = upsertEntity(
+      createEngineState(),
+      createTaggedEntity({ id: 'player', tags: [] }),
+    );
+    const context = toEngineContext(
+      state,
+      { level: 4, enabled: true },
+      { actorEntityId: 'player' },
+    );
 
     expect(
       requirementsMet(
@@ -120,4 +141,69 @@ describe('registry builtins and actions', () => {
       ),
     ).toBe(true);
   });
+
+  it('applies actor pool costs and source-scoped tag grants', () => {
+    registry.registerEntityDefinition({
+      id: 'lander',
+      maxActive: 1,
+      maxCreated: 1,
+    });
+    let state = upsertEntity(
+      createEngineState(),
+      createTaggedEntity({
+        id: 'player',
+        tags: [
+          createTag({
+            name: 'life-max',
+            effects: [
+              { type: 'pool-max', name: 'Life', strength: 2, pool: 'Life' } as never,
+            ],
+          }),
+        ],
+      }),
+    );
+    state = reduceWithPools(state);
+    state = upsertEntity(
+      state,
+      createTaggedEntity({ id: 'lander-1', definitionId: 'lander', tags: [] }),
+    );
+
+    const action: ActionDefinition = {
+      name: 'open',
+      requirements: [{ type: 'free' }],
+      costs: [
+        { type: 'adjust-pool', name: 'stamina', strength: -1, pool: 'Life' },
+      ],
+      results: [
+        {
+          type: 'grant-tag',
+          name: 'opened',
+          strength: 1,
+          scope: 'source',
+        } as never,
+      ],
+      sideEffects: [],
+    };
+
+    const next = executeAction(
+      registry,
+      action,
+      toEngineContext(state, {}, {
+        actorEntityId: 'player',
+        sourceEntityId: 'lander-1',
+      }),
+    );
+    expect(next.engine.entities.get('player')?.pools.Life).toBe(1);
+    expect(next.engine.entities.get('lander-1')?.tags.has('opened')).toBe(true);
+  });
 });
+
+function reduceWithPools(
+  state: ReturnType<typeof createEngineState>,
+) {
+  const entity = state.entities.get('player')!;
+  return upsertEntity(state, {
+    ...entity,
+    pools: { Life: 2 },
+  });
+}
