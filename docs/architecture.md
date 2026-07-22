@@ -1,5 +1,7 @@
 # Architecture
 
+Related design guidance (living): [design/engine-composition.md](./design/engine-composition.md).
+
 ## Goals
 
 Extract a **framework-neutral** tag/requirement/effect/action evaluation core from game-specific code so Astrevno (and others) can depend on `grani-tag-engine` without pulling React, DOM, or game enums.
