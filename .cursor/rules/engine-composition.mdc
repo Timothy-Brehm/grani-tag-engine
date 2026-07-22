@@ -1,0 +1,32 @@
+---
+description: Engine composition — entities, tags, traits, pools, actions (game-agnostic)
+alwaysApply: true
+---
+
+# Engine composition (grani-tag-engine)
+
+When changing engine APIs, builtins, schemas, or advising how a host should model content, follow [docs/design/engine-composition.md](docs/design/engine-composition.md).
+
+**Living rules.** If we disagree because of these principles, update the design doc and this rule—do not silently override them.
+
+## Hard preferences
+
+1. **Entities own tags and pools** — anything that acts or holds state is an entity instance from a definition.
+2. **Traits vs pools** — lasting quantities/flags for gating are traits (not spent); spendable quantities with maxima are pools.
+3. **Tags derive traits/capacities** — prefer grant-tag / tag passive effects over bespoke fields on `EngineState`.
+4. **Prefer adding tags to removing them** — state transitions as successor tags (`found_crate` → also `opened_crate`), not erasing history by default.
+5. **Track metrics for gates** — action counts (manual / automatic / total), pool currents, high-waters for pools and pool-max, etc., so requirements/effects can hang off them. Prefer engine-owned metrics over host-only counters.
+6. **Actions are recipes** — requirements → costs → results (+ side effects), with actor / source / target roles.
+7. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist).
+8. **Host owns presentation** — no React, cards, sheets, or layout in the core package.
+9. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content.
+
+## Vocabulary
+
+- **Player** = human at the keyboard
+- **Character** = in-game character entity
+- **Primary character** = `primaryEntityId` (host may show “You” / a custom name)
+
+## Before coding
+
+Name the pieces in engine vocabulary and say which entity is actor vs source. Prefer grant successor tags and plan which metrics might later gate content. If the doc prevents a good design, amend the doc in the same change set when possible.
