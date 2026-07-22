@@ -32,6 +32,39 @@ describe('entity catalog schema', () => {
     expect(result.catalog?.entities[0]?.id).toBe('player');
   });
 
+  it('accepts metric requirements', () => {
+    const result = validateEntityCatalog({
+      entities: [
+        {
+          id: 'bench',
+          actions: [
+            {
+              name: 'advanced',
+              requirements: [
+                {
+                  type: 'metric',
+                  metric: 'action-total',
+                  actionId: 'basic',
+                  amount: 3,
+                },
+                {
+                  type: 'metric',
+                  metric: 'pool-high-water',
+                  pool: 'Rock',
+                  amount: 10,
+                },
+              ],
+              costs: [],
+              results: [{ type: 'grant-tag', name: 'unlocked', strength: 1 }],
+              sideEffects: [],
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
+
   it('rejects unknown effect types', () => {
     const result = validateEntityCatalog({
       entities: [

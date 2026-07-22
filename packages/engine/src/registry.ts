@@ -7,6 +7,7 @@ import {
 } from './context';
 import type {
   EntityCountRequirement,
+  MetricRequirement,
   PoolMaxRequirement,
   StatRequirement,
   TagRequirement,
@@ -22,6 +23,16 @@ import {
   instantiateEntity,
   withEntityTags,
 } from './entity';
+import {
+  selectActionCount,
+  selectPoolHighWater,
+  selectPoolLifetimeUsed,
+  selectPoolLowWater,
+  selectPoolMaxHighWater,
+  selectStatHighWater,
+  selectStatLowWater,
+  selectTagGrantedAt,
+} from './metrics';
 import {
   selectActiveCount,
   selectPoolCurrent,
@@ -157,7 +168,7 @@ export class EngineRegistry<THost = unknown> {
   }
 
   /**
-   * Registers builtins: free/forbidden/tag/stat/pool-max/entity-count
+   * Registers builtins: free/forbidden/tag/stat/pool-max/entity-count/metric
    * requirements and grant-tag/adjust-pool/spawn-entity effects.
    */
   createBuiltinAdaptors(): this {
@@ -209,6 +220,76 @@ export class EngineRegistry<THost = unknown> {
       },
     );
 
+    this.registerRequirement('metric', (requirement: MetricRequirement, context) => {
+      if (requirement.metric === 'engine-tick') {
+        return context.engine.tick >= requirement.amount;
+      }
+      const scope = defaultRequirementScope(context, requirement.scope);
+      const entity = getScopedEntity(context, scope);
+      if (!entity) {
+        return false;
+      }
+      switch (requirement.metric) {
+        case 'action-manual':
+          return (
+            selectActionCount(entity, requirement.actionId, 'manual') >=
+            requirement.amount
+          );
+        case 'action-automatic':
+          return (
+            selectActionCount(entity, requirement.actionId, 'automatic') >=
+            requirement.amount
+          );
+        case 'action-total':
+          return (
+            selectActionCount(entity, requirement.actionId, 'total') >=
+            requirement.amount
+          );
+        case 'pool-current':
+          return selectPoolCurrent(entity, requirement.pool) >= requirement.amount;
+        case 'pool-high-water':
+          return (
+            selectPoolHighWater(entity, requirement.pool) >= requirement.amount
+          );
+        case 'pool-low-water': {
+          const low = selectPoolLowWater(entity, requirement.pool);
+          return low !== undefined && low <= requirement.amount;
+        }
+        case 'pool-max-high-water':
+          return (
+            selectPoolMaxHighWater(entity, requirement.pool) >=
+            requirement.amount
+          );
+        case 'pool-lifetime-used':
+          return (
+            selectPoolLifetimeUsed(entity, requirement.pool) >=
+            requirement.amount
+          );
+        case 'stat-high-water':
+          return (
+            selectStatHighWater(entity, requirement.stat) >= requirement.amount
+          );
+        case 'stat-low-water': {
+          const low = selectStatLowWater(entity, requirement.stat);
+          return low !== undefined && low <= requirement.amount;
+        }
+        case 'tag-held-for': {
+          if (!entity.tags.has(requirement.tagName)) {
+            return false;
+          }
+          const granted = selectTagGrantedAt(entity, requirement.tagName);
+          if (granted === undefined) {
+            return false;
+          }
+          return context.engine.tick - granted >= requirement.amount;
+        }
+        default: {
+          const _exhaustive: never = requirement;
+          return _exhaustive;
+        }
+      }
+    });
+
     this.registerEffect('grant-tag', {
       canHappen: (effect: GrantTagEffect, context) => {
         const scope = defaultEffectScope(context, effect.scope);
@@ -225,7 +306,11 @@ export class EngineRegistry<THost = unknown> {
         const tag = fromCatalog
           ? createTag(fromCatalog)
           : createTag({ name: effect.name, effects: [] });
-        const nextEntity = withEntityTags(entity, entity.tags.add(tag));
+        const nextEntity = withEntityTags(
+          entity,
+          entity.tags.add(tag),
+          context.engine.tick,
+        );
         return withScopedEntity(context, scope, nextEntity);
       },
     });
@@ -255,6 +340,7 @@ export class EngineRegistry<THost = unknown> {
           effect.pool,
           effect.strength,
           max,
+          context.engine.tick,
         );
         return withScopedEntity(context, scope, nextEntity);
       },
@@ -296,7 +382,11 @@ export class EngineRegistry<THost = unknown> {
         if (context.engine.entities.has(entityId)) {
           return context;
         }
-        const entity = instantiateEntity(definition, entityId);
+        const entity = instantiateEntity(
+          definition,
+          entityId,
+          context.engine.tick,
+        );
         const engine = withEngineSpawnCounts(
           upsertEntity(context.engine, entity),
           {

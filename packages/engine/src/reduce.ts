@@ -18,6 +18,7 @@ import {
   instantiateEntity,
   withEntityTags,
 } from './entity';
+import { recordActionExecution } from './metrics';
 import { selectPoolMax, selectSpawnCount } from './selectors';
 
 export type ReduceEngineOptions<THost = unknown> = {
@@ -41,7 +42,7 @@ export function reduceEngineState<THost = unknown>(
       }
       return upsertEntity(
         state,
-        withEntityTags(entity, entity.tags.add(command.tag)),
+        withEntityTags(entity, entity.tags.add(command.tag), state.tick),
       );
     }
     case 'remove-tag': {
@@ -51,7 +52,7 @@ export function reduceEngineState<THost = unknown>(
       }
       return upsertEntity(
         state,
-        withEntityTags(entity, entity.tags.remove(command.name)),
+        withEntityTags(entity, entity.tags.remove(command.name), state.tick),
       );
     }
     case 'replace-tags': {
@@ -61,7 +62,7 @@ export function reduceEngineState<THost = unknown>(
       }
       return upsertEntity(
         state,
-        withEntityTags(entity, TagCollection.create(command.tags)),
+        withEntityTags(entity, TagCollection.create(command.tags), state.tick),
       );
     }
     case 'adjust-pool': {
@@ -72,7 +73,13 @@ export function reduceEngineState<THost = unknown>(
       const max = selectPoolMax(entity, command.pool);
       return upsertEntity(
         state,
-        adjustEntityPool(entity, command.pool, command.delta, max),
+        adjustEntityPool(
+          entity,
+          command.pool,
+          command.delta,
+          max,
+          state.tick,
+        ),
       );
     }
     case 'spawn-entity': {
@@ -102,7 +109,7 @@ export function reduceEngineState<THost = unknown>(
       ) {
         return state;
       }
-      const entity = instantiateEntity(definition, entityId);
+      const entity = instantiateEntity(definition, entityId, state.tick);
       return withEngineSpawnCounts(upsertEntity(state, entity), {
         ...state.spawnCounts,
         [definition.id]: created + 1,
@@ -126,7 +133,23 @@ export function reduceEngineState<THost = unknown>(
         command.mode === 'safe'
           ? executeActionSafe(options.registry, command.action, ctx)
           : executeAction(options.registry, command.action, ctx);
-      return nextCtx.engine;
+      let nextState = nextCtx.engine;
+      const actorId = command.actorEntityId;
+      if (actorId) {
+        const actor = nextState.entities.get(actorId);
+        if (actor) {
+          nextState = upsertEntity(
+            nextState,
+            recordActionExecution(
+              actor,
+              command.action.name,
+              command.execution ?? 'manual',
+              nextState.tick,
+            ),
+          );
+        }
+      }
+      return nextState;
     }
     case 'set-process-allocation':
       return setProcessAllocation({

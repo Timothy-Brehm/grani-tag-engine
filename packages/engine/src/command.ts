@@ -51,6 +51,11 @@ export type EngineCommand<THost = unknown> =
       readonly targetEntityId?: string;
       /** Default `strict` (FireAction). `safe` re-checks canHappen per effect. */
       readonly mode?: 'strict' | 'safe';
+      /**
+       * Who initiated the action for metric counting.
+       * Default `manual`. Processes should pass `automatic`.
+       */
+      readonly execution?: 'manual' | 'automatic';
     }
   /** Reserved recurring-action endpoints. They currently throw explicitly. */
   | {

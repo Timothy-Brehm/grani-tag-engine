@@ -20,12 +20,20 @@ Extract a **framework-neutral** tag/requirement/effect/action evaluation core fr
 // Core (serializable)
 EngineState {
   tick: number
-  entities: Map<id, EntityInstance>  // tags + pools per entity
+  entities: Map<id, EntityInstance>  // tags + pools + metrics per entity
   spawnCounts: Record<definitionId, number>
-  primaryEntityId?: string           // e.g. the player; optional default actor
+  primaryEntityId?: string           // e.g. the primary character; optional default actor
 }
 
-EntityInstance { id, definitionId, tags, pools }
+EntityInstance {
+  id, definitionId, tags, pools,
+  metrics: {
+    actionCounts,
+    poolHighWater, poolLowWater, poolLifetimeUsed,
+    poolMaxHighWater,
+    statHighWater, statLowWater
+  }
+}
 
 // Host game composes presentation around entities
 AstrevnoState {
@@ -43,6 +51,7 @@ AstrevnoState {
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
 - Derived values (stats / pool maxima from tags) live in engine selectors.
+- Entity **metrics** track action counts (manual / automatic / total) and high/low-water marks for pool current, pool-max, and stats so requirements can hang off history.
 
 ## Entity presentation
 
