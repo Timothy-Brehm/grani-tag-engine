@@ -66,7 +66,10 @@ export function withTags<THost>(
   if (!entity) {
     return { ...ctx, tags };
   }
-  const nextEngine = upsertEntity(ctx.engine, withEntityTags(entity, tags));
+  const nextEngine = upsertEntity(
+    ctx.engine,
+    withEntityTags(entity, tags, ctx.engine.tick),
+  );
   return withEngineState(ctx, nextEngine);
 }
 

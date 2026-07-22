@@ -96,6 +96,74 @@
           },
           "required": ["type", "definitionId"],
           "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "metric" },
+            "metric": { "const": "engine-tick" },
+            "amount": { "type": "number" }
+          },
+          "required": ["type", "metric", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "metric" },
+            "metric": {
+              "type": "string",
+              "enum": ["action-manual", "action-automatic", "action-total"]
+            },
+            "actionId": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "metric", "actionId", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "metric" },
+            "metric": {
+              "type": "string",
+              "enum": [
+                "pool-current",
+                "pool-high-water",
+                "pool-low-water",
+                "pool-max-high-water",
+                "pool-lifetime-used"
+              ]
+            },
+            "pool": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "metric", "pool", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "metric" },
+            "metric": {
+              "type": "string",
+              "enum": ["stat-high-water", "stat-low-water"]
+            },
+            "stat": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "metric", "stat", "amount"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "metric" },
+            "metric": { "const": "tag-held-for" },
+            "tagName": { "type": "string" },
+            "amount": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "metric", "tagName", "amount"],
+          "additionalProperties": false
         }
       ]
     },

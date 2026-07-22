@@ -42,6 +42,44 @@ export type RequirementJSON =
       definitionId: string;
       min?: number;
       max?: number;
+    }
+  | {
+      type: 'metric';
+      metric: 'engine-tick';
+      amount: number;
+    }
+  | {
+      type: 'metric';
+      metric: 'action-manual' | 'action-automatic' | 'action-total';
+      actionId: string;
+      amount: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'metric';
+      metric:
+        | 'pool-current'
+        | 'pool-high-water'
+        | 'pool-low-water'
+        | 'pool-max-high-water'
+        | 'pool-lifetime-used';
+      pool: string;
+      amount: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'metric';
+      metric: 'stat-high-water' | 'stat-low-water';
+      stat: string;
+      amount: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'metric';
+      metric: 'tag-held-for';
+      tagName: string;
+      amount: number;
+      scope?: EntityScope;
     };
 
 export type ActiveEffectJSON =

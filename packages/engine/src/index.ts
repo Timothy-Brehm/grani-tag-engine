@@ -11,6 +11,7 @@ export type {
   StatRequirement,
   PoolMaxRequirement,
   EntityCountRequirement,
+  MetricRequirement,
   BuiltinRequirement,
   Requirement,
 } from './requirement';
@@ -37,9 +38,39 @@ export {
   entityInstanceFromJSON,
   withEntityTags,
   withEntityPools,
+  withEntityMetrics,
   adjustEntityPool,
   instantiateEntity,
 } from './entity';
+
+export type {
+  ActionCountMetric,
+  LifetimeUsedMetric,
+  EntityMetrics,
+  EntityMetricsJSON,
+  ActionExecutionKind,
+} from './metrics';
+export {
+  emptyEntityMetrics,
+  entityMetricsToJSON,
+  entityMetricsFromJSON,
+  refreshEntityHighWaters,
+  recordActionExecution,
+  recordPoolLifetimeUsed,
+  recordTagGrants,
+  selectActionCount,
+  selectActionFirstTick,
+  selectActionLastTick,
+  selectPoolHighWater,
+  selectPoolLifetimeUsed,
+  selectPoolLifetimeUsedFirstTick,
+  selectPoolLifetimeUsedLastTick,
+  selectPoolLowWater,
+  selectPoolMaxHighWater,
+  selectStatHighWater,
+  selectStatLowWater,
+  selectTagGrantedAt,
+} from './metrics';
 
 export type { EngineContext } from './context';
 export {

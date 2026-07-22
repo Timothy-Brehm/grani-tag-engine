@@ -122,22 +122,38 @@ A **process** will be a standing allocation that attempts an action once per tic
 
 **All meaningful metrics should be tracked** in engine-owned state so requirements and effects can hang off them—not only “current” gameplay values the UI happens to show.
 
-This is a design target; the full metric surface is not fully wired yet. Prefer APIs and content that assume metrics exist (or will), rather than one-off host counters.
+Metrics live on each **entity** (`entity.metrics`):
 
-| Metric family | Examples | Why track it |
-|---------------|----------|--------------|
-| Action counts | Per action id: **manual**, **automatic** (process), **total** | Unlock after N crafts; mastery; “first time” vs habit |
-| Pool current | Current value of each pool | Gates, effects, UI |
-| Pool high-water | Max **current** ever reached per pool | “Once held 50 rock” discoveries |
-| Pool-max / capacity | Current derived max; high-water of max | Storage milestones; “installed 32 RAM” |
-| Trait / stat | Current derived trait; optional high-water | Strength peaks, Science milestones |
-| Entity / spawn | Spawn counts, active counts (already partially present) | Caps and “have ever built” gates |
-| Tick / time | Engine `tick` | Duration gates |
+| Metric family | Storage | Why track it |
+|---------------|---------|--------------|
+| Action counts | `actionCounts[actionId].{manual,automatic,total,firstTick,lastTick}` | Unlock after N crafts; when first/last run |
+| Pool current | live `pools` + metric req `pool-current` | Gates, effects, UI |
+| Pool high-water | `poolHighWater` + `poolHighWaterAtTick` | “Once held 50 rock”; when it peaked |
+| Pool low-water | `poolLowWater` + `poolLowWaterAtTick` | “Ever hit 0 Life”; when it bottomed |
+| Pool lifetime used | `poolLifetimeUsed[pool].{amount,firstTick,lastTick}` | Lifetime spent (not current stock) |
+| Pool-max high-water | `poolMaxHighWater` + `…AtTick` | Storage milestones |
+| Trait / stat water | `statHighWater` / `statLowWater` + `…AtTick` | Trait peaks / floors |
+| Tag first granted | `tagGrantedAt[tagName]` | Age / “held for N ticks” (kept after remove) |
+| Entity / spawn | `spawnCounts` / active counts on engine | Caps and “have ever built” |
+| Tick / time | `EngineState.tick` | Total game time; `engine-tick` / `tag-held-for` gates |
+
+**Time model:** prefer **engine ticks**, not wall-clock, for metrics and requirements (deterministic, pause-safe, saveable). Hosts may present `tick / ticksPerSecond` (e.g. `/ 1000`) as “seconds” if they advance ticks at a fixed rate. Wall-clock belongs in host telemetry/UI only—do not hang rules on `Date.now()`.
+
+**Wiring today:**
+- High/low-waters refresh whenever tags or pools change; `*AtTick` records the engine tick of the last change.
+- Tag grants record `tagGrantedAt` on first sight (not cleared on remove).
+- `adjust-pool` adds **actual** decreases to `poolLifetimeUsed` with first/last ticks.
+- `execute-action` increments actor action counts with first/last ticks; pass `execution: 'automatic'` for processes.
+- Builtin requirement `{ type: 'metric', metric: '…', amount, … }`:
+  - most metrics: value `>= amount`
+  - `pool-low-water` / `stat-low-water`: value `<= amount`
+  - `engine-tick`: `EngineState.tick >= amount`
+  - `tag-held-for`: tag present and `tick - tagGrantedAt >= amount`
 
 **Rules of thumb:**
 - If a designer might later say “when X has happened N times / reached N,” it should be a metric—not reconstructed from logs.
 - Prefer **monotonic counters and high-water marks** alongside live values; do not rely on deleting tags to infer history.
-- Distinguish **manual vs automatic** action execution so automation does not silently satisfy “player did this” gates unless intended (or offer both total and split counts).
+- Distinguish **manual vs automatic** action execution so automation does not silently satisfy “player did this” gates unless intended.
 - Metrics are engine facts: hosts may display them; hosts should not be the only place they live if rules need them.
 
 ---
@@ -151,16 +167,18 @@ EntityDefinition
   └─ actions[]    →  recipes offered when this entity is source
 
 Action
-  ├─ requirements →  read traits/tags/pools/entity counts (scoped)
+  ├─ requirements →  read traits/tags/pools/metrics/entity counts (scoped)
   ├─ costs        →  adjust-pool / (rarely) remove facts (actor by default)
   ├─ results      →  grant-tag / adjust-pool / spawn-entity / …
   └─ sideEffects  →  same toolbox, applied after results
 
+EntityInstance
+  └─ metrics → actionCounts + pool/stat high-waters
+
 EngineState
   ├─ entities + spawnCounts
   ├─ primaryEntityId?
-  ├─ tick
-  └─ metrics (target: action counts, pool high-waters, …)
+  └─ tick
 ```
 
 **Recipe graph:** unlocking is usually `grant-tag` or `spawn-entity` or raising `pool-max`, which then satisfies requirements on other actions. Prefer expanding that graph over special-case code paths.
@@ -171,7 +189,7 @@ EngineState
 
 ## Builtin toolbox (current)
 
-**Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`  
+**Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
 **Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
