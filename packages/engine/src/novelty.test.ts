@@ -5,8 +5,6 @@ import { createEngineState, upsertEntity } from './state';
 import { reduceEngineState } from './reduce';
 import { EngineRegistry } from './registry';
 import {
-  NOVELTY_AUTO_SEEN_TICKS,
-  accumulateNoveltySheetShown,
   selectActionIsNew,
   selectEntityHasNew,
   selectEntityIsNew,
@@ -79,12 +77,14 @@ describe('entity novelty', () => {
     expect(selectEntityHasNew(hero, ['scout'])).toBe(true);
   });
 
-  it('auto-sees pools after NOVELTY_AUTO_SEEN_TICKS of sheet ticks', () => {
-    let hero = lifeHero();
-    expect(selectPoolIsNew(hero, 'Life')).toBe(true);
-    for (let i = 0; i < NOVELTY_AUTO_SEEN_TICKS; i += 1) {
-      hero = accumulateNoveltySheetShown(hero, { pools: ['Life'] });
-    }
-    expect(selectPoolIsNew(hero, 'Life')).toBe(false);
+  it('marks pools seen via seen-pool (host decides when)', () => {
+    let state = upsertEntity(createEngineState(), lifeHero());
+    expect(selectPoolIsNew(state.entities.get('hero')!, 'Life')).toBe(true);
+    state = reduceEngineState(
+      state,
+      { type: 'seen-pool', entityId: 'hero', pool: 'Life' },
+      options,
+    );
+    expect(selectPoolIsNew(state.entities.get('hero')!, 'Life')).toBe(false);
   });
 });

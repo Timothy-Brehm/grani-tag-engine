@@ -20,7 +20,6 @@ import {
 } from './entity';
 import { recordActionExecution } from './metrics';
 import {
-  accumulateNoveltySheetShown,
   markActionSeen,
   markEntityNoveltySeen,
   markEntitySeen,
@@ -202,19 +201,6 @@ export function reduceEngineState<THost = unknown>(
       return upsertEntity(
         state,
         markEntityNoveltySeen(entity, command.actionIds ?? []),
-      );
-    }
-    case 'novelty-sheet-tick': {
-      const entity = state.entities.get(command.entityId);
-      if (!entity) {
-        return state;
-      }
-      return upsertEntity(
-        state,
-        accumulateNoveltySheetShown(entity, {
-          pools: command.pools,
-          stats: command.stats,
-        }),
       );
     }
     default: {

@@ -2,9 +2,6 @@ import type { EntityInstance } from './entity';
 import { selectPoolMax, selectStatValue } from './selectors';
 import type { Tag } from './tag';
 
-/** Ticks a pool/stat must be sheet-shown before auto `seen` (≈seconds at 1 tick/sec). */
-export const NOVELTY_AUTO_SEEN_TICKS = 30;
-
 export type EntityNovelty = {
   /** False until host acknowledges the entity (bootstrap should set true). */
   readonly entitySeen: boolean;
@@ -12,9 +9,6 @@ export type EntityNovelty = {
   readonly seenActions: Readonly<Record<string, true>>;
   readonly seenPools: Readonly<Record<string, true>>;
   readonly seenStats: Readonly<Record<string, true>>;
-  /** Cumulative ticks while reported shown on the selected entity sheet. */
-  readonly poolShownTicks: Readonly<Record<string, number>>;
-  readonly statShownTicks: Readonly<Record<string, number>>;
 };
 
 export type EntityNoveltyJSON = {
@@ -22,7 +16,9 @@ export type EntityNoveltyJSON = {
   seenActions?: Record<string, true | boolean>;
   seenPools?: Record<string, true | boolean>;
   seenStats?: Record<string, true | boolean>;
+  /** @deprecated Host-owned; ignored on load. */
   poolShownTicks?: Record<string, number>;
+  /** @deprecated Host-owned; ignored on load. */
   statShownTicks?: Record<string, number>;
 };
 
@@ -32,8 +28,6 @@ export function emptyEntityNovelty(entitySeen = false): EntityNovelty {
     seenActions: Object.freeze({}),
     seenPools: Object.freeze({}),
     seenStats: Object.freeze({}),
-    poolShownTicks: Object.freeze({}),
-    statShownTicks: Object.freeze({}),
   };
 }
 
@@ -55,8 +49,6 @@ export function entityNoveltyToJSON(novelty: EntityNovelty): EntityNoveltyJSON {
     seenActions: { ...novelty.seenActions },
     seenPools: { ...novelty.seenPools },
     seenStats: { ...novelty.seenStats },
-    poolShownTicks: { ...novelty.poolShownTicks },
-    statShownTicks: { ...novelty.statShownTicks },
   };
 }
 
@@ -71,8 +63,6 @@ export function entityNoveltyFromJSON(
     seenActions: freezeTrueMap(json.seenActions),
     seenPools: freezeTrueMap(json.seenPools),
     seenStats: freezeTrueMap(json.seenStats),
-    poolShownTicks: Object.freeze({ ...(json.poolShownTicks ?? {}) }),
-    statShownTicks: Object.freeze({ ...(json.statShownTicks ?? {}) }),
   };
 }
 
@@ -199,65 +189,6 @@ export function markStatSeen(
   });
 }
 
-/**
- * Accumulate one tick of “shown on character sheet” for the given pools/stats.
- * Auto-marks seen when shown ticks reach {@link NOVELTY_AUTO_SEEN_TICKS}.
- */
-export function accumulateNoveltySheetShown(
-  entity: EntityInstance,
-  input: {
-    readonly pools?: readonly string[];
-    readonly stats?: readonly string[];
-  },
-): EntityInstance {
-  let novelty = entity.novelty;
-  let changed = false;
-
-  const poolShownTicks = {
-    ...novelty.poolShownTicks,
-  } as Record<string, number>;
-  const seenPools = { ...novelty.seenPools } as Record<string, true>;
-  for (const pool of input.pools ?? []) {
-    if (seenPools[pool]) {
-      continue;
-    }
-    const next = (poolShownTicks[pool] ?? 0) + 1;
-    poolShownTicks[pool] = next;
-    changed = true;
-    if (next >= NOVELTY_AUTO_SEEN_TICKS) {
-      seenPools[pool] = true;
-    }
-  }
-
-  const statShownTicks = {
-    ...novelty.statShownTicks,
-  } as Record<string, number>;
-  const seenStats = { ...novelty.seenStats } as Record<string, true>;
-  for (const stat of input.stats ?? []) {
-    if (seenStats[stat]) {
-      continue;
-    }
-    const next = (statShownTicks[stat] ?? 0) + 1;
-    statShownTicks[stat] = next;
-    changed = true;
-    if (next >= NOVELTY_AUTO_SEEN_TICKS) {
-      seenStats[stat] = true;
-    }
-  }
-
-  if (!changed) {
-    return entity;
-  }
-
-  return withNovelty(entity, {
-    ...novelty,
-    poolShownTicks: Object.freeze(poolShownTicks),
-    statShownTicks: Object.freeze(statShownTicks),
-    seenPools: Object.freeze(seenPools),
-    seenStats: Object.freeze(seenStats),
-  });
-}
-
 export function selectEntityIsNew(entity: EntityInstance): boolean {
   return !entity.novelty.entitySeen;
 }
@@ -290,7 +221,10 @@ export function selectStatIsNew(
   if (entity.novelty.seenStats[stat]) {
     return false;
   }
-  return selectStatValue(entity, stat) !== 0 || collectStatKeys(entity.tags).includes(stat);
+  return (
+    selectStatValue(entity, stat) !== 0 ||
+    collectStatKeys(entity.tags).includes(stat)
+  );
 }
 
 /**

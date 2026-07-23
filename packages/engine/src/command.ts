@@ -86,19 +86,9 @@ export type EngineCommand<THost = unknown> =
       readonly entityId: string;
       readonly stat: string;
     }
-  | {
-      /** Mark entity + current offered actions/pools/stats seen (bootstrap). */
-      readonly type: 'seen-entity-content';
-      readonly entityId: string;
-      readonly actionIds?: readonly string[];
-    }
-  | {
-      /**
-       * While this entity’s sheet is shown (selected), accumulate one tick of
-       * shown-time for the listed pools/stats (auto-seen at NOVELTY_AUTO_SEEN_TICKS).
-       */
-      readonly type: 'novelty-sheet-tick';
-      readonly entityId: string;
-      readonly pools?: readonly string[];
-      readonly stats?: readonly string[];
-    };
+    | {
+        /** Mark entity + current offered actions/pools/stats seen (bootstrap). */
+        readonly type: 'seen-entity-content';
+        readonly entityId: string;
+        readonly actionIds?: readonly string[];
+      };

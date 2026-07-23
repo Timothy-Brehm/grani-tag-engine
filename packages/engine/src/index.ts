@@ -75,7 +75,6 @@ export {
 
 export type { EntityNovelty, EntityNoveltyJSON } from './novelty';
 export {
-  NOVELTY_AUTO_SEEN_TICKS,
   emptyEntityNovelty,
   entityNoveltyToJSON,
   entityNoveltyFromJSON,
@@ -84,7 +83,6 @@ export {
   markActionSeen,
   markPoolSeen,
   markStatSeen,
-  accumulateNoveltySheetShown,
   selectEntityIsNew,
   selectActionIsNew,
   selectPoolIsNew,

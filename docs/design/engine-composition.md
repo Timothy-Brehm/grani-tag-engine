@@ -158,25 +158,23 @@ Metrics live on each **entity** (`entity.metrics`):
 
 ### Novelty (“new” badges — saveable)
 
-**Intent:** when something new appears for the player, the engine remembers it until the host acknowledges it (so saves keep ⚠ state). Presentation (badge art) stays in the host.
-
-Constant: `NOVELTY_AUTO_SEEN_TICKS = 30` (pool/stat auto-clear after that many **shown** ticks; ≈30s when the host advances 1 tick/sec).
+**Intent:** when something new appears for the player, the engine remembers it until the host acknowledges it (so saves keep ⚠ state). Presentation (badge art) and **when** to auto-acknowledge stay in the host.
 
 | Kind | Becomes new when | Cleared when |
 |------|------------------|--------------|
 | **Entity** | Spawns / enters play with `entitySeen: false` | `seen-entity` (or bootstrap seed) |
 | **Action** | Action id is **on the entity’s offered list** (definition actions at spawn; later dynamic adds) — even if greyed out / unavailable | `seen-action` |
-| **Pool / stat** | First appears on the entity (pool key / derived stat) | `seen-pool` / `seen-stat`, **or** auto after `NOVELTY_AUTO_SEEN_TICKS` while the sheet reports it shown |
+| **Pool / stat** | First appears on the entity (pool key / derived stat) | `seen-pool` / `seen-stat` (host: mouseover, sheet-shown timer, etc.) |
 
 **`hasNew` (derived):** `!entitySeen || any unseen offered action || any unseen pool/stat`.
 
-**Bootstrap (starting loadout):** do **not** treat default entities as new. Prefer marking them fully seen immediately after create (`markEntityNoveltySeen` / `seen-all` helper)—no content-definition “createdSeen” flag unless we later need it often.
+**Bootstrap (starting loadout):** do **not** treat default entities as new. Prefer marking them fully seen immediately after create (`markEntityNoveltySeen` / `seen-entity-content`)—no content-definition “createdSeen” flag unless we later need it often.
 
-**Sheet shown ticks:** host dispatches a per-tick “this entity’s pools/stats are on the character sheet” signal while that entity is selected; engine accumulates shown ticks and auto-marks pools/stats seen at the constant. Do not use wall-clock.
+**Sheet shown / auto-seen:** the host decides how long a pool/stat must be visible before dispatching `seen-pool` / `seen-stat`. Do not put host tick-rate UX constants in the engine. Prefer engine ticks over wall-clock if the host counts duration.
 
 **Rule for future object kinds:** any new engine-facing object type the player can discover should get novelty + seen (same pattern as actions/pools). Metrics already follow “track for gates”; novelty follows “surface until acknowledged.”
 
-**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; click/open sends the matching `seen-*` command.
+**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; acknowledge sends the matching `seen-*` command.
 
 ---
 
