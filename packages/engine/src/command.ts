@@ -66,4 +66,29 @@ export type EngineCommand<THost = unknown> =
   | {
       readonly type: 'clear-process-pool';
       readonly poolId: string;
-    };
+    }
+  | {
+      readonly type: 'seen-entity';
+      readonly entityId: string;
+    }
+  | {
+      readonly type: 'seen-action';
+      readonly entityId: string;
+      readonly actionId: string;
+    }
+  | {
+      readonly type: 'seen-pool';
+      readonly entityId: string;
+      readonly pool: string;
+    }
+  | {
+      readonly type: 'seen-stat';
+      readonly entityId: string;
+      readonly stat: string;
+    }
+    | {
+        /** Mark entity + current offered actions/pools/stats seen (bootstrap). */
+        readonly type: 'seen-entity-content';
+        readonly entityId: string;
+        readonly actionIds?: readonly string[];
+      };

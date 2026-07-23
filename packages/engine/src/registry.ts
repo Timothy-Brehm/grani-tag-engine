@@ -2,6 +2,7 @@ import { createTag, type Tag } from './tag';
 import type { EngineContext } from './context';
 import {
   getScopedEntity,
+  resolveScopedEntityId,
   withEngineState,
   withScopedEntity,
 } from './context';
@@ -15,6 +16,7 @@ import type {
 import type {
   AdjustPoolEffect,
   GrantTagEffect,
+  RemoveEntityEffect,
   SpawnEntityEffect,
 } from './effect';
 import type { EntityDefinition, EntityScope } from './entity';
@@ -41,6 +43,7 @@ import {
   selectStatValue,
 } from './selectors';
 import {
+  removeEntity,
   upsertEntity,
   withEngineSpawnCounts,
 } from './state';
@@ -101,6 +104,20 @@ function defaultEffectScope(
     return 'actor';
   }
   return 'source';
+}
+
+/** Prefer source for consumable board cards; fall back to actor. */
+function defaultRemoveEntityScope(
+  context: EngineContext<unknown>,
+  scope?: EntityScope,
+): EntityScope {
+  if (scope) {
+    return scope;
+  }
+  if (context.sourceEntityId) {
+    return 'source';
+  }
+  return 'actor';
 }
 
 export class EngineRegistry<THost = unknown> {
@@ -169,7 +186,7 @@ export class EngineRegistry<THost = unknown> {
 
   /**
    * Registers builtins: free/forbidden/tag/stat/pool-max/entity-count/metric
-   * requirements and grant-tag/adjust-pool/spawn-entity effects.
+   * requirements and grant-tag/adjust-pool/spawn-entity/remove-entity effects.
    */
   createBuiltinAdaptors(): this {
     this.registerRequirement('free', () => true);
@@ -395,6 +412,21 @@ export class EngineRegistry<THost = unknown> {
           },
         );
         return withEngineState(context, engine);
+      },
+    });
+
+    this.registerEffect('remove-entity', {
+      canHappen: (effect: RemoveEntityEffect, context) => {
+        const scope = defaultRemoveEntityScope(context, effect.scope);
+        return Boolean(getScopedEntity(context, scope));
+      },
+      apply: (effect: RemoveEntityEffect, context) => {
+        const scope = defaultRemoveEntityScope(context, effect.scope);
+        const id = resolveScopedEntityId(context, scope);
+        if (!id || !context.engine.entities.has(id)) {
+          return context;
+        }
+        return withEngineState(context, removeEntity(context.engine, id));
       },
     });
 

@@ -75,6 +75,31 @@ describe('registry builtins and actions', () => {
     expect(tags.size).toBe(2);
   });
 
+  it('remove-entity effect removes the source by default', () => {
+    const state = upsertEntity(
+      upsertEntity(
+        createEngineState(),
+        createTaggedEntity({ id: 'player', tags: [] }),
+      ),
+      createTaggedEntity({ id: 'crate', tags: [] }),
+    );
+    const ctx = toEngineContext(state, {}, {
+      actorEntityId: 'player',
+      sourceEntityId: 'crate',
+    });
+    const action: ActionDefinition = {
+      name: 'loot',
+      requirements: [{ type: 'free' }],
+      costs: [],
+      results: [{ type: 'remove-entity', name: 'Remove', strength: 1 }],
+      sideEffects: [],
+    };
+    expect(isActionAvailable(registry, action, ctx)).toBe(true);
+    const next = executeAction(registry, action, ctx);
+    expect(next.engine.entities.has('crate')).toBe(false);
+    expect(next.engine.entities.has('player')).toBe(true);
+  });
+
   it('uses host tagCatalog when granting', () => {
     const catalog = {
       fancy: createTag({

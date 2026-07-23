@@ -25,3 +25,12 @@ export type SpawnEntityEffect = ActiveEffect & {
   /** Optional stable instance id; generated when omitted. */
   readonly entityId?: string;
 };
+
+export type RemoveEntityEffect = ActiveEffect & {
+  readonly type: 'remove-entity';
+  /**
+   * Defaults to source when present, otherwise actor.
+   * Typical one-shot board cards: remove the source after loot.
+   */
+  readonly scope?: EntityScope;
+};

@@ -16,10 +16,11 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 3. **Tags derive traits/capacities** — prefer grant-tag / tag passive effects over bespoke fields on `EngineState`.
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`found_crate` → also `opened_crate`), not erasing history by default.
 5. **Track metrics for gates** — action counts, pool currents, high/low-waters, lifetime used, and tick timestamps live on `entity.metrics`. Prefer engine ticks over wall-clock for rules; hosts may display `tick / N` as time. Use `execute-action.execution` (`manual` default / `automatic`). Low-water metric requirements use `<= amount`.
-6. **Actions are recipes** — requirements → costs → results (+ side effects), with actor / source / target roles.
-7. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist).
-8. **Host owns presentation** — no React, cards, sheets, or layout in the core package.
-9. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content.
+6. **Novelty is engine-owned facts** — unseen until `seen-*`; hosts decide *when* to acknowledge (mouseover, sheet-shown timers, etc.). Bootstrap loadout: mark seen immediately. **Any new discoverable object kind should get the same novelty + seen pattern.**
+7. **Actions are recipes** — requirements → costs → results (+ side effects), with actor / source / target roles.
+8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist).
+9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
+10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content.
 
 ## Vocabulary
 

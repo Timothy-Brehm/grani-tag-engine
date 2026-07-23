@@ -156,6 +156,26 @@ Metrics live on each **entity** (`entity.metrics`):
 - Distinguish **manual vs automatic** action execution so automation does not silently satisfy “player did this” gates unless intended.
 - Metrics are engine facts: hosts may display them; hosts should not be the only place they live if rules need them.
 
+### Novelty (“new” badges — saveable)
+
+**Intent:** when something new appears for the player, the engine remembers it until the host acknowledges it (so saves keep ⚠ state). Presentation (badge art) and **when** to auto-acknowledge stay in the host.
+
+| Kind | Becomes new when | Cleared when |
+|------|------------------|--------------|
+| **Entity** | Spawns / enters play with `entitySeen: false` | `seen-entity` (or bootstrap seed) |
+| **Action** | Action id is **on the entity’s offered list** (definition actions at spawn; later dynamic adds) — even if greyed out / unavailable | `seen-action` |
+| **Pool / stat** | First appears on the entity (pool key / derived stat) | `seen-pool` / `seen-stat` (host: mouseover, sheet-shown timer, etc.) |
+
+**`hasNew` (derived):** `!entitySeen || any unseen offered action || any unseen pool/stat`.
+
+**Bootstrap (starting loadout):** do **not** treat default entities as new. Prefer marking them fully seen immediately after create (`markEntityNoveltySeen` / `seen-entity-content`)—no content-definition “createdSeen” flag unless we later need it often.
+
+**Sheet shown / auto-seen:** the host decides how long a pool/stat must be visible before dispatching `seen-pool` / `seen-stat`. Do not put host tick-rate UX constants in the engine. Prefer engine ticks over wall-clock if the host counts duration.
+
+**Rule for future object kinds:** any new engine-facing object type the player can discover should get novelty + seen (same pattern as actions/pools). Metrics already follow “track for gates”; novelty follows “surface until acknowledged.”
+
+**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; acknowledge sends the matching `seen-*` command.
+
 ---
 
 ## How pieces combine
@@ -190,7 +210,7 @@ EngineState
 ## Builtin toolbox (current)
 
 **Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 
