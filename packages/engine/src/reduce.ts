@@ -19,6 +19,14 @@ import {
   withEntityTags,
 } from './entity';
 import { recordActionExecution } from './metrics';
+import {
+  accumulateNoveltySheetShown,
+  markActionSeen,
+  markEntityNoveltySeen,
+  markEntitySeen,
+  markPoolSeen,
+  markStatSeen,
+} from './novelty';
 import { selectPoolMax, selectSpawnCount } from './selectors';
 
 export type ReduceEngineOptions<THost = unknown> = {
@@ -158,6 +166,57 @@ export function reduceEngineState<THost = unknown>(
       });
     case 'clear-process-pool':
       return clearProcessPool(command.poolId);
+    case 'seen-entity': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(state, markEntitySeen(entity));
+    }
+    case 'seen-action': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(state, markActionSeen(entity, command.actionId));
+    }
+    case 'seen-pool': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(state, markPoolSeen(entity, command.pool));
+    }
+    case 'seen-stat': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(state, markStatSeen(entity, command.stat));
+    }
+    case 'seen-entity-content': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(
+        state,
+        markEntityNoveltySeen(entity, command.actionIds ?? []),
+      );
+    }
+    case 'novelty-sheet-tick': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(
+        state,
+        accumulateNoveltySheetShown(entity, {
+          pools: command.pools,
+          stats: command.stats,
+        }),
+      );
+    }
     default: {
       const _exhaustive: never = command;
       return _exhaustive;

@@ -62,7 +62,7 @@ AstrevnoState {
 ## Requirement / effect builtins
 
 - Requirements: `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`
-- Effects: `grant-tag`, `adjust-pool`, `spawn-entity`
+- Effects: `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 - Games may still register namespaced custom types when needed.
 - TypeScript-defined actions may use `codeRequirements` (runtime-only, not for JSON).
 

@@ -20,6 +20,7 @@ export type {
   ActiveEffect,
   AdjustPoolEffect,
   GrantTagEffect,
+  RemoveEntityEffect,
   SpawnEntityEffect,
 } from './effect';
 
@@ -71,6 +72,25 @@ export {
   selectStatLowWater,
   selectTagGrantedAt,
 } from './metrics';
+
+export type { EntityNovelty, EntityNoveltyJSON } from './novelty';
+export {
+  NOVELTY_AUTO_SEEN_TICKS,
+  emptyEntityNovelty,
+  entityNoveltyToJSON,
+  entityNoveltyFromJSON,
+  markEntityNoveltySeen,
+  markEntitySeen,
+  markActionSeen,
+  markPoolSeen,
+  markStatSeen,
+  accumulateNoveltySheetShown,
+  selectEntityIsNew,
+  selectActionIsNew,
+  selectPoolIsNew,
+  selectStatIsNew,
+  selectEntityHasNew,
+} from './novelty';
 
 export type { EngineContext } from './context';
 export {
