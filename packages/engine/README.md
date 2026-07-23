@@ -80,6 +80,16 @@ registry.registerRequirement(
 
 Actions defined in TypeScript can also provide runtime-only predicates via `codeRequirements` (not serializable).
 
+## Messages (host catalog + engine seen state)
+
+Short-term player text (modals, banners) uses host-owned catalog entries (text,
+image key, optional priority). The engine only tracks message **ids** on entities:
+
+- Effect: `{ type: 'show-message', name: 'welcome', strength: 1 }` (default scope:
+  source, else actor). Fire-once if already offered or seen.
+- Select: `selectUnseenMessages(entity)` / `selectUnseenMessagesInState(state)`
+- Ack: `{ type: 'seen-message', entityId, messageId }`
+
 ## Reserved process API
 
 Recurring toggles will be modeled as processes that allocate capacity from a

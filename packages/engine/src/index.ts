@@ -21,6 +21,7 @@ export type {
   AdjustPoolEffect,
   GrantTagEffect,
   RemoveEntityEffect,
+  ShowMessageEffect,
   SpawnEntityEffect,
 } from './effect';
 
@@ -83,10 +84,14 @@ export {
   markActionSeen,
   markPoolSeen,
   markStatSeen,
+  offerMessage,
+  markMessageSeen,
   selectEntityIsNew,
   selectActionIsNew,
   selectPoolIsNew,
   selectStatIsNew,
+  selectMessageIsNew,
+  selectUnseenMessages,
   selectEntityHasNew,
 } from './novelty';
 
@@ -141,7 +146,9 @@ export {
   selectSpawnCount,
   selectPrimaryEntity,
   selectPrimaryEntityId,
+  selectUnseenMessagesInState,
 } from './selectors';
+export type { UnseenMessageRef } from './selectors';
 
 export type {
   ProcessPoolKind,

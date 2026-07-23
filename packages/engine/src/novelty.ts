@@ -9,6 +9,13 @@ export type EntityNovelty = {
   readonly seenActions: Readonly<Record<string, true>>;
   readonly seenPools: Readonly<Record<string, true>>;
   readonly seenStats: Readonly<Record<string, true>>;
+  /**
+   * Message ids offered for host display (modal / short text).
+   * Unseen = offered and not in `seenMessages`.
+   */
+  readonly offeredMessages: Readonly<Record<string, true>>;
+  /** Message ids the host has acknowledged (history kept). */
+  readonly seenMessages: Readonly<Record<string, true>>;
 };
 
 export type EntityNoveltyJSON = {
@@ -16,6 +23,8 @@ export type EntityNoveltyJSON = {
   seenActions?: Record<string, true | boolean>;
   seenPools?: Record<string, true | boolean>;
   seenStats?: Record<string, true | boolean>;
+  offeredMessages?: Record<string, true | boolean>;
+  seenMessages?: Record<string, true | boolean>;
   /** @deprecated Host-owned; ignored on load. */
   poolShownTicks?: Record<string, number>;
   /** @deprecated Host-owned; ignored on load. */
@@ -28,6 +37,8 @@ export function emptyEntityNovelty(entitySeen = false): EntityNovelty {
     seenActions: Object.freeze({}),
     seenPools: Object.freeze({}),
     seenStats: Object.freeze({}),
+    offeredMessages: Object.freeze({}),
+    seenMessages: Object.freeze({}),
   };
 }
 
@@ -49,6 +60,8 @@ export function entityNoveltyToJSON(novelty: EntityNovelty): EntityNoveltyJSON {
     seenActions: { ...novelty.seenActions },
     seenPools: { ...novelty.seenPools },
     seenStats: { ...novelty.seenStats },
+    offeredMessages: { ...novelty.offeredMessages },
+    seenMessages: { ...novelty.seenMessages },
   };
 }
 
@@ -63,6 +76,8 @@ export function entityNoveltyFromJSON(
     seenActions: freezeTrueMap(json.seenActions),
     seenPools: freezeTrueMap(json.seenPools),
     seenStats: freezeTrueMap(json.seenStats),
+    offeredMessages: freezeTrueMap(json.offeredMessages),
+    seenMessages: freezeTrueMap(json.seenMessages),
   };
 }
 
@@ -189,6 +204,59 @@ export function markStatSeen(
   });
 }
 
+/**
+ * Offer a host-catalog message id for display.
+ * No-op if already seen (fire-once) or already offered.
+ */
+export function offerMessage(
+  entity: EntityInstance,
+  messageId: string,
+): EntityInstance {
+  if (
+    entity.novelty.seenMessages[messageId] ||
+    entity.novelty.offeredMessages[messageId]
+  ) {
+    return entity;
+  }
+  return withNovelty(entity, {
+    ...entity.novelty,
+    offeredMessages: Object.freeze({
+      ...entity.novelty.offeredMessages,
+      [messageId]: true,
+    }),
+  });
+}
+
+/** Acknowledge a message; keeps history in `seenMessages`. */
+export function markMessageSeen(
+  entity: EntityInstance,
+  messageId: string,
+): EntityInstance {
+  if (entity.novelty.seenMessages[messageId]) {
+    if (!entity.novelty.offeredMessages[messageId]) {
+      return entity;
+    }
+    const offered: Record<string, true> = {
+      ...entity.novelty.offeredMessages,
+    };
+    delete offered[messageId];
+    return withNovelty(entity, {
+      ...entity.novelty,
+      offeredMessages: Object.freeze(offered),
+    });
+  }
+  const offered: Record<string, true> = { ...entity.novelty.offeredMessages };
+  delete offered[messageId];
+  return withNovelty(entity, {
+    ...entity.novelty,
+    offeredMessages: Object.freeze(offered),
+    seenMessages: Object.freeze({
+      ...entity.novelty.seenMessages,
+      [messageId]: true,
+    }),
+  });
+}
+
 export function selectEntityIsNew(entity: EntityInstance): boolean {
   return !entity.novelty.entitySeen;
 }
@@ -227,9 +295,31 @@ export function selectStatIsNew(
   );
 }
 
+/** Host-catalog message ids offered on this entity and not yet acknowledged. */
+export function selectUnseenMessages(entity: EntityInstance): string[] {
+  const unseen: string[] = [];
+  for (const messageId of Object.keys(entity.novelty.offeredMessages)) {
+    if (!entity.novelty.seenMessages[messageId]) {
+      unseen.push(messageId);
+    }
+  }
+  return unseen;
+}
+
+export function selectMessageIsNew(
+  entity: EntityInstance,
+  messageId: string,
+): boolean {
+  return (
+    Boolean(entity.novelty.offeredMessages[messageId]) &&
+    !entity.novelty.seenMessages[messageId]
+  );
+}
+
 /**
  * True if the entity itself is new or it has any unseen offered actions /
  * present pools / present stats.
+ * Unseen messages are polled separately via {@link selectUnseenMessages}.
  */
 export function selectEntityHasNew(
   entity: EntityInstance,

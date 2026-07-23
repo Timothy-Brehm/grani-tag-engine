@@ -23,6 +23,7 @@ import {
   markActionSeen,
   markEntityNoveltySeen,
   markEntitySeen,
+  markMessageSeen,
   markPoolSeen,
   markStatSeen,
 } from './novelty';
@@ -192,6 +193,16 @@ export function reduceEngineState<THost = unknown>(
         return state;
       }
       return upsertEntity(state, markStatSeen(entity, command.stat));
+    }
+    case 'seen-message': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      return upsertEntity(
+        state,
+        markMessageSeen(entity, command.messageId),
+      );
     }
     case 'seen-entity-content': {
       const entity = state.entities.get(command.entityId);

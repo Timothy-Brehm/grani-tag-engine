@@ -102,6 +102,18 @@ export type ActiveEffectJSON =
       strength: number;
       definitionId: string;
       entityId?: string;
+    }
+  | {
+      type: 'remove-entity';
+      name: string;
+      strength: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'show-message';
+      name: string;
+      strength: number;
+      scope?: EntityScope;
     };
 
 export type ActionDefinitionJSON = {

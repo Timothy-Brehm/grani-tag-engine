@@ -86,6 +86,11 @@ export type EngineCommand<THost = unknown> =
       readonly entityId: string;
       readonly stat: string;
     }
+  | {
+      readonly type: 'seen-message';
+      readonly entityId: string;
+      readonly messageId: string;
+    }
     | {
         /** Mark entity + current offered actions/pools/stats seen (bootstrap). */
         readonly type: 'seen-entity-content';

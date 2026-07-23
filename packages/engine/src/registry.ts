@@ -17,6 +17,7 @@ import type {
   AdjustPoolEffect,
   GrantTagEffect,
   RemoveEntityEffect,
+  ShowMessageEffect,
   SpawnEntityEffect,
 } from './effect';
 import type { EntityDefinition, EntityScope } from './entity';
@@ -25,6 +26,7 @@ import {
   instantiateEntity,
   withEntityTags,
 } from './entity';
+import { offerMessage } from './novelty';
 import {
   selectActionCount,
   selectPoolHighWater,
@@ -186,7 +188,7 @@ export class EngineRegistry<THost = unknown> {
 
   /**
    * Registers builtins: free/forbidden/tag/stat/pool-max/entity-count/metric
-   * requirements and grant-tag/adjust-pool/spawn-entity/remove-entity effects.
+   * requirements and grant-tag/adjust-pool/spawn-entity/remove-entity/show-message effects.
    */
   createBuiltinAdaptors(): this {
     this.registerRequirement('free', () => true);
@@ -427,6 +429,32 @@ export class EngineRegistry<THost = unknown> {
           return context;
         }
         return withEngineState(context, removeEntity(context.engine, id));
+      },
+    });
+
+    this.registerEffect('show-message', {
+      canHappen: (effect: ShowMessageEffect, context) => {
+        const scope = defaultRemoveEntityScope(context, effect.scope);
+        const entity = getScopedEntity(context, scope);
+        if (!entity || !effect.name) {
+          return false;
+        }
+        return (
+          !entity.novelty.seenMessages[effect.name] &&
+          !entity.novelty.offeredMessages[effect.name]
+        );
+      },
+      apply: (effect: ShowMessageEffect, context) => {
+        const scope = defaultRemoveEntityScope(context, effect.scope);
+        const entity = getScopedEntity(context, scope);
+        if (!entity || !effect.name) {
+          return context;
+        }
+        return withScopedEntity(
+          context,
+          scope,
+          offerMessage(entity, effect.name),
+        );
       },
     });
 

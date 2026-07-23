@@ -165,8 +165,15 @@ Metrics live on each **entity** (`entity.metrics`):
 | **Entity** | Spawns / enters play with `entitySeen: false` | `seen-entity` (or bootstrap seed) |
 | **Action** | Action id is **on the entity’s offered list** (definition actions at spawn; later dynamic adds) — even if greyed out / unavailable | `seen-action` |
 | **Pool / stat** | First appears on the entity (pool key / derived stat) | `seen-pool` / `seen-stat` (host: mouseover, sheet-shown timer, etc.) |
+| **Message** | `show-message` effect offers a host-catalog id on an entity | `seen-message` (host modal dismiss, etc.) |
 
-**`hasNew` (derived):** `!entitySeen || any unseen offered action || any unseen pool/stat`.
+**`hasNew` (derived):** `!entitySeen || any unseen offered action || any unseen pool/stat`. Unseen **messages** are polled separately (`selectUnseenMessages` / `selectUnseenMessagesInState`) so hosts can drive modals without conflating board badges.
+
+**Messages (short-term host display):**
+- Engine stores only **message ids** on the entity (`offeredMessages` / `seenMessages`). Host JSON owns text, image keys, optional priority.
+- Builtin effect `{ type: 'show-message', name: '<messageId>', strength: 1, scope? }` — defaults to **source** then **actor** (same as `remove-entity`). Fire-once: no-op if already offered or seen.
+- Selectors: `selectUnseenMessages(entity)`, `selectUnseenMessagesInState(state)` (unordered list).
+- Ack: command `seen-message` → keeps history in `seenMessages`.
 
 **Bootstrap (starting loadout):** do **not** treat default entities as new. Prefer marking them fully seen immediately after create (`markEntityNoveltySeen` / `seen-entity-content`)—no content-definition “createdSeen” flag unless we later need it often.
 
@@ -174,7 +181,7 @@ Metrics live on each **entity** (`entity.metrics`):
 
 **Rule for future object kinds:** any new engine-facing object type the player can discover should get novelty + seen (same pattern as actions/pools). Metrics already follow “track for gates”; novelty follows “surface until acknowledged.”
 
-**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; acknowledge sends the matching `seen-*` command.
+**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; acknowledge sends the matching `seen-*` command. Messages → host modal / overlay from catalog lookup.
 
 ---
 
@@ -210,7 +217,7 @@ EngineState
 ## Builtin toolbox (current)
 
 **Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`, `show-message`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 
