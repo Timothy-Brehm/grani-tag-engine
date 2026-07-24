@@ -88,6 +88,28 @@ function effectNovelty(effect: TagEffect): NoveltyAck | undefined {
   };
 }
 
+function tagNovelty(tag: { novelty?: NoveltyAck }): NoveltyAck | undefined {
+  const raw = tag.novelty;
+  if (!raw?.seenTag) {
+    return undefined;
+  }
+  return {
+    seenTag: raw.seenTag,
+    ...(raw.scope === 'primary' || raw.scope === 'instance'
+      ? { scope: raw.scope }
+      : {}),
+  };
+}
+
+/** A held tag is novel when it declares `novelty` and the ack tag is absent. */
+export function selectTagIsNovel(
+  state: EngineState,
+  entity: EntityInstance,
+  tag: { readonly name: string; readonly novelty?: NoveltyAck },
+): boolean {
+  return selectIsNovel(state, entity, tagNovelty(tag));
+}
+
 export function selectPoolIsNovel(
   state: EngineState,
   entity: EntityInstance,
@@ -238,6 +260,19 @@ export function selectNovelOnEntity(
           });
         }
       }
+    }
+  }
+
+  for (const tag of entity.tags.list()) {
+    const novelty = tagNovelty(tag);
+    if (novelty && selectIsNovel(state, entity, novelty)) {
+      out.push({
+        entityId: entity.id,
+        seenTag: novelty.seenTag,
+        scope: noveltyScope(novelty),
+        kind: 'tag',
+        key: tag.name,
+      });
     }
   }
 

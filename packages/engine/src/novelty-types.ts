@@ -13,13 +13,13 @@ export type NoveltyAck = {
   readonly scope?: 'instance' | 'primary';
 };
 
-export type NovelKind = 'entity' | 'action' | 'pool' | 'stat';
+export type NovelKind = 'entity' | 'action' | 'pool' | 'stat' | 'tag';
 
 export type NovelRef = {
   readonly entityId: string;
   readonly seenTag: string;
   readonly scope: 'instance' | 'primary';
   readonly kind: NovelKind;
-  /** Action name, pool id, stat id, or entity definition id. */
+  /** Action name, pool id, stat id, entity definition id, or tag name. */
   readonly key: string;
 };

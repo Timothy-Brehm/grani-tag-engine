@@ -81,6 +81,7 @@ export {
   selectActionIsNovel,
   selectPoolIsNovel,
   selectStatIsNovel,
+  selectTagIsNovel,
   selectNovelOnEntity,
   selectNovelInState,
   selectEntityHasNovel,

@@ -158,23 +158,22 @@ Metrics live on each **entity** (`entity.metrics`):
 
 ### Novelty (“new” badges / short text — saveable via tags)
 
-**Intent:** when something new appears for the player, the engine treats it as novel until the host **grants an acknowledgement tag**. Presentation (badge, modal) and **when** to acknowledge stay in the host. Display copy/image live on the **catalog tag definition**.
+**Intent:** when something new appears for the player, the engine treats it as novel until the host **grants an acknowledgement tag**. Presentation (badge, modal) and **when** to acknowledge stay in the host. Display copy/image live on the **catalog tag definition** named by `seenTag` (not necessarily on the discoverable itself).
 
 | Kind | In play when | Novel when | Ack |
 |------|--------------|------------|-----|
 | **Entity** | Instance exists; definition has `novelty` | Ack tag absent on scope | `add-tag` / `grant-tag` of `seenTag` |
 | **Action** | On the entity’s offered action list; action has `novelty` | Same | Same |
 | **Pool / stat** | Present on the entity; `pool-max` / `stat` effect has `novelty` | Same | Same |
+| **Tag** | Entity holds a tag that declares `novelty` | Same | Same |
 
 **`NoveltyAck`:** `{ seenTag, scope?: 'instance' | 'primary' }`
 - `instance` (default): subject entity must hold `seenTag`
-- `primary`: `primaryEntityId` holds it (once-per-run / cross-instance “type” feel)
+- `primary`: `primaryEntityId` holds it (once-per-run / cross-instance)
 
 **Selectors:** walk in-play objects and keep those whose ack tag is missing — `selectIsNovel`, `selectNovelOnEntity`, `selectNovelInState`, `selectEntityHasNovel`. No parallel `seen*` maps on the entity.
 
-**Bootstrap:** grant starting loadout ack tags (host), same as any other tags.
-
-**Messages / modals:** not a separate engine queue. Attach `novelty` to an in-play action (or entity/pool); host shows catalog `description` / `image` for that `seenTag`, then grants the tag on dismiss.
+**Bootstrap / starting loadout:** do **not** declare `novelty` on content you do not want highlighted. No `novelty` ⇒ not tracked ⇒ not novel. Only grant ack tags when the player actually acknowledges something that *was* novel.
 
 **Rule for future object kinds:** declare `novelty` on the content; ack with a catalog tag; select by walking the in-play graph.
 
@@ -212,7 +211,7 @@ EngineState
 ## Builtin toolbox (current)
 
 **Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`, `show-message`
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 
@@ -295,6 +294,50 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
   3. Downstream recipes require `major_stage_colony` plus optionally a specific `path_*` tag.
 - Deepening a path unlocks path-specific recipes; shared colony recipes need only `major_stage_colony`.
 
+### 6. Novelty highlight — new important content (badge ⚠)
+
+**Intent:** call out something the player has not acknowledged yet (new action, new pool, new board entity). Omit `novelty` on starting loadout you do not want highlighted.
+
+**Composition:**
+- On the discoverable (action / entity definition / `pool-max` or `stat` effect), set  
+  `novelty: { seenTag: 'Seen_BreakCanopy', scope: 'primary' }` (or `instance`).
+- Catalog entry `Seen_BreakCanopy` may be a thin ack tag (empty effects) or carry tooltip copy/`image`.
+- Host: `selectNovelOnEntity` / `selectNovelInState` → show ⚠; on mouseover / open, `add-tag` the `seenTag` onto the ack scope.
+- Example: Landing Ship action **Break Canopy Seal** declares novelty; Pickup Wrist Computer does **not**.
+
+### 7. Event message — modal when something becomes true (no other visible effect)
+
+**Intent:** show short-term text (confirm-style modal) when a condition becomes true—e.g. “You feel stronger” at Strength ≥ 5—without inventing a visible reward or a parallel message queue.
+
+**Composition (silent milestone tag → display ack tag):**
+1. **Display / ack catalog tag** `Msg_Strength5` — holds `description`, optional `image` (modal body). No gameplay effects required.
+2. **Silent milestone tag** `Milestone_Strength5` — `effects: []`, and  
+   `novelty: { seenTag: 'Msg_Strength5', scope: 'primary' }`.  
+   Holding this tag is what puts the message “in play”; the player-facing copy lives on `Msg_Strength5`, not on the milestone.
+3. **One-shot grant** when Strength reaches 5 (primary character as actor), e.g. an automatic or host-fired action:
+   - Requirements: `{ type: 'stat', stat: 'Strength', amount: 5 }`,  
+     `{ type: 'tag', tagName: 'Milestone_Strength5', exists: false }`
+   - Results: `grant-tag` `Milestone_Strength5`
+   - No costs; no other results needed.
+4. Host: novel `kind: 'tag'` with `seenTag: 'Msg_Strength5'` → open modal from catalog → on dismiss `add-tag` `Msg_Strength5` on primary (ack). Milestone tag stays (history); message does not reappear.
+
+**Why two tags:** the milestone can be granted by any recipe when a gate trips; novelty points at a **separate** display tag so the milestone itself stays invisible (no label/image) while the modal still has rich copy. Same pattern works for “first time you open the canopy,” “first Science ≥ 2,” etc.
+
+**Do not** put the modal text only on the milestone and also use it as the ack tag unless you want granting the message tag to be the same object as the milestone (usually worse for “silent trigger + rich display”).
+
+### 8. Achievement badge — lifetime milestone (`badge_totalkills`)
+
+**Intent:** when a long-run metric is hit (e.g. 100 lifetime creature kills), grant a **badge tag** the host can show anywhere (profile, sheet, toast)—independent of whether you also flash novelty.
+
+**Composition:**
+- Track kills as a **metric** (e.g. `action-total` on a `kill-creature` action, or a dedicated counter metric if you add one)—not host-only memory.
+- One-shot action (manual trophy claim or `execution: 'automatic'` when processes exist):
+  - Requirements: metric ≥ 100, `{ type: 'tag', tagName: 'badge_totalkills', exists: false }`
+  - Results: `grant-tag` `badge_totalkills`
+- Catalog tag `badge_totalkills`: `label` / `description` / `image` for the badge art; typically **no** stat/pool effects (pure presence).
+- Host lists `entity.tags` (or a `badge_*` name prefix) wherever badges should appear.
+- Optional: give `badge_totalkills` its own `novelty: { seenTag: 'Seen_Badge_TotalKills' }` if the first earn should modal or ⚠; omit novelty if the badge appearing in the badge list is enough.
+
 ---
 
 ## Worked sketches (not product specs)
@@ -343,6 +386,9 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 | One-shot player or NPC verb? | **Action** |
 | Repeats every tick while assigned? | **Process** (when implemented) |
 | “Has this ever / how many times / how high?” | **Metric** (count or high-water), not host-only memory |
+| Highlight something until acknowledged? | **`novelty` + ack tag** (`seenTag`); omit `novelty` if not highlighted |
+| Modal / short text when a fact becomes true? | Silent **milestone tag** with `novelty.seenTag` → display catalog tag |
+| Trophy / badge for a lifetime milestone? | **Grant badge tag** (presence); host renders anywhere |
 | Only changes pixels / layout? | **Host presentation** |
 
 ---

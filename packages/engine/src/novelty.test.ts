@@ -156,6 +156,49 @@ describe('tag-based novelty', () => {
     ]);
   });
 
+  it('supports silent milestone tags that point novelty at a display tag', () => {
+    const milestone = createTag({
+      name: 'Milestone_Strength5',
+      effects: [],
+      novelty: { seenTag: 'Msg_Strength5', scope: 'primary' },
+    });
+    let state = createEngineState({
+      entities: [
+        createEntityInstance({
+          id: 'hero',
+          definitionId: 'hero',
+          tags: [milestone],
+        }),
+      ],
+      primaryEntityId: 'hero',
+    });
+    const refs = selectNovelOnEntity(state, state.entities.get('hero')!);
+    expect(refs).toEqual([
+      {
+        entityId: 'hero',
+        seenTag: 'Msg_Strength5',
+        scope: 'primary',
+        kind: 'tag',
+        key: 'Milestone_Strength5',
+      },
+    ]);
+
+    state = reduceEngineState(
+      state,
+      {
+        type: 'add-tag',
+        entityId: 'hero',
+        tag: createTag({
+          name: 'Msg_Strength5',
+          description: 'You feel stronger.',
+          effects: [],
+        }),
+      },
+      options,
+    );
+    expect(selectNovelOnEntity(state, state.entities.get('hero')!)).toEqual([]);
+  });
+
   it('ignores discoverables with no novelty config', () => {
     const state = upsertEntity(createEngineState(), lifeHero());
     const hero = state.entities.get('hero')!;

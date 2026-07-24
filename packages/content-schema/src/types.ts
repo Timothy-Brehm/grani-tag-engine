@@ -1,5 +1,10 @@
 export type EntityScope = 'actor' | 'source' | 'target';
 
+export type NoveltyAckJSON = {
+  seenTag: string;
+  scope?: 'instance' | 'primary';
+};
+
 export type TagEffectJSON = {
   type: string;
   name: string;
@@ -15,6 +20,7 @@ export type TagJSON = {
   description?: string;
   label?: string;
   image?: string;
+  novelty?: NoveltyAckJSON;
   effects: TagEffectJSON[];
 };
 
@@ -111,11 +117,6 @@ export type ActiveEffectJSON =
       strength: number;
       scope?: EntityScope;
     };
-
-export type NoveltyAckJSON = {
-  seenTag: string;
-  scope?: 'instance' | 'primary';
-};
 
 export type ActionDefinitionJSON = {
   name: string;
