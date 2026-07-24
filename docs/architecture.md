@@ -19,10 +19,11 @@ Extract a **framework-neutral** tag/requirement/effect/action evaluation core fr
 ```ts
 // Core (serializable)
 EngineState {
+  engineVersion: string              // major.minor.patch.build; compat key = major.minor
   tick: number
   entities: Map<id, EntityInstance>  // tags + pools + metrics per entity
   spawnCounts: Record<definitionId, number>
-  primaryEntityId: string            // required primary character (must be in entities)
+  primaryEntityId: string            // required default entity for general use (must be in entities)
 }
 
 EntityInstance {
@@ -47,7 +48,8 @@ AstrevnoState {
 - Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, …).
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Costs/results default to the **actor**; source-state requirements default to the **source**.
-- `primaryEntityId` is a **required** engine pointer to an in-play entity (typically the primary character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
+- `primaryEntityId` is a **required** engine pointer to an in-play entity: the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
+- `engineVersion` is stamped on every `EngineState` (`ENGINE_VERSION`, currently `0.1.0.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**—bump `minor` (or `major`) when the serialized protocol is incompatible; `patch`/`build` stay within an epoch. `engineStateFromJSON` rejects missing or foreign epochs.
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
 - Derived values (stats / pool maxima from tags) live in engine selectors.

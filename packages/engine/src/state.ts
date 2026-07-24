@@ -8,9 +8,18 @@ import {
   type EntityInstance,
   type EntityInstanceJSON,
 } from './entity';
+import {
+  assertCompatibleEngineVersion,
+  ENGINE_VERSION,
+} from './version';
 
 /** Serializable, framework-neutral engine slice owned by the core package. */
 export interface EngineState {
+  /**
+   * Protocol version (`major.minor.patch.build`). Stamped on create; load
+   * rejects saves whose major.minor epoch differs from {@link ENGINE_VERSION}.
+   */
+  readonly engineVersion: string;
   /** Monotonic tick counter advanced by the `tick` command. */
   readonly tick: number;
   /** In-play entity instances keyed by stable instance id. */
@@ -18,7 +27,8 @@ export interface EngineState {
   /** Lifetime spawn counts keyed by definition id. */
   readonly spawnCounts: Readonly<Record<string, number>>;
   /**
-   * Required primary entity (typically the primary character).
+   * Required default entity for general use (PC sheet, camp bag, or other
+   * property store—not necessarily a character).
    * Must always refer to an id present in `entities`.
    * Hosts may treat it as the default actor; run-wide facts often live here.
    */
@@ -26,6 +36,7 @@ export interface EngineState {
 }
 
 export type EngineStateJSON = {
+  engineVersion: string;
   tick: number;
   entities: EntityInstanceJSON[];
   spawnCounts: Record<string, number>;
@@ -54,6 +65,7 @@ export function createEngineState(input: {
     );
   }
   return {
+    engineVersion: ENGINE_VERSION,
     tick: input.tick ?? 0,
     entities,
     spawnCounts: Object.freeze({ ...(input.spawnCounts ?? {}) }),
@@ -63,6 +75,7 @@ export function createEngineState(input: {
 
 export function engineStateToJSON(state: EngineState): EngineStateJSON {
   return {
+    engineVersion: state.engineVersion,
     tick: state.tick,
     entities: [...state.entities.values()].map(entityInstanceToJSON),
     spawnCounts: { ...state.spawnCounts },
@@ -71,6 +84,7 @@ export function engineStateToJSON(state: EngineState): EngineStateJSON {
 }
 
 export function engineStateFromJSON(json: EngineStateJSON): EngineState {
+  assertCompatibleEngineVersion(json.engineVersion);
   if (typeof json.primaryEntityId !== 'string' || !json.primaryEntityId) {
     throw new Error('engineStateFromJSON requires primaryEntityId');
   }

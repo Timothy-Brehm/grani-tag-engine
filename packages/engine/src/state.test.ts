@@ -52,14 +52,27 @@ describe('EngineState and reduceEngineState', () => {
     return createPrimaryEngineState(playerEntity(), { tick });
   }
 
-  it('serializes and restores entities, tick, and primaryEntityId', () => {
+  it('serializes and restores entities, tick, primaryEntityId, and engineVersion', () => {
     const state = withPlayer(3);
+    expect(state.engineVersion).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
     const restored = engineStateFromJSON(engineStateToJSON(state));
     expect(restored.tick).toBe(3);
     expect(restored.primaryEntityId).toBe('player');
+    expect(restored.engineVersion).toBe(state.engineVersion);
     expect(
       restored.entities.get('player')?.tags.has('Stat_Initial_Strength'),
     ).toBe(true);
+  });
+
+  it('rejects JSON with a missing or incompatible engineVersion', () => {
+    const state = withPlayer();
+    const json = engineStateToJSON(state);
+    expect(() =>
+      engineStateFromJSON({ ...json, engineVersion: undefined as never }),
+    ).toThrow(/Missing engineVersion/);
+    expect(() =>
+      engineStateFromJSON({ ...json, engineVersion: '0.2.0.0' }),
+    ).toThrow(/Incompatible engineVersion/);
   });
 
   it('requires primaryEntityId and refuses to remove the primary entity', () => {
