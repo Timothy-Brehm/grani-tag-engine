@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  createEngineState,
   reduceEngineState,
   type EngineCommand,
   type EngineRegistry,
@@ -31,7 +30,8 @@ export type EngineProviderProps<THost = unknown> = {
   children: ReactNode;
   registry: EngineRegistry<THost>;
   host: THost;
-  initialState?: EngineState;
+  /** Required valid engine state (must include primaryEntityId). */
+  initialState: EngineState;
 };
 
 /**
@@ -44,9 +44,7 @@ export function EngineProvider<THost = unknown>({
   host,
   initialState,
 }: EngineProviderProps<THost>) {
-  const [state, setState] = useState<EngineState>(
-    () => initialState ?? createEngineState(),
-  );
+  const [state, setState] = useState<EngineState>(() => initialState);
 
   // Keep host/registry fresh without forcing consumers to remount.
   const optionsRef = useRef<ReduceEngineOptions<THost>>({ registry, host });

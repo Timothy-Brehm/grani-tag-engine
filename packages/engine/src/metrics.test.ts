@@ -3,7 +3,7 @@ import type { ActionDefinition } from './action';
 import { EngineRegistry } from './registry';
 import { reduceEngineState } from './reduce';
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   engineStateFromJSON,
   engineStateToJSON,
@@ -31,8 +31,7 @@ describe('entity metrics', () => {
   const options = { registry, host: {} };
 
   function withPlayer() {
-    return upsertEntity(
-      createEngineState(),
+    return createPrimaryEngineState(
       createTaggedEntity({
         id: 'player',
         definitionId: 'player',
@@ -91,8 +90,7 @@ describe('entity metrics', () => {
   });
 
   it('tracks pool low-water and gates on ever hitting zero Life', () => {
-    let state = upsertEntity(
-      createEngineState(),
+    let state = createPrimaryEngineState(
       createEntityInstance({
         id: 'hero',
         definitionId: 'hero',
@@ -165,8 +163,7 @@ describe('entity metrics', () => {
   });
 
   it('counts lifetime pool usage from actual spends, not gains or current', () => {
-    let state = upsertEntity(
-      createEngineState(),
+    let state = createPrimaryEngineState(
       createEntityInstance({
         id: 'hero',
         definitionId: 'hero',
@@ -299,8 +296,7 @@ describe('entity metrics', () => {
       results: [{ type: 'grant-tag', name: 'scouted', strength: 1 }],
       sideEffects: [],
     };
-    let state = upsertEntity(
-      createEngineState({ tick: 10 }),
+    let state = createPrimaryEngineState(
       createEntityInstance({
         id: 'hero',
         definitionId: 'hero',
@@ -320,6 +316,7 @@ describe('entity metrics', () => {
         pools: { Stick: 5 },
         tick: 10,
       }),
+      { tick: 10 },
     );
     expect(selectTagGrantedAt(state.entities.get('hero')!, 'Pool_Sticks')).toBe(
       10,

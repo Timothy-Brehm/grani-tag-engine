@@ -12,7 +12,12 @@ npm install grani-tag-engine @grani/react
 ## Usage
 
 ```tsx
-import { EngineRegistry, createEngineState } from 'grani-tag-engine';
+import {
+  EngineRegistry,
+  createPrimaryEngineState,
+  createTaggedEntity,
+  createTag,
+} from 'grani-tag-engine';
 import {
   EngineProvider,
   useEngineState,
@@ -22,10 +27,16 @@ import {
 } from '@grani/react';
 
 const registry = new EngineRegistry().createBuiltinAdaptors();
+const initialState = createPrimaryEngineState(
+  createTaggedEntity({
+    id: 'player',
+    tags: [createTag({ name: 'ready', effects: [] })],
+  }),
+);
 
 export function App() {
   return (
-    <EngineProvider registry={registry} host={{}} initialState={createEngineState()}>
+    <EngineProvider registry={registry} host={{}} initialState={initialState}>
       <Game />
     </EngineProvider>
   );

@@ -97,18 +97,17 @@ export function selectSpawnCount(
   return state.spawnCounts[definitionId] ?? 0;
 }
 
-/** The engine's designated primary entity, if any (typically the player). */
-export function selectPrimaryEntity(
-  state: EngineState,
-): EntityInstance | undefined {
-  if (state.primaryEntityId === undefined) {
-    return undefined;
+/** The engine's designated primary entity (always present when state is valid). */
+export function selectPrimaryEntity(state: EngineState): EntityInstance {
+  const entity = state.entities.get(state.primaryEntityId);
+  if (!entity) {
+    throw new Error(
+      `primaryEntityId "${state.primaryEntityId}" is missing from entities`,
+    );
   }
-  return state.entities.get(state.primaryEntityId);
+  return entity;
 }
 
-export function selectPrimaryEntityId(
-  state: EngineState,
-): string | undefined {
+export function selectPrimaryEntityId(state: EngineState): string {
   return state.primaryEntityId;
 }

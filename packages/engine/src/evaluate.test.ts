@@ -10,7 +10,7 @@ import {
   requirementsMet,
 } from './evaluate';
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   toEngineContext,
   upsertEntity,
@@ -20,8 +20,7 @@ describe('registry builtins and actions', () => {
   const registry = new EngineRegistry().createBuiltinAdaptors();
 
   function playerContext(tags = [createTag({ name: 'marked', effects: [] })]) {
-    const state = upsertEntity(
-      createEngineState(),
+    const state = createPrimaryEngineState(
       createTaggedEntity({ id: 'player', tags }),
     );
     return toEngineContext(state, {}, { actorEntityId: 'player' });
@@ -76,12 +75,9 @@ describe('registry builtins and actions', () => {
   });
 
   it('remove-entity effect removes the source by default', () => {
-    const state = upsertEntity(
-      upsertEntity(
-        createEngineState(),
-        createTaggedEntity({ id: 'player', tags: [] }),
-      ),
-      createTaggedEntity({ id: 'crate', tags: [] }),
+    const state = createPrimaryEngineState(
+      createTaggedEntity({ id: 'player', tags: [] }),
+      { others: [createTaggedEntity({ id: 'crate', tags: [] })] },
     );
     const ctx = toEngineContext(state, {}, {
       actorEntityId: 'player',
@@ -115,8 +111,7 @@ describe('registry builtins and actions', () => {
       results: [{ type: 'grant-tag', name: 'fancy', strength: 1 }],
       sideEffects: [],
     };
-    const state = upsertEntity(
-      createEngineState(),
+    const state = createPrimaryEngineState(
       createTaggedEntity({ id: 'player', tags: [] }),
     );
     const next = executeAction(
@@ -142,8 +137,7 @@ describe('registry builtins and actions', () => {
         (requirement: LevelRequirement, context) =>
           context.host.level >= requirement.minimum,
       );
-    const state = upsertEntity(
-      createEngineState(),
+    const state = createPrimaryEngineState(
       createTaggedEntity({ id: 'player', tags: [] }),
     );
     const context = toEngineContext(
@@ -173,8 +167,7 @@ describe('registry builtins and actions', () => {
       maxActive: 1,
       maxCreated: 1,
     });
-    let state = upsertEntity(
-      createEngineState(),
+    let state = createPrimaryEngineState(
       createTaggedEntity({
         id: 'player',
         tags: [
@@ -224,7 +217,7 @@ describe('registry builtins and actions', () => {
 });
 
 function reduceWithPools(
-  state: ReturnType<typeof createEngineState>,
+  state: ReturnType<typeof createPrimaryEngineState>,
 ) {
   const entity = state.entities.get('player')!;
   return upsertEntity(state, {

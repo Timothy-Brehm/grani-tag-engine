@@ -3,6 +3,7 @@ import type { Tag } from './tag';
 import type { ActionDefinition } from './action';
 import type { ActiveEffect } from './effect';
 import type { Requirement } from './requirement';
+import type { NoveltyAck } from './novelty-types';
 import {
   emptyEntityMetrics,
   entityMetricsFromJSON,
@@ -16,13 +17,6 @@ import {
   type EntityMetrics,
   type EntityMetricsJSON,
 } from './metrics';
-import {
-  emptyEntityNovelty,
-  entityNoveltyFromJSON,
-  entityNoveltyToJSON,
-  type EntityNovelty,
-  type EntityNoveltyJSON,
-} from './novelty';
 
 /** Who an effect or requirement resolves against. */
 export type EntityScope = 'actor' | 'source' | 'target';
@@ -38,8 +32,6 @@ export interface EntityInstance {
   readonly pools: EntityPoolMap;
   /** Tracked counters and water marks for gates/effects. */
   readonly metrics: EntityMetrics;
-  /** Unseen / “new” flags for host badges (saveable). */
-  readonly novelty: EntityNovelty;
 }
 
 export type EntityInstanceJSON = {
@@ -48,7 +40,8 @@ export type EntityInstanceJSON = {
   tags: TagCollectionJSON;
   pools: Record<string, number>;
   metrics?: EntityMetricsJSON;
-  novelty?: EntityNoveltyJSON;
+  /** @deprecated Ignored; novelty is tag-based now. */
+  novelty?: unknown;
 };
 
 /** Catalog definition used when spawning or listing actions. */
@@ -64,6 +57,10 @@ export interface EntityDefinition {
     ActiveEffect,
     unknown
   >[];
+  /**
+   * When set, the entity instance is novel while `seenTag` is absent on scope.
+   */
+  readonly novelty?: NoveltyAck;
   /** Max concurrent instances of this definition. */
   readonly maxActive?: number;
   /** Max lifetime spawns of this definition. */
@@ -76,7 +73,6 @@ export function createEntityInstance(input: {
   tags?: readonly Tag[] | TagCollection;
   pools?: EntityPoolMap;
   metrics?: EntityMetrics;
-  novelty?: EntityNovelty;
   /** Engine tick used to stamp initial watermarks / tag grants. Default 0. */
   tick?: number;
 }): EntityInstance {
@@ -98,7 +94,6 @@ export function createEntityInstance(input: {
     tags,
     pools,
     metrics: baseMetrics,
-    novelty: input.novelty ?? emptyEntityNovelty(false),
   };
   return refreshEntityHighWaters(recordTagGrants(base, tags, tick), tick);
 }
@@ -112,7 +107,6 @@ export function entityInstanceToJSON(
     tags: entity.tags.toJSON(),
     pools: { ...entity.pools },
     metrics: entityMetricsToJSON(entity.metrics),
-    novelty: entityNoveltyToJSON(entity.novelty),
   };
 }
 
@@ -125,7 +119,6 @@ export function entityInstanceFromJSON(
     tags: TagCollection.fromJSON(json.tags ?? { tags: [] }),
     pools: json.pools ?? {},
     metrics: json.metrics ? entityMetricsFromJSON(json.metrics) : undefined,
-    novelty: json.novelty ? entityNoveltyFromJSON(json.novelty) : undefined,
   });
 }
 

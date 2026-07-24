@@ -60,15 +60,21 @@ describe('TagCollection', () => {
 
   it('filters and serializes round-trip', () => {
     const col = TagCollection.create([
-      createTag({ name: 'hot', label: 'Hot', effects: [{ type: 'heat', name: 'h', strength: 1 }] }),
+      createTag({
+        name: 'message_hot',
+        label: 'Hot',
+        displayText: 'It burns!',
+        effects: [{ type: 'heat', name: 'h', strength: 1 }],
+      }),
       createTag({ name: 'cold', effects: [] }),
     ]);
-    const filtered = col.filter((t) => t.name === 'hot');
+    const filtered = col.filter((t) => t.name === 'message_hot');
     expect(filtered.size).toBe(1);
     const json = filtered.toJSON();
     const restored = TagCollection.fromJSON(json);
-    expect(restored.get('hot')?.label).toBe('Hot');
-    expect(restored.get('hot')?.effects[0]?.strength).toBe(1);
+    expect(restored.get('message_hot')?.label).toBe('Hot');
+    expect(restored.get('message_hot')?.displayText).toBe('It burns!');
+    expect(restored.get('message_hot')?.effects[0]?.strength).toBe(1);
     expect(JSON.parse(JSON.stringify(json))).toEqual(json);
   });
 });
