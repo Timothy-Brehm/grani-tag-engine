@@ -11,7 +11,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 
 ## Hard preferences
 
-1. **Entities own tags and pools** — anything that acts or holds state is an entity instance from a definition.
+1. **Entities own tags and pools** — anything that acts or holds state is an entity instance from a definition. `EngineState.primaryEntityId` is **required** and must point at an in-play entity.
 2. **Traits vs pools** — lasting quantities/flags for gating are traits (not spent); spendable quantities with maxima are pools.
 3. **Tags derive traits/capacities** — prefer grant-tag / tag passive effects over bespoke fields on `EngineState`.
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`found_crate` → also `opened_crate`), not erasing history by default.

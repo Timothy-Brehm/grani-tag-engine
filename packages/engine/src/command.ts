@@ -40,7 +40,8 @@ export type EngineCommand<THost = unknown> =
     }
   | {
       readonly type: 'set-primary-entity';
-      readonly entityId: string | undefined;
+      /** Must reference an entity already in state (primary is always required). */
+      readonly entityId: string;
     }
   | { readonly type: 'tick'; readonly steps?: number }
   | {

@@ -12,24 +12,21 @@ npm install grani-tag-engine
 
 ```ts
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   createTag,
   EngineRegistry,
   reduceEngineState,
   isActionAvailable,
   toEngineContext,
-  upsertEntity,
 } from 'grani-tag-engine';
 
 const registry = new EngineRegistry().createBuiltinAdaptors();
-let state = upsertEntity(
-  createEngineState(),
-  createTaggedEntity({
-    id: 'player',
-    tags: [createTag({ name: 'ready', effects: [] })],
-  }),
-);
+const player = createTaggedEntity({
+  id: 'player',
+  tags: [createTag({ name: 'ready', effects: [] })],
+});
+let state = createPrimaryEngineState(player);
 
 state = reduceEngineState(
   state,

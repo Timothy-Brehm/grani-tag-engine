@@ -1,7 +1,6 @@
 import type { EngineCommand } from './command';
 import type { EngineRegistry } from './registry';
 import {
-  createEngineState,
   removeEntity,
   toEngineContext,
   upsertEntity,
@@ -180,7 +179,7 @@ export function reduceEngineCommands<THost = unknown>(
 export function foldEngineCommands<THost = unknown>(
   commands: readonly EngineCommand<THost>[],
   options: ReduceEngineOptions<THost>,
-  initial: EngineState = createEngineState(),
+  initial: EngineState,
 ): EngineState {
   return reduceEngineCommands(initial, commands, options);
 }

@@ -34,11 +34,11 @@ An **entity** is anything that can own tags, pools, and offered actions: a perso
 | Identity | stable `id` (instance) + `definitionId` (type) |
 | Catalog | `EntityDefinition` (initial tags/pools, actions, spawn limits) |
 | In play | `EntityInstance` in `EngineState.entities` |
-| Spotlight | optional `primaryEntityId` (usually the primary character) |
+| Spotlight | required `primaryEntityId` (the primary character instance) |
 
 **Composition rule:** prefer many entity *definitions* with shared mechanics over inheritance hierarchies. Presentation differences stay in the host registry.
 
-**Primary entity:** first-class pointer for the **primary character** (the avatar the human player controls). Hosts may default the action **actor** to it; the engine does not assume React or a character sheet. Prefer display labels like “You” / a renamed name in the host—not renaming the technical definition id to `Character`.
+**Primary entity:** required pointer for the **primary character** (the avatar the human player controls). Must always reference an entity in `entities`. Hosts may default the action **actor** to it; the engine does not assume React or a character sheet. Prefer display labels like “You” / a renamed name in the host—not renaming the technical definition id to `Character`. Removing the primary entity throws until `set-primary-entity` points elsewhere.
 
 ### Speaking clearly (hosts + agents)
 
@@ -227,7 +227,7 @@ EntityInstance
 
 EngineState
   ├─ entities + spawnCounts
-  ├─ primaryEntityId?
+  ├─ primaryEntityId (required)
   └─ tick
 ```
 

@@ -117,6 +117,7 @@ export {
 export type { EngineState, EngineStateJSON, ActionRoles } from './state';
 export {
   createEngineState,
+  createPrimaryEngineState,
   engineStateToJSON,
   engineStateFromJSON,
   toEngineContext,

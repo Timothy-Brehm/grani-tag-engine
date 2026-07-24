@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTag } from './tag';
 import { createEntityInstance } from './entity';
-import { createEngineState, upsertEntity, withPrimaryEntityId } from './state';
+import { createPrimaryEngineState } from './state';
 import { reduceEngineState } from './reduce';
 import { EngineRegistry } from './registry';
 import {
@@ -63,10 +63,7 @@ describe('tag-based novelty', () => {
   };
 
   it('treats configured items as novel until ack tags are granted', () => {
-    let state = withPrimaryEntityId(
-      upsertEntity(createEngineState(), lifeHero()),
-      'hero',
-    );
+    let state = createPrimaryEngineState(lifeHero());
     let hero = state.entities.get('hero')!;
 
     expect(selectEntityIsNovel(state, hero, heroDefinition.novelty)).toBe(true);
@@ -105,9 +102,9 @@ describe('tag-based novelty', () => {
     const shipA = createEntityInstance({ id: 'ship-a', definitionId: 'ship' });
     const shipB = createEntityInstance({ id: 'ship-b', definitionId: 'ship' });
     const pilot = createEntityInstance({ id: 'pilot', definitionId: 'pilot' });
-    let state = createEngineState({
-      entities: [pilot, shipA, shipB],
-      primaryEntityId: 'pilot',
+    let state = createPrimaryEngineState(pilot, {
+      others: [shipA, shipB],
+      spawnCounts: { pilot: 1, ship: 2 },
     });
 
     const popCanopy = {
@@ -136,10 +133,7 @@ describe('tag-based novelty', () => {
   });
 
   it('lists novel refs for host modals / badges', () => {
-    const state = withPrimaryEntityId(
-      upsertEntity(createEngineState(), lifeHero()),
-      'hero',
-    );
+    const state = createPrimaryEngineState(lifeHero());
     const refs = selectNovelOnEntity(state, state.entities.get('hero')!, {
       definition: heroDefinition,
     });
@@ -156,16 +150,13 @@ describe('tag-based novelty', () => {
       effects: [],
       novelty: { seenTag: 'message_strength5', scope: 'primary' },
     });
-    let state = createEngineState({
-      entities: [
-        createEntityInstance({
-          id: 'hero',
-          definitionId: 'hero',
-          tags: [milestone],
-        }),
-      ],
-      primaryEntityId: 'hero',
-    });
+    let state = createPrimaryEngineState(
+      createEntityInstance({
+        id: 'hero',
+        definitionId: 'hero',
+        tags: [milestone],
+      }),
+    );
     const refs = selectNovelOnEntity(state, state.entities.get('hero')!);
     expect(refs).toEqual([
       {
@@ -194,7 +185,7 @@ describe('tag-based novelty', () => {
   });
 
   it('ignores discoverables with no novelty config', () => {
-    const state = upsertEntity(createEngineState(), lifeHero());
+    const state = createPrimaryEngineState(lifeHero());
     const hero = state.entities.get('hero')!;
     expect(
       selectActionIsNovel(state, hero, { name: 'repair' /* no novelty */ }),
