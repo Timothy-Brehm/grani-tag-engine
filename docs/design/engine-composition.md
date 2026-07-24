@@ -34,11 +34,11 @@ An **entity** is anything that can own tags, pools, and offered actions: a perso
 | Identity | stable `id` (instance) + `definitionId` (type) |
 | Catalog | `EntityDefinition` (initial tags/pools, actions, spawn limits) |
 | In play | `EntityInstance` in `EngineState.entities` |
-| Spotlight | required `primaryEntityId` (the primary character instance) |
+| Default entity | required `primaryEntityId` (default entity for general use) |
 
 **Composition rule:** prefer many entity *definitions* with shared mechanics over inheritance hierarchies. Presentation differences stay in the host registry.
 
-**Primary entity:** required pointer for the **primary character** (the avatar the human player controls). Must always reference an entity in `entities`. Hosts may default the action **actor** to it; the engine does not assume React or a character sheet. Prefer display labels like “You” / a renamed name in the host—not renaming the technical definition id to `Character`. Removing the primary entity throws until `set-primary-entity` points elsewhere.
+**Primary entity:** required default entity for general use—often a PC character sheet, sometimes a colony bag, camp stockpile, or other generic property store. Must always reference an entity in `entities`. Hosts may default the action **actor** to it; the engine does not assume a character sheet or avatar. Removing the primary entity throws until `set-primary-entity` points elsewhere.
 
 ### Speaking clearly (hosts + agents)
 
@@ -46,9 +46,9 @@ An **entity** is anything that can own tags, pools, and offered actions: a perso
 |------|--------|
 | **Player** | Human at the keyboard |
 | **Character** | Any in-game character entity |
-| **Primary character** | Entity referenced by `primaryEntityId` |
+| **Primary entity** | Entity referenced by `primaryEntityId` (default property store / default actor—not necessarily a PC) |
 
-Correct loose speech when “player” means the avatar.
+Correct loose speech when “player” means the avatar. Prefer **primary entity** over **primary character** unless the host’s content really is a character.
 
 ### Tag
 
@@ -62,8 +62,8 @@ Tags are not the UI label and not the inventory row by themselves—they are the
 
 | Prefer | Avoid (when either works) |
 |--------|---------------------------|
-| `found_crate` → also grant `opened_crate` | `found_crate` → remove `found_crate` |
-| `emergency_supplies` → `emergency_supplies_opened` | Clear the only tag that recorded the crate existed |
+| `Event_CrateFound` → also grant `Event_CrateOpened` | `found_crate` → remove `found_crate` |
+| `Event_EmergencySupplies` → `Event_EmergencySuppliesOpened` | Clear the only tag that recorded the crate existed |
 | Gate “already done” on the *new* tag | Gate on absence of the old tag after deletion |
 
 Removing a tag (or entity) is allowed when something truly leaves play and nothing should hang off the old fact—but default to **grant the next fact** so history, requirements, and metrics remain queryable. Host presentation can hide or restyle based on the new tag without deleting the old one.
@@ -181,26 +181,56 @@ Metrics live on each **entity** (`entity.metrics`):
 
 ## Suggested conventions
 
-These are **host/content naming habits**, not engine-enforced rules. Prefer them in examples and new content so agents and hosts stay consistent.
+These are **host/content habits**, not engine-enforced rules. Prefer them in examples and new content so agents and hosts stay consistent.
 
-| Prefix / field | Use |
-|----------------|-----|
-| **`displayText`** | Player-facing body copy on a tag (modals, novelty messages). Prefer this over stuffing copy into `description`. |
+### Field intents
+
+What each field is *for* (do not overload them).
+
+**Tag catalog**
+
+| Field | Intent |
+|-------|--------|
+| **`displayText`** | Player-facing body copy (modals, novelty messages). Prefer this over stuffing copy into `description`. |
 | **`description`** | Designer notes / longer non-UI docs; hosts may ignore for modals. |
 | **`label`** | Short UI title (button-ish, badge title). |
 | **`image`** | Host asset key for art. |
-| **`message_*`** | Catalog tags whose primary job is short-term player text (modal ack / display). Carry `displayText` (+ optional `image`). Example: `message_strength5`. |
+
+**Engine state**
+
+| Field | Intent |
+|-------|--------|
+| **`primaryEntityId`** | Required default entity for general use—PC character sheet, camp bag, or other generic property store. Do **not** assume it is always a character; hosts choose what lives there. |
+
+### Tag naming prefixes
+
+How to name catalog tags by role (orthogonal to which fields they fill). Prefer `Prefix_PascalCase` (or `Prefix_Pascal_Snake` for multi-part) so roles stay greppable.
+
+| Prefix | Role |
+|--------|------|
+| **`Pool_Initial_*`** / **`Stat_Initial_*`** | Bootstrap capacity / base trait on a definition. Examples: `Pool_Initial_Life`, `Stat_Initial_Science`. |
+| **`Item_*_*`** (or **`Gear_*_*`**) | Presence → stacking `stat` / multi-effect gear. Example: `Item_WristComputer_Science`. |
+| **`Tech_*`** / **`Upgrade_*`** | Unlocks (spawn caps, recipes)—not the resource itself. Example: `Tech_ExtraSupplyCrate`. |
+| **`Event_*`** | Durable world/history facts and one-shot gates. Prefer accretion (`Event_CrateFound` → also `Event_CrateOpened`) over bare snake_case (`found_crate`). Examples: `Event_CanopySealBroken`, `Event_EmergencySuppliesOpened`. |
+| **`message_*`** | Short-term player text (modal ack / display). Carry `displayText` (+ optional `image` / `label`). Example: `message_strength5`. |
 | **`seen_*`** | Thin novelty-ack tags (often empty effects) when the discoverable is not itself a message. Example: `seen_break_canopy`. |
 | **`milestone_*`** | Silent trigger tags (`effects: []`) that exist only to become “in play” and point `novelty.seenTag` at a `message_*` (or `seen_*`) tag. Example: `milestone_strength5`. |
 | **`badge_*`** | Achievement / trophy presence tags the host can render anywhere. Example: `badge_totalkills`. |
 
-**Tag field cheat-sheet:**
+Novelty/message prefixes stay `snake_case` after the role word (`message_strength5`); mechanical / history tags prefer `Event_*` + PascalCase so they do not collide with player-copy tags.
+
+**Other habits (not prefixes):**
+
+- **Technical id ≠ display** — keep `definitionId` / tag `name` / action `name` stable; put UI titles in `label` / host `displayName`.
+- **Action ids** — prefer `{Source}_{Verb}` when the recipe is offered by a specific definition (`LandingShip_BreakCanopySeal`).
+
+**Example** (`message_*` tag using the field intents above):
 
 ```ts
 {
   name: 'message_strength5',
-  label?: 'Stronger',           // optional short title
-  displayText: 'You feel stronger.',  // modal / message body
+  label?: 'Stronger',           // short title
+  displayText: 'You feel stronger.',  // player-facing body
   image?: 'ui/strength-up',
   effects: [],
 }
@@ -226,6 +256,7 @@ EntityInstance
   └─ metrics → actionCounts + pool/stat high-waters
 
 EngineState
+  ├─ engineVersion (major.minor.patch.build; compat = major.minor)
   ├─ entities + spawnCounts
   ├─ primaryEntityId (required)
   └─ tick
@@ -233,7 +264,7 @@ EngineState
 
 **Recipe graph:** unlocking is usually `grant-tag` or `spawn-entity` or raising `pool-max`, which then satisfies requirements on other actions. Prefer expanding that graph over special-case code paths.
 
-**Host layer:** maps definition ids to views (card, sheet, map pin, dialogue). Multiple views may share one entity (e.g. primary-character card + status sheet).
+**Host layer:** maps definition ids to views (card, sheet, map pin, dialogue). Multiple views may share one entity (e.g. primary-entity sheet + status HUD).
 
 ---
 
@@ -257,7 +288,7 @@ These are the patterns we intend to reuse. Names can be thematic; the structure 
 **Composition:**
 - Each source is a **tag** whose passive effect is `{ type: 'stat', stat: 'Science', strength: N }`.
 - Examples: `Item_WristComputer_Science` (+1), `Item_ScienceKit_Science` (+1).
-- Trait value = sum of matching `stat` strengths on the entity (today: primary character).
+- Trait value = sum of matching `stat` strengths on the entity (often the primary entity).
 - Requirements use `{ type: 'stat', stat: 'Science', amount: 2 }` (scope actor).
 - Acquiring gear is usually `grant-tag` of that item tag (idempotent by name—each unique gear tag once).
 
@@ -268,7 +299,7 @@ These are the patterns we intend to reuse. Names can be thematic; the structure 
 **Intent:** usable capacity with a spendable current (programs loaded, buffer used, etc.).
 
 **Composition:**
-- Pool id `RAM` on the relevant entity (primary character or a `computer` entity).
+- Pool id `RAM` on the relevant entity (primary entity or a `computer` entity).
 - Max from tags: e.g. `Module_Baseboard_RAM` → `{ type: 'pool-max', pool: 'RAM', strength: 8 }`; upgrade stick `Module_DIMM_8G` adds another +8 via another tag.
 - Current in `pools.RAM` (how much is in use, or how much free—pick one convention and keep it).
 - **Load program** action: requirements `pool-max` / free current; costs `adjust-pool` RAM by −size (if current = free) or +size (if current = used).
@@ -282,7 +313,7 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 **Intent:** one resource (`Rock`) with capacity contributed by several containers; backpack also expands other resource caps.
 
 **Composition:**
-- Single pool id `Rock` on the stockpile owner (often primary character or a `camp` entity)—**one current**, one logical resource.
+- Single pool id `Rock` on the stockpile owner (often primary entity or a `camp` entity)—**one current**, one logical resource.
 - Capacity tags stack `pool-max` for `Rock`:
   - `Storage_Base_Pile` (+20)
   - `Storage_Extra_Bin_1` (+50)
@@ -295,16 +326,16 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 
 ### 4. One-shot interactable — Emergency crate (use once)
 
-**Intent:** something is available, the player (or primary character) uses it once, and that history stays queryable. Host may hide or restyle it afterward.
+**Intent:** something is available, the player (via the primary entity or another actor) uses it once, and that history stays queryable. Host may hide or restyle it afterward.
 
 **Composition (prefer tag accretion):**
-- Fact on lander/source (or crate owner): start with `found_crate` (or spawn with that tag).
+- Fact on lander/source (or crate owner): start with `Event_CrateFound` (or spawn with that tag).
 - Appearance: tag the **host** reads (`appearance-charred-crate`), or definition `cardImage` if static. Prefer a tag if appearance can change.
-- Action (crate or lander as **source**, primary character as **actor**):
-  - Requirements: has `found_crate`, **does not** have `opened_crate` (or require `opened_crate` absent)
-  - Results: `grant-tag` `opened_crate`, grant loot tags on actor, optionally change appearance tag (`appearance-empty-crate`)
-- **Do not** default to removing `found_crate` to mean “opened.” Keep both; gate repeat use on `opened_crate`.
-- Optional: if the board must drop a physical card, host may `remove-entity` the crate **instance** while the lander keeps `found_crate` + `opened_crate`. Prefer leaving an entity when later effects might hang off it.
+- Action (crate or lander as **source**, primary entity as **actor**):
+  - Requirements: has `Event_CrateFound`, **does not** have `Event_CrateOpened` (or require `Event_CrateOpened` absent)
+  - Results: `grant-tag` `Event_CrateOpened`, grant loot tags on actor, optionally change appearance tag (`appearance-empty-crate`)
+- **Do not** default to removing `Event_CrateFound` to mean “opened.” Keep both; gate repeat use on `Event_CrateOpened`.
+- Optional: if the board must drop a physical card, host may `remove-entity` the crate **instance** while the lander keeps `Event_CrateFound` + `Event_CrateOpened`. Prefer leaving an entity when later effects might hang off it.
 
 **Appearance trait:** e.g. tag `appearance-damaged` → host picks sprite. Engine stores the fact.
 
@@ -313,7 +344,7 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 **Intent:** large content gated on a stage tag; entering the stage requires choosing exactly one specialization.
 
 **Composition:**
-- Gate content with requirement `{ type: 'tag', tagName: 'major_stage_colony', exists: true }` (on primary character or colony entity).
+- Gate content with requirement `{ type: 'tag', tagName: 'major_stage_colony', exists: true }` (on primary entity or colony entity).
 - **Enter stage** might be automatic when prerequisites met, or an action that only offers **three exclusive choices**:
   - `Choose Fishing Village` → results: `grant-tag` `major_stage_colony`, `grant-tag` `path_fishing_village`, and grant-tags or removals that **forbid** the others (e.g. grant `path_locked` alternatives, or remove the competing choice actions by replacing a chooser entity).
   - Same for `path_hunting_village`, `path_mining_village`.
@@ -343,7 +374,7 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 2. **Silent milestone tag** `milestone_strength5` — `effects: []`, and  
    `novelty: { seenTag: 'message_strength5', scope: 'primary' }`.  
    Holding the milestone puts the message “in play”; player-facing copy lives on `message_strength5.displayText`, not on the milestone.
-3. **One-shot grant** when Strength reaches 5 (primary character as actor), e.g. an automatic or host-fired action:
+3. **One-shot grant** when Strength reaches 5 (primary entity as actor), e.g. an automatic or host-fired action:
    - Requirements: `{ type: 'stat', stat: 'Strength', amount: 5 }`,  
      `{ type: 'tag', tagName: 'milestone_strength5', exists: false }`
    - Results: `grant-tag` `milestone_strength5`
@@ -377,12 +408,12 @@ These show composition only. Names are fictional.
 
 | Design idea | Composition |
 |-------------|-------------|
-| Wizard | Primary character entity; traits Arcana, Will; pools Mana, Satchel |
+| Wizard | Primary entity as PC sheet; traits Arcana, Will; pools Mana, Satchel |
 | Reagents | Pools on wizard or on a `satchel` entity (`moon-petal`, `iron-salt`) |
 | Learned spell | Tag on wizard (`spell-firebolt`) granting presence or Arcana-related effects |
 | Spellbook / altar | Source entity offering cast/craft actions |
 | Cast Firebolt | Requirements: tag `spell-firebolt`, Arcana ≥ 1, Mana ≥ 2; costs Mana; results: grant-tag on target or spawn effect entity |
-| Brew draught | Source = cauldron; actor = primary character; costs reagents; results grant-tag or potion pool |
+| Brew draught | Source = cauldron; actor = primary entity; costs reagents; results grant-tag or potion pool |
 | Mastery | New reagents / schools via discoveries (tags), not only +% mana regen |
 | Familiar automation | Future process: familiar entity allocates “gather reagent” action each tick |
 
@@ -390,14 +421,14 @@ These show composition only. Names are fictional.
 
 | Design idea | Composition |
 |-------------|-------------|
-| Person | Primary character; traits Charm, Focus, Strength; pools Energy, Money, Stress |
+| Person | Primary entity as PC; traits Charm, Focus, Strength; pools Energy, Money, Stress |
 | Skill ranks | Quantity traits or tier tags (`skill-barista-2`) from career actions |
 | Job board / workplace | Source entity with shift actions |
 | Take a shift | Costs Energy; results Money; may grant-tag career progress |
 | Unlock career | Requirement on tags/traits from prior jobs; result grant-tag or spawn workplace entity |
 | Education | Actions that trade Money/Energy for traits |
 | Life stage | Stage tags; choices grant exclusive path tags (same pattern as village picks) |
-| Roommate / shop | Other entities; primary character is actor, shop is source |
+| Roommate / shop | Other entities; primary entity is actor, shop is source |
 
 Both games use the **same** engine nouns: entities, tags→traits, pools, actions, roles. Theme lives in definitions and host presentation.
 
@@ -432,7 +463,7 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 - [ ] Actor / source / target roles explicit when more than one entity is involved
 - [ ] Host vs engine boundary respected (no React in core; no rule logic only in UI)
 - [ ] Works as a pattern for more than one genre (not smuggling one game’s nouns into the core API)
-- [ ] Suggested conventions followed where applicable (`message_*` / `seen_*` / `milestone_*` / `badge_*`, `displayText` for player copy)
+- [ ] Suggested conventions followed where applicable (field intents; prefixes: `Event_*` / `Pool_Initial_*` / `Item_*` / `Tech_*` / `message_*` / `seen_*` / `milestone_*` / `badge_*`)
 - [ ] If this doc blocked a good design, the doc was updated
 
 ---

@@ -130,6 +130,15 @@ export {
   createTaggedEntity,
 } from './state';
 
+export type { EngineVersionParts } from './version';
+export {
+  ENGINE_VERSION,
+  parseEngineVersion,
+  engineVersionCompatibilityKey,
+  isCompatibleEngineVersion,
+  assertCompatibleEngineVersion,
+} from './version';
+
 export type { EngineCommand } from './command';
 
 export {
