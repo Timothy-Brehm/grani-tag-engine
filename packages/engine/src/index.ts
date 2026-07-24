@@ -21,7 +21,6 @@ export type {
   AdjustPoolEffect,
   GrantTagEffect,
   RemoveEntityEffect,
-  ShowMessageEffect,
   SpawnEntityEffect,
 } from './effect';
 
@@ -74,24 +73,21 @@ export {
   selectTagGrantedAt,
 } from './metrics';
 
-export type { EntityNovelty, EntityNoveltyJSON } from './novelty';
+export type { NovelKind, NovelRef, NoveltyAck } from './novelty-types';
 export {
-  emptyEntityNovelty,
-  entityNoveltyToJSON,
-  entityNoveltyFromJSON,
-  markEntityNoveltySeen,
-  markEntitySeen,
-  markActionSeen,
-  markPoolSeen,
-  markStatSeen,
-  offerMessage,
-  markMessageSeen,
+  selectNoveltyHolder,
+  selectIsNovel,
+  selectEntityIsNovel,
+  selectActionIsNovel,
+  selectPoolIsNovel,
+  selectStatIsNovel,
+  selectNovelOnEntity,
+  selectNovelInState,
+  selectEntityHasNovel,
   selectEntityIsNew,
   selectActionIsNew,
   selectPoolIsNew,
   selectStatIsNew,
-  selectMessageIsNew,
-  selectUnseenMessages,
   selectEntityHasNew,
 } from './novelty';
 
@@ -146,9 +142,7 @@ export {
   selectSpawnCount,
   selectPrimaryEntity,
   selectPrimaryEntityId,
-  selectUnseenMessagesInState,
 } from './selectors';
-export type { UnseenMessageRef } from './selectors';
 
 export type {
   ProcessPoolKind,

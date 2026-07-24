@@ -79,6 +79,7 @@ export class TagCollection {
         name: tag.name,
         ...(tag.description !== undefined ? { description: tag.description } : {}),
         ...(tag.label !== undefined ? { label: tag.label } : {}),
+        ...(tag.image !== undefined ? { image: tag.image } : {}),
         effects: tag.effects.map((e: TagEffect) => ({ ...e })),
       })),
     };

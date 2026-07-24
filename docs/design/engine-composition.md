@@ -156,32 +156,27 @@ Metrics live on each **entity** (`entity.metrics`):
 - Distinguish **manual vs automatic** action execution so automation does not silently satisfy “player did this” gates unless intended.
 - Metrics are engine facts: hosts may display them; hosts should not be the only place they live if rules need them.
 
-### Novelty (“new” badges — saveable)
+### Novelty (“new” badges / short text — saveable via tags)
 
-**Intent:** when something new appears for the player, the engine remembers it until the host acknowledges it (so saves keep ⚠ state). Presentation (badge art) and **when** to auto-acknowledge stay in the host.
+**Intent:** when something new appears for the player, the engine treats it as novel until the host **grants an acknowledgement tag**. Presentation (badge, modal) and **when** to acknowledge stay in the host. Display copy/image live on the **catalog tag definition**.
 
-| Kind | Becomes new when | Cleared when |
-|------|------------------|--------------|
-| **Entity** | Spawns / enters play with `entitySeen: false` | `seen-entity` (or bootstrap seed) |
-| **Action** | Action id is **on the entity’s offered list** (definition actions at spawn; later dynamic adds) — even if greyed out / unavailable | `seen-action` |
-| **Pool / stat** | First appears on the entity (pool key / derived stat) | `seen-pool` / `seen-stat` (host: mouseover, sheet-shown timer, etc.) |
-| **Message** | `show-message` effect offers a host-catalog id on an entity | `seen-message` (host modal dismiss, etc.) |
+| Kind | In play when | Novel when | Ack |
+|------|--------------|------------|-----|
+| **Entity** | Instance exists; definition has `novelty` | Ack tag absent on scope | `add-tag` / `grant-tag` of `seenTag` |
+| **Action** | On the entity’s offered action list; action has `novelty` | Same | Same |
+| **Pool / stat** | Present on the entity; `pool-max` / `stat` effect has `novelty` | Same | Same |
 
-**`hasNew` (derived):** `!entitySeen || any unseen offered action || any unseen pool/stat`. Unseen **messages** are polled separately (`selectUnseenMessages` / `selectUnseenMessagesInState`) so hosts can drive modals without conflating board badges.
+**`NoveltyAck`:** `{ seenTag, scope?: 'instance' | 'primary' }`
+- `instance` (default): subject entity must hold `seenTag`
+- `primary`: `primaryEntityId` holds it (once-per-run / cross-instance “type” feel)
 
-**Messages (short-term host display):**
-- Engine stores only **message ids** on the entity (`offeredMessages` / `seenMessages`). Host JSON owns text, image keys, optional priority.
-- Builtin effect `{ type: 'show-message', name: '<messageId>', strength: 1, scope? }` — defaults to **source** then **actor** (same as `remove-entity`). Fire-once: no-op if already offered or seen.
-- Selectors: `selectUnseenMessages(entity)`, `selectUnseenMessagesInState(state)` (unordered list).
-- Ack: command `seen-message` → keeps history in `seenMessages`.
+**Selectors:** walk in-play objects and keep those whose ack tag is missing — `selectIsNovel`, `selectNovelOnEntity`, `selectNovelInState`, `selectEntityHasNovel`. No parallel `seen*` maps on the entity.
 
-**Bootstrap (starting loadout):** do **not** treat default entities as new. Prefer marking them fully seen immediately after create (`markEntityNoveltySeen` / `seen-entity-content`)—no content-definition “createdSeen” flag unless we later need it often.
+**Bootstrap:** grant starting loadout ack tags (host), same as any other tags.
 
-**Sheet shown / auto-seen:** the host decides how long a pool/stat must be visible before dispatching `seen-pool` / `seen-stat`. Do not put host tick-rate UX constants in the engine. Prefer engine ticks over wall-clock if the host counts duration.
+**Messages / modals:** not a separate engine queue. Attach `novelty` to an in-play action (or entity/pool); host shows catalog `description` / `image` for that `seenTag`, then grants the tag on dismiss.
 
-**Rule for future object kinds:** any new engine-facing object type the player can discover should get novelty + seen (same pattern as actions/pools). Metrics already follow “track for gates”; novelty follows “surface until acknowledged.”
-
-**Host presentation:** badge (prefer ⚠ triangle) on entities/actions/pools/stats from selectors; acknowledge sends the matching `seen-*` command. Messages → host modal / overlay from catalog lookup.
+**Rule for future object kinds:** declare `novelty` on the content; ack with a catalog tag; select by walking the in-play graph.
 
 ---
 

@@ -34,12 +34,3 @@ export type RemoveEntityEffect = ActiveEffect & {
    */
   readonly scope?: EntityScope;
 };
-
-/**
- * Offer a host-catalog message id on an entity for short-term display.
- * `name` is the message id. Defaults to source when present, otherwise actor.
- */
-export type ShowMessageEffect = ActiveEffect & {
-  readonly type: 'show-message';
-  readonly scope?: EntityScope;
-};

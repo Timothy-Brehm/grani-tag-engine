@@ -112,23 +112,3 @@ export function selectPrimaryEntityId(
 ): string | undefined {
   return state.primaryEntityId;
 }
-
-export type UnseenMessageRef = {
-  readonly entityId: string;
-  readonly messageId: string;
-};
-
-/** All unseen host-catalog message ids across entities (no order guarantee). */
-export function selectUnseenMessagesInState(
-  state: EngineState,
-): UnseenMessageRef[] {
-  const out: UnseenMessageRef[] = [];
-  for (const entity of state.entities.values()) {
-    for (const messageId of Object.keys(entity.novelty.offeredMessages)) {
-      if (!entity.novelty.seenMessages[messageId]) {
-        out.push({ entityId: entity.id, messageId });
-      }
-    }
-  }
-  return out;
-}

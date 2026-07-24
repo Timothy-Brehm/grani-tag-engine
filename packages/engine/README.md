@@ -80,15 +80,18 @@ registry.registerRequirement(
 
 Actions defined in TypeScript can also provide runtime-only predicates via `codeRequirements` (not serializable).
 
-## Messages (host catalog + engine seen state)
+## Novelty (tag-based)
 
-Short-term player text (modals, banners) uses host-owned catalog entries (text,
-image key, optional priority). The engine only tracks message **ids** on entities:
+Discoverables (entity, action, pool-max / stat effect) may declare:
 
-- Effect: `{ type: 'show-message', name: 'welcome', strength: 1 }` (default scope:
-  source, else actor). Fire-once if already offered or seen.
-- Select: `selectUnseenMessages(entity)` / `selectUnseenMessagesInState(state)`
-- Ack: `{ type: 'seen-message', entityId, messageId }`
+```ts
+novelty: { seenTag: 'Seen_BreakCanopy', scope?: 'instance' | 'primary' }
+```
+
+Novel while `seenTag` is **absent** on the ack scope. Acknowledge with `add-tag` /
+`grant-tag`. Catalog tag fields (`description`, `image`, …) are the display payload
+for badges or modals. Selectors: `selectIsNovel`, `selectNovelOnEntity`,
+`selectNovelInState`.
 
 ## Reserved process API
 
