@@ -1,11 +1,17 @@
 export type EntityScope = 'actor' | 'source' | 'target';
 
+export type NoveltyAckJSON = {
+  seenTag: string;
+  scope?: 'instance' | 'primary';
+};
+
 export type TagEffectJSON = {
   type: string;
   name: string;
   strength: number;
   stat?: string;
   pool?: string;
+  novelty?: NoveltyAckJSON;
   [key: string]: unknown;
 };
 
@@ -13,6 +19,9 @@ export type TagJSON = {
   name: string;
   description?: string;
   label?: string;
+  displayText?: string;
+  image?: string;
+  novelty?: NoveltyAckJSON;
   effects: TagEffectJSON[];
 };
 
@@ -102,6 +111,12 @@ export type ActiveEffectJSON =
       strength: number;
       definitionId: string;
       entityId?: string;
+    }
+  | {
+      type: 'remove-entity';
+      name: string;
+      strength: number;
+      scope?: EntityScope;
     };
 
 export type ActionDefinitionJSON = {
@@ -109,6 +124,7 @@ export type ActionDefinitionJSON = {
   description?: string;
   label?: string;
   sourceId?: string;
+  novelty?: NoveltyAckJSON;
   requirements: RequirementJSON[];
   costs: ActiveEffectJSON[];
   results: ActiveEffectJSON[];
@@ -122,6 +138,7 @@ export type EntityDefinitionJSON = {
   initialTags?: TagJSON[];
   initialPools?: Record<string, number>;
   actions?: ActionDefinitionJSON[];
+  novelty?: NoveltyAckJSON;
   maxActive?: number;
   maxCreated?: number;
 };

@@ -12,24 +12,21 @@ npm install grani-tag-engine
 
 ```ts
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   createTag,
   EngineRegistry,
   reduceEngineState,
   isActionAvailable,
   toEngineContext,
-  upsertEntity,
 } from 'grani-tag-engine';
 
 const registry = new EngineRegistry().createBuiltinAdaptors();
-let state = upsertEntity(
-  createEngineState(),
-  createTaggedEntity({
-    id: 'player',
-    tags: [createTag({ name: 'ready', effects: [] })],
-  }),
-);
+const player = createTaggedEntity({
+  id: 'player',
+  tags: [createTag({ name: 'ready', effects: [] })],
+});
+let state = createPrimaryEngineState(player);
 
 state = reduceEngineState(
   state,
@@ -79,6 +76,20 @@ registry.registerRequirement(
 ```
 
 Actions defined in TypeScript can also provide runtime-only predicates via `codeRequirements` (not serializable).
+
+## Novelty (tag-based)
+
+Discoverables (entity, action, pool-max / stat effect, or a held **tag**) may declare:
+
+```ts
+novelty: { seenTag: 'seen_break_canopy', scope?: 'instance' | 'primary' }
+```
+
+Novel while `seenTag` is **absent** on the ack scope. Acknowledge with `add-tag` /
+`grant-tag`. Player-facing modal copy lives in catalog **`displayText`** on that
+`seenTag` (convention: `message_*` for modals, `seen_*` for thin acks). Silent
+milestones use `milestone_*` tags with empty effects plus `novelty.seenTag` →
+`message_*`. Selectors: `selectIsNovel`, `selectNovelOnEntity`, `selectNovelInState`.
 
 ## Reserved process API
 

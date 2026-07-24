@@ -4,11 +4,10 @@ import type { EngineCommand } from './command';
 import { EngineRegistry } from './registry';
 import { reduceEngineCommands, reduceEngineState } from './reduce';
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   engineStateFromJSON,
   engineStateToJSON,
-  upsertEntity,
 } from './state';
 import { createTag } from './tag';
 import { ProcessesNotImplementedError } from './process';
@@ -18,52 +17,89 @@ describe('EngineState and reduceEngineState', () => {
   const registry = new EngineRegistry().createBuiltinAdaptors();
   const options = { registry, host: {} };
 
-  function withPlayer(state = createEngineState()) {
-    return upsertEntity(
-      state,
-      createTaggedEntity({
-        id: 'player',
-        definitionId: 'player',
-        tags: [
-          createTag({
-            name: 'Stat_Initial_Strength',
-            effects: [{ type: 'stat', name: 'Strength', strength: 1, stat: 'Strength' } as never],
-          }),
-          createTag({
-            name: 'Pool_Initial_Life',
-            effects: [{ type: 'pool-max', name: 'Life', strength: 1, pool: 'Life' } as never],
-          }),
-        ],
-      }),
-    );
+  function playerEntity() {
+    return createTaggedEntity({
+      id: 'player',
+      definitionId: 'player',
+      tags: [
+        createTag({
+          name: 'Stat_Initial_Strength',
+          effects: [
+            {
+              type: 'stat',
+              name: 'Strength',
+              strength: 1,
+              stat: 'Strength',
+            } as never,
+          ],
+        }),
+        createTag({
+          name: 'Pool_Initial_Life',
+          effects: [
+            {
+              type: 'pool-max',
+              name: 'Life',
+              strength: 1,
+              pool: 'Life',
+            } as never,
+          ],
+        }),
+      ],
+    });
   }
 
-  it('serializes and restores entities and tick', () => {
-    const state = withPlayer(createEngineState({ tick: 3 }));
+  function withPlayer(tick = 0) {
+    return createPrimaryEngineState(playerEntity(), { tick });
+  }
+
+  it('serializes and restores entities, tick, and primaryEntityId', () => {
+    const state = withPlayer(3);
     const restored = engineStateFromJSON(engineStateToJSON(state));
     expect(restored.tick).toBe(3);
-    expect(restored.entities.get('player')?.tags.has('Stat_Initial_Strength')).toBe(
-      true,
-    );
+    expect(restored.primaryEntityId).toBe('player');
+    expect(
+      restored.entities.get('player')?.tags.has('Stat_Initial_Strength'),
+    ).toBe(true);
   });
 
-  it('tracks primaryEntityId and clears it when the entity is removed', () => {
-    let state = withPlayer();
-    state = reduceEngineState(
-      state,
-      { type: 'set-primary-entity', entityId: 'player' },
-      options,
-    );
+  it('requires primaryEntityId and refuses to remove the primary entity', () => {
+    const state = withPlayer();
     expect(state.primaryEntityId).toBe('player');
-    const restored = engineStateFromJSON(engineStateToJSON(state));
-    expect(restored.primaryEntityId).toBe('player');
+    expect(() =>
+      reduceEngineState(
+        state,
+        { type: 'remove-entity', entityId: 'player' },
+        options,
+      ),
+    ).toThrow(/Cannot remove primary entity/);
+  });
+
+  it('allows removing a former primary after retargeting', () => {
+    const registryLocal = new EngineRegistry().createBuiltinAdaptors();
+    registryLocal.registerEntityDefinition({
+      id: 'hero',
+      maxActive: 2,
+      maxCreated: 2,
+    });
+    const a = createTaggedEntity({ id: 'a', definitionId: 'hero' });
+    const b = createTaggedEntity({ id: 'b', definitionId: 'hero' });
+    let state = createPrimaryEngineState(a, {
+      others: [b],
+      spawnCounts: { hero: 2 },
+    });
     state = reduceEngineState(
       state,
-      { type: 'remove-entity', entityId: 'player' },
-      options,
+      { type: 'set-primary-entity', entityId: 'b' },
+      { registry: registryLocal, host: {} },
     );
-    expect(state.primaryEntityId).toBeUndefined();
-    expect(state.entities.has('player')).toBe(false);
+    expect(state.primaryEntityId).toBe('b');
+    state = reduceEngineState(
+      state,
+      { type: 'remove-entity', entityId: 'a' },
+      { registry: registryLocal, host: {} },
+    );
+    expect(state.entities.has('a')).toBe(false);
+    expect(state.primaryEntityId).toBe('b');
   });
 
   it('adds tags idempotently and removes by name on an entity', () => {
@@ -169,7 +205,7 @@ describe('EngineState and reduceEngineState', () => {
   it('fails explicitly for reserved process commands', () => {
     expect(() =>
       reduceEngineState(
-        createEngineState(),
+        withPlayer(),
         {
           type: 'set-process-allocation',
           processId: 'factory/metal',

@@ -18,35 +18,37 @@ export interface EngineState {
   /** Lifetime spawn counts keyed by definition id. */
   readonly spawnCounts: Readonly<Record<string, number>>;
   /**
-   * Optional primary entity (e.g. the player). First-class engine concept;
-   * hosts may treat it as the default actor.
+   * Required primary entity (typically the primary character).
+   * Must always refer to an id present in `entities`.
+   * Hosts may treat it as the default actor; run-wide facts often live here.
    */
-  readonly primaryEntityId: string | undefined;
+  readonly primaryEntityId: string;
 }
 
 export type EngineStateJSON = {
   tick: number;
   entities: EntityInstanceJSON[];
   spawnCounts: Record<string, number>;
-  primaryEntityId?: string;
+  primaryEntityId: string;
 };
 
-export function createEngineState(
-  input: {
-    tick?: number;
-    entities?: readonly EntityInstance[];
-    spawnCounts?: Readonly<Record<string, number>>;
-    primaryEntityId?: string;
-  } = {},
-): EngineState {
+export function createEngineState(input: {
+  tick?: number;
+  entities: readonly EntityInstance[];
+  spawnCounts?: Readonly<Record<string, number>>;
+  primaryEntityId: string;
+}): EngineState {
   const entities = new Map<string, EntityInstance>();
-  for (const entity of input.entities ?? []) {
+  for (const entity of input.entities) {
     if (!entities.has(entity.id)) {
       entities.set(entity.id, entity);
     }
   }
+  if (entities.size === 0) {
+    throw new Error('createEngineState requires at least one entity');
+  }
   const primaryEntityId = input.primaryEntityId;
-  if (primaryEntityId !== undefined && !entities.has(primaryEntityId)) {
+  if (!entities.has(primaryEntityId)) {
     throw new Error(
       `primaryEntityId "${primaryEntityId}" is not present in entities`,
     );
@@ -64,13 +66,14 @@ export function engineStateToJSON(state: EngineState): EngineStateJSON {
     tick: state.tick,
     entities: [...state.entities.values()].map(entityInstanceToJSON),
     spawnCounts: { ...state.spawnCounts },
-    ...(state.primaryEntityId !== undefined
-      ? { primaryEntityId: state.primaryEntityId }
-      : {}),
+    primaryEntityId: state.primaryEntityId,
   };
 }
 
 export function engineStateFromJSON(json: EngineStateJSON): EngineState {
+  if (typeof json.primaryEntityId !== 'string' || !json.primaryEntityId) {
+    throw new Error('engineStateFromJSON requires primaryEntityId');
+  }
   return createEngineState({
     tick: json.tick ?? 0,
     entities: (json.entities ?? []).map(entityInstanceFromJSON),
@@ -122,11 +125,12 @@ export function withEngineSpawnCounts(
   return { ...state, spawnCounts: Object.freeze({ ...spawnCounts }) };
 }
 
+/** Retarget the required primary pointer; `entityId` must exist. */
 export function withPrimaryEntityId(
   state: EngineState,
-  primaryEntityId: string | undefined,
+  primaryEntityId: string,
 ): EngineState {
-  if (primaryEntityId !== undefined && !state.entities.has(primaryEntityId)) {
+  if (!state.entities.has(primaryEntityId)) {
     throw new Error(
       `primaryEntityId "${primaryEntityId}" is not present in entities`,
     );
@@ -150,13 +154,14 @@ export function removeEntity(
   if (!state.entities.has(entityId)) {
     return state;
   }
+  if (state.primaryEntityId === entityId) {
+    throw new Error(
+      `Cannot remove primary entity "${entityId}"; set-primary-entity to another entity first`,
+    );
+  }
   const next = new Map(state.entities);
   next.delete(entityId);
-  const clearedPrimary =
-    state.primaryEntityId === entityId
-      ? { ...withEngineEntities(state, next), primaryEntityId: undefined }
-      : withEngineEntities(state, next);
-  return clearedPrimary;
+  return withEngineEntities(state, next);
 }
 
 /** Convenience when constructing a one-off entity for tests. */
@@ -169,5 +174,28 @@ export function createTaggedEntity(input: {
     id: input.id,
     definitionId: input.definitionId ?? input.id,
     tags: input.tags,
+  });
+}
+
+/**
+ * Build a valid engine with a required primary entity (and optional others).
+ * Primary is included automatically; do not duplicate it in `others`.
+ */
+export function createPrimaryEngineState(
+  primary: EntityInstance,
+  options: {
+    readonly tick?: number;
+    readonly others?: readonly EntityInstance[];
+    readonly spawnCounts?: Readonly<Record<string, number>>;
+  } = {},
+): EngineState {
+  const others = (options.others ?? []).filter(
+    (entity) => entity.id !== primary.id,
+  );
+  return createEngineState({
+    tick: options.tick,
+    entities: [primary, ...others],
+    primaryEntityId: primary.id,
+    spawnCounts: options.spawnCounts ?? { [primary.definitionId]: 1 },
   });
 }

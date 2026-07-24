@@ -22,7 +22,7 @@ EngineState {
   tick: number
   entities: Map<id, EntityInstance>  // tags + pools + metrics per entity
   spawnCounts: Record<definitionId, number>
-  primaryEntityId?: string           // e.g. the primary character; optional default actor
+  primaryEntityId: string            // required primary character (must be in entities)
 }
 
 EntityInstance {
@@ -47,7 +47,7 @@ AstrevnoState {
 - Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, …).
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Costs/results default to the **actor**; source-state requirements default to the **source**.
-- `primaryEntityId` is a first-class engine pointer (typically the player). Hosts may use it as the default actor; presentation still lives in the host.
+- `primaryEntityId` is a **required** engine pointer to an in-play entity (typically the primary character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
 - Derived values (stats / pool maxima from tags) live in engine selectors.

@@ -73,16 +73,18 @@ export {
   selectTagGrantedAt,
 } from './metrics';
 
-export type { EntityNovelty, EntityNoveltyJSON } from './novelty';
+export type { NovelKind, NovelRef, NoveltyAck } from './novelty-types';
 export {
-  emptyEntityNovelty,
-  entityNoveltyToJSON,
-  entityNoveltyFromJSON,
-  markEntityNoveltySeen,
-  markEntitySeen,
-  markActionSeen,
-  markPoolSeen,
-  markStatSeen,
+  selectNoveltyHolder,
+  selectIsNovel,
+  selectEntityIsNovel,
+  selectActionIsNovel,
+  selectPoolIsNovel,
+  selectStatIsNovel,
+  selectTagIsNovel,
+  selectNovelOnEntity,
+  selectNovelInState,
+  selectEntityHasNovel,
   selectEntityIsNew,
   selectActionIsNew,
   selectPoolIsNew,
@@ -115,6 +117,7 @@ export {
 export type { EngineState, EngineStateJSON, ActionRoles } from './state';
 export {
   createEngineState,
+  createPrimaryEngineState,
   engineStateToJSON,
   engineStateFromJSON,
   toEngineContext,

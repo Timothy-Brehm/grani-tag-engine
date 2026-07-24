@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createEngineState,
+  createPrimaryEngineState,
   createTaggedEntity,
   EngineRegistry,
   reduceEngineState,
-  upsertEntity,
   type EngineCommand,
 } from 'grani-tag-engine';
 import { createTag } from 'grani-tag-engine';
@@ -17,8 +16,7 @@ describe('@grani/react dispatch pattern', () => {
   it('reduces add-tag the same way EngineProvider dispatch would', () => {
     const registry = new EngineRegistry().createBuiltinAdaptors();
     const options = { registry, host: {} };
-    let state = upsertEntity(
-      createEngineState(),
+    let state = createPrimaryEngineState(
       createTaggedEntity({ id: 'player', tags: [] }),
     );
     const dispatch = (command: EngineCommand) => {
