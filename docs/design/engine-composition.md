@@ -158,7 +158,7 @@ Metrics live on each **entity** (`entity.metrics`):
 
 ### Novelty (“new” badges / short text — saveable via tags)
 
-**Intent:** when something new appears for the player, the engine treats it as novel until the host **grants an acknowledgement tag**. Presentation (badge, modal) and **when** to acknowledge stay in the host. Display copy/image live on the **catalog tag definition** named by `seenTag` (not necessarily on the discoverable itself).
+**Intent:** when something new appears for the player, the engine treats it as novel until the host **grants an acknowledgement tag**. Presentation (badge, modal) and **when** to acknowledge stay in the host. Player-facing modal/body copy lives in **`displayText`** on the catalog tag named by `seenTag` (see [Suggested conventions](#suggested-conventions)).
 
 | Kind | In play when | Novel when | Ack |
 |------|--------------|------------|-----|
@@ -176,6 +176,35 @@ Metrics live on each **entity** (`entity.metrics`):
 **Bootstrap / starting loadout:** do **not** declare `novelty` on content you do not want highlighted. No `novelty` ⇒ not tracked ⇒ not novel. Only grant ack tags when the player actually acknowledges something that *was* novel.
 
 **Rule for future object kinds:** declare `novelty` on the content; ack with a catalog tag; select by walking the in-play graph.
+
+---
+
+## Suggested conventions
+
+These are **host/content naming habits**, not engine-enforced rules. Prefer them in examples and new content so agents and hosts stay consistent.
+
+| Prefix / field | Use |
+|----------------|-----|
+| **`displayText`** | Player-facing body copy on a tag (modals, novelty messages). Prefer this over stuffing copy into `description`. |
+| **`description`** | Designer notes / longer non-UI docs; hosts may ignore for modals. |
+| **`label`** | Short UI title (button-ish, badge title). |
+| **`image`** | Host asset key for art. |
+| **`message_*`** | Catalog tags whose primary job is short-term player text (modal ack / display). Carry `displayText` (+ optional `image`). Example: `message_strength5`. |
+| **`seen_*`** | Thin novelty-ack tags (often empty effects) when the discoverable is not itself a message. Example: `seen_break_canopy`. |
+| **`milestone_*`** | Silent trigger tags (`effects: []`) that exist only to become “in play” and point `novelty.seenTag` at a `message_*` (or `seen_*`) tag. Example: `milestone_strength5`. |
+| **`badge_*`** | Achievement / trophy presence tags the host can render anywhere. Example: `badge_totalkills`. |
+
+**Tag field cheat-sheet:**
+
+```ts
+{
+  name: 'message_strength5',
+  label?: 'Stronger',           // optional short title
+  displayText: 'You feel stronger.',  // modal / message body
+  image?: 'ui/strength-up',
+  effects: [],
+}
+```
 
 ---
 
@@ -300,43 +329,43 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 
 **Composition:**
 - On the discoverable (action / entity definition / `pool-max` or `stat` effect), set  
-  `novelty: { seenTag: 'Seen_BreakCanopy', scope: 'primary' }` (or `instance`).
-- Catalog entry `Seen_BreakCanopy` may be a thin ack tag (empty effects) or carry tooltip copy/`image`.
-- Host: `selectNovelOnEntity` / `selectNovelInState` → show ⚠; on mouseover / open, `add-tag` the `seenTag` onto the ack scope.
+  `novelty: { seenTag: 'seen_break_canopy', scope: 'primary' }` (or `instance`).
+- Catalog entry `seen_break_canopy` is usually a thin ack tag (`effects: []`). Optional `label` / `displayText` if the host shows a tooltip on acknowledge.
+- Host: `selectNovelOnEntity` / `selectNovelInState` → show ⚠; on mouseover / open, `add-tag` `seen_break_canopy` onto the ack scope.
 - Example: Landing Ship action **Break Canopy Seal** declares novelty; Pickup Wrist Computer does **not**.
 
 ### 7. Event message — modal when something becomes true (no other visible effect)
 
 **Intent:** show short-term text (confirm-style modal) when a condition becomes true—e.g. “You feel stronger” at Strength ≥ 5—without inventing a visible reward or a parallel message queue.
 
-**Composition (silent milestone tag → display ack tag):**
-1. **Display / ack catalog tag** `Msg_Strength5` — holds `description`, optional `image` (modal body). No gameplay effects required.
-2. **Silent milestone tag** `Milestone_Strength5` — `effects: []`, and  
-   `novelty: { seenTag: 'Msg_Strength5', scope: 'primary' }`.  
-   Holding this tag is what puts the message “in play”; the player-facing copy lives on `Msg_Strength5`, not on the milestone.
+**Composition (silent `milestone_*` → `message_*` display/ack tag):**
+1. **Message catalog tag** `message_strength5` — `displayText` (modal body), optional `image` / `label`. No gameplay effects required.
+2. **Silent milestone tag** `milestone_strength5` — `effects: []`, and  
+   `novelty: { seenTag: 'message_strength5', scope: 'primary' }`.  
+   Holding the milestone puts the message “in play”; player-facing copy lives on `message_strength5.displayText`, not on the milestone.
 3. **One-shot grant** when Strength reaches 5 (primary character as actor), e.g. an automatic or host-fired action:
    - Requirements: `{ type: 'stat', stat: 'Strength', amount: 5 }`,  
-     `{ type: 'tag', tagName: 'Milestone_Strength5', exists: false }`
-   - Results: `grant-tag` `Milestone_Strength5`
+     `{ type: 'tag', tagName: 'milestone_strength5', exists: false }`
+   - Results: `grant-tag` `milestone_strength5`
    - No costs; no other results needed.
-4. Host: novel `kind: 'tag'` with `seenTag: 'Msg_Strength5'` → open modal from catalog → on dismiss `add-tag` `Msg_Strength5` on primary (ack). Milestone tag stays (history); message does not reappear.
+4. Host: novel `kind: 'tag'` with `seenTag: 'message_strength5'` → open modal using catalog `displayText` → on dismiss `add-tag` `message_strength5` on primary (ack). Milestone stays (history); message does not reappear.
 
-**Why two tags:** the milestone can be granted by any recipe when a gate trips; novelty points at a **separate** display tag so the milestone itself stays invisible (no label/image) while the modal still has rich copy. Same pattern works for “first time you open the canopy,” “first Science ≥ 2,” etc.
+**Why two tags:** the milestone can be granted by any recipe when a gate trips; novelty points at a **separate** `message_*` tag so the milestone stays invisible while the modal still has rich `displayText`. Same pattern for “first canopy open,” “first Science ≥ 2,” etc.
 
-**Do not** put the modal text only on the milestone and also use it as the ack tag unless you want granting the message tag to be the same object as the milestone (usually worse for “silent trigger + rich display”).
+**Do not** put modal copy only on the milestone and also use it as the ack tag unless you want one object to be both silent trigger and rich display (usually worse).
 
 ### 8. Achievement badge — lifetime milestone (`badge_totalkills`)
 
-**Intent:** when a long-run metric is hit (e.g. 100 lifetime creature kills), grant a **badge tag** the host can show anywhere (profile, sheet, toast)—independent of whether you also flash novelty.
+**Intent:** when a long-run metric is hit (e.g. 100 lifetime creature kills), grant a **`badge_*` tag** the host can show anywhere (profile, sheet, toast)—independent of whether you also flash novelty.
 
 **Composition:**
 - Track kills as a **metric** (e.g. `action-total` on a `kill-creature` action, or a dedicated counter metric if you add one)—not host-only memory.
 - One-shot action (manual trophy claim or `execution: 'automatic'` when processes exist):
   - Requirements: metric ≥ 100, `{ type: 'tag', tagName: 'badge_totalkills', exists: false }`
   - Results: `grant-tag` `badge_totalkills`
-- Catalog tag `badge_totalkills`: `label` / `description` / `image` for the badge art; typically **no** stat/pool effects (pure presence).
-- Host lists `entity.tags` (or a `badge_*` name prefix) wherever badges should appear.
-- Optional: give `badge_totalkills` its own `novelty: { seenTag: 'Seen_Badge_TotalKills' }` if the first earn should modal or ⚠; omit novelty if the badge appearing in the badge list is enough.
+- Catalog tag `badge_totalkills`: `label` / `displayText` / `image` for badge title and blurb; typically **no** stat/pool effects (pure presence).
+- Host lists tags matching `badge_*` (or an explicit badge list) wherever badges should appear.
+- Optional first-earn flash: `novelty: { seenTag: 'message_badge_totalkills' }` on the badge tag, with `message_badge_totalkills.displayText` for a modal; or omit novelty if appearing in the badge list is enough.
 
 ---
 
@@ -386,9 +415,10 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 | One-shot player or NPC verb? | **Action** |
 | Repeats every tick while assigned? | **Process** (when implemented) |
 | “Has this ever / how many times / how high?” | **Metric** (count or high-water), not host-only memory |
-| Highlight something until acknowledged? | **`novelty` + ack tag** (`seenTag`); omit `novelty` if not highlighted |
-| Modal / short text when a fact becomes true? | Silent **milestone tag** with `novelty.seenTag` → display catalog tag |
-| Trophy / badge for a lifetime milestone? | **Grant badge tag** (presence); host renders anywhere |
+| Highlight something until acknowledged? | **`novelty` + ack tag** (`seen_*` / `message_*`); omit `novelty` if not highlighted |
+| Modal / short text when a fact becomes true? | Silent **`milestone_*`** with `novelty.seenTag` → **`message_*`** (`displayText`) |
+| Trophy / badge for a lifetime milestone? | **Grant `badge_*` tag** (presence); host renders anywhere |
+| Player-facing tag body copy? | **`displayText`** (not `description`) |
 | Only changes pixels / layout? | **Host presentation** |
 
 ---
@@ -402,6 +432,7 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 - [ ] Actor / source / target roles explicit when more than one entity is involved
 - [ ] Host vs engine boundary respected (no React in core; no rule logic only in UI)
 - [ ] Works as a pattern for more than one genre (not smuggling one game’s nouns into the core API)
+- [ ] Suggested conventions followed where applicable (`message_*` / `seen_*` / `milestone_*` / `badge_*`, `displayText` for player copy)
 - [ ] If this doc blocked a good design, the doc was updated
 
 ---

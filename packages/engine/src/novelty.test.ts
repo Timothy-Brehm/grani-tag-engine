@@ -17,20 +17,15 @@ describe('tag-based novelty', () => {
   const options = { registry, host: {} };
 
   const seenShip = createTag({
-    name: 'Seen_Ship',
-    description: 'You have looked at this ship.',
-    image: 'ship-seen',
+    name: 'seen_ship',
     effects: [],
   });
   const seenScout = createTag({
-    name: 'Seen_Scout',
-    description: 'Scout briefing.',
-    image: 'scout-modal',
+    name: 'seen_scout',
     effects: [],
   });
   const seenLife = createTag({
-    name: 'Seen_Life',
-    description: 'Life pool intro.',
+    name: 'seen_life',
     effects: [],
   });
 
@@ -47,7 +42,7 @@ describe('tag-based novelty', () => {
               name: 'Life',
               strength: 5,
               pool: 'Life',
-              novelty: { seenTag: 'Seen_Life', scope: 'instance' },
+              novelty: { seenTag: 'seen_life', scope: 'instance' },
             },
           ],
         }),
@@ -58,12 +53,12 @@ describe('tag-based novelty', () => {
 
   const scoutAction = {
     name: 'scout',
-    novelty: { seenTag: 'Seen_Scout', scope: 'primary' as const },
+    novelty: { seenTag: 'seen_scout', scope: 'primary' as const },
   };
 
   const heroDefinition = {
     id: 'hero',
-    novelty: { seenTag: 'Seen_Ship', scope: 'instance' as const },
+    novelty: { seenTag: 'seen_ship', scope: 'instance' as const },
     actions: [scoutAction],
   };
 
@@ -117,7 +112,7 @@ describe('tag-based novelty', () => {
 
     const popCanopy = {
       name: 'pop',
-      novelty: { seenTag: 'Seen_PopCanopy', scope: 'primary' as const },
+      novelty: { seenTag: 'seen_pop_canopy', scope: 'primary' as const },
     };
 
     expect(selectActionIsNovel(state, shipA, popCanopy)).toBe(true);
@@ -129,8 +124,7 @@ describe('tag-based novelty', () => {
         type: 'add-tag',
         entityId: 'pilot',
         tag: createTag({
-          name: 'Seen_PopCanopy',
-          description: 'Break the canopy seal.',
+          name: 'seen_pop_canopy',
           effects: [],
         }),
       },
@@ -150,17 +144,17 @@ describe('tag-based novelty', () => {
       definition: heroDefinition,
     });
     expect(refs.map((ref) => ref.seenTag).sort()).toEqual([
-      'Seen_Life',
-      'Seen_Scout',
-      'Seen_Ship',
+      'seen_life',
+      'seen_scout',
+      'seen_ship',
     ]);
   });
 
-  it('supports silent milestone tags that point novelty at a display tag', () => {
+  it('supports silent milestone tags that point novelty at a message_* tag', () => {
     const milestone = createTag({
-      name: 'Milestone_Strength5',
+      name: 'milestone_strength5',
       effects: [],
-      novelty: { seenTag: 'Msg_Strength5', scope: 'primary' },
+      novelty: { seenTag: 'message_strength5', scope: 'primary' },
     });
     let state = createEngineState({
       entities: [
@@ -176,10 +170,10 @@ describe('tag-based novelty', () => {
     expect(refs).toEqual([
       {
         entityId: 'hero',
-        seenTag: 'Msg_Strength5',
+        seenTag: 'message_strength5',
         scope: 'primary',
         kind: 'tag',
-        key: 'Milestone_Strength5',
+        key: 'milestone_strength5',
       },
     ]);
 
@@ -189,8 +183,8 @@ describe('tag-based novelty', () => {
         type: 'add-tag',
         entityId: 'hero',
         tag: createTag({
-          name: 'Msg_Strength5',
-          description: 'You feel stronger.',
+          name: 'message_strength5',
+          displayText: 'You feel stronger.',
           effects: [],
         }),
       },

@@ -85,14 +85,14 @@ Actions defined in TypeScript can also provide runtime-only predicates via `code
 Discoverables (entity, action, pool-max / stat effect, or a held **tag**) may declare:
 
 ```ts
-novelty: { seenTag: 'Seen_BreakCanopy', scope?: 'instance' | 'primary' }
+novelty: { seenTag: 'seen_break_canopy', scope?: 'instance' | 'primary' }
 ```
 
 Novel while `seenTag` is **absent** on the ack scope. Acknowledge with `add-tag` /
-`grant-tag`. Catalog tag fields (`description`, `image`, …) on **`seenTag`** are the
-display payload for badges or modals. Silent milestones use a tag with empty effects
-plus `novelty.seenTag` pointing at the message catalog entry. Selectors:
-`selectIsNovel`, `selectNovelOnEntity`, `selectNovelInState`.
+`grant-tag`. Player-facing modal copy lives in catalog **`displayText`** on that
+`seenTag` (convention: `message_*` for modals, `seen_*` for thin acks). Silent
+milestones use `milestone_*` tags with empty effects plus `novelty.seenTag` →
+`message_*`. Selectors: `selectIsNovel`, `selectNovelOnEntity`, `selectNovelInState`.
 
 ## Reserved process API
 

@@ -19,8 +19,14 @@ export interface TagEffect {
 
 export interface Tag<TEffect extends TagEffect = TagEffect> {
   readonly name: string;
+  /**
+   * Longer / design notes. Prefer {@link displayText} for player-facing copy
+   * (modals, tooltips driven by novelty ack tags).
+   */
   readonly description?: string;
   readonly label?: string;
+  /** Player-facing body text (modals, novelty messages). */
+  readonly displayText?: string;
   /** Optional host asset key for novelty / message presentation. */
   readonly image?: string;
   /**
@@ -44,6 +50,9 @@ export function createTag<TEffect extends TagEffect = TagEffect>(
       ? { description: input.description }
       : {}),
     ...(input.label !== undefined ? { label: input.label } : {}),
+    ...(input.displayText !== undefined
+      ? { displayText: input.displayText }
+      : {}),
     ...(input.image !== undefined ? { image: input.image } : {}),
     ...(input.novelty !== undefined ? { novelty: input.novelty } : {}),
     effects: Object.freeze([...input.effects]),

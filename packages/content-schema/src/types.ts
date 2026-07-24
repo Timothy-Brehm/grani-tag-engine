@@ -19,6 +19,7 @@ export type TagJSON = {
   name: string;
   description?: string;
   label?: string;
+  displayText?: string;
   image?: string;
   novelty?: NoveltyAckJSON;
   effects: TagEffectJSON[];
