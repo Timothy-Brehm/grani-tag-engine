@@ -100,9 +100,12 @@ Pools model stamina, ingredients on hand, money, mana, stress, reputation points
 An **action** is one atomic recipe:
 
 1. **Requirements** — may it be offered / started?
-2. **Costs** — what is paid (usually pools, sometimes tags)?
-3. **Results** — what is produced?
-4. **Side effects** — optional extras after results
+2. **Costs** (`costs`) — cost to **start** a cycle at 0% progress
+3. **Costs over time** (`costsOverTime`, optional) — total for one full cycle; **prorated** as progress advances; inability to pay pauses and keeps progress
+4. **Results** — what is produced on **completion**
+5. **Side effects** — optional extras after results
+
+**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible.
 
 Actions are data (`ActionDefinition`). Execution is `execute-action` with roles:
 
@@ -242,23 +245,27 @@ Novelty/message prefixes stay `snake_case` after the role word (`message_strengt
 
 ```text
 EntityDefinition
-  ├─ initialTags  →  traits (stat/…) + pool maxima
+  ├─ initialTags  →  traits (stat/…) + pool maxima + generate-pool / continuous-* passives
   ├─ initialPools →  starting currents
   └─ actions[]    →  recipes offered when this entity is source
 
 Action
+  ├─ durationTicks → omitted = 1 (instant); >1 = multi-tick continuous
   ├─ requirements →  read traits/tags/pools/metrics/entity counts (scoped)
-  ├─ costs        →  adjust-pool / (rarely) remove facts (actor by default)
-  ├─ results      →  grant-tag / adjust-pool / spawn-entity / …
+  ├─ costs        →  cost to start (actor by default)
+  ├─ costsOverTime→  prorated while progressing (pause if unpaid)
+  ├─ results      →  grant-tag / adjust-pool / spawn-entity / … (on complete)
   └─ sideEffects  →  same toolbox, applied after results
 
 EntityInstance
-  └─ metrics → actionCounts + pool/stat high-waters
+  └─ metrics → actionCounts + pool/stat high-waters + generatorLastTick
 
 EngineState
   ├─ engineVersion (major.minor.patch.build; compat = major.minor)
   ├─ entities + spawnCounts
   ├─ primaryEntityId (required)
+  ├─ continuousActions (active jobs / slots)
+  ├─ continuousProgress (persisted % by actor::action::source)
   └─ tick
 ```
 
@@ -271,9 +278,30 @@ EngineState
 ## Builtin toolbox (current)
 
 **Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`  
+**Tag passives:** `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
+
+### Generators (`generate-pool`)
+
+Tag passive peer to `stat` / `pool-max`:
+
+```ts
+{ type: 'generate-pool', pool: 'Stamina', amount: 1, everyTicks: 5, strength: 1, name: '…' }
+```
+
+On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and stamp `entity.metrics.generatorLastTick['tagName::pool']`. If the pool is full, **skip** and do **not** advance lastPulse.
+
+### Continuous actions
+
+- Progress key: `actorEntityId::actionName::sourceEntityId??''`
+- **Start** (`execute-action`): pay `costs` only at 0%; resume mid-cycle keeps progress and does not re-pay start costs
+- **Pause** / auto-stop (requirements fail or cannot pay `costsOverTime` slice): free slot, **keep** progress
+- **Complete**: fire results/sideEffects; clear progress to 0%; free slot
+- **Cancel**: clear progress; no refund
+- Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
+- Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; effective duration min 1
 
 ---
 

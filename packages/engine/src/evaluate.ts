@@ -3,6 +3,13 @@ import type { ActiveEffect } from './effect';
 import type { EngineContext } from './context';
 import type { EngineRegistry } from './registry';
 import type { Requirement } from './requirement';
+import {
+  actionDurationTicks,
+  buildOverTimeSlice,
+  continuousProgressKey,
+  selectContinuousProgressDelta,
+  selectEffectiveDurationTicks,
+} from './continuous';
 
 /** True when every requirement is met (original RequirementsMet). */
 export function requirementsMet<THost>(
@@ -42,18 +49,60 @@ export function anyResultPossible<THost>(
 /**
  * Action is available when requirements are met, costs are payable,
  * and at least one result is possible.
+ *
+ * Mid-cycle resume (saved progress > 0): start `costs` are not re-checked.
+ * At 0%: start costs plus the first over-time slice must be payable.
  */
 export function isActionAvailable<THost>(
   registry: EngineRegistry<THost>,
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): boolean {
-  return (
-    requirementsMet(registry, action.requirements, context) &&
-    codeRequirementsMet(action.codeRequirements, context) &&
-    costsPayable(registry, action.costs, context) &&
-    anyResultPossible(registry, action.results, context)
+  if (
+    !requirementsMet(registry, action.requirements, context) ||
+    !codeRequirementsMet(action.codeRequirements, context) ||
+    !anyResultPossible(registry, action.results, context)
+  ) {
+    return false;
+  }
+
+  const actorEntityId =
+    context.actorEntityId ?? context.engine.primaryEntityId;
+  const key = continuousProgressKey({
+    actorEntityId,
+    actionName: action.name,
+    sourceEntityId: context.sourceEntityId,
+  });
+  const existing = context.engine.continuousProgress.get(key);
+  const midCycle =
+    existing !== undefined &&
+    existing.progressTicks > 0 &&
+    existing.progressTicks < existing.effectiveDurationTicks;
+
+  if (midCycle) {
+    return true;
+  }
+
+  if (!costsPayable(registry, action.costs, context)) {
+    return false;
+  }
+
+  const actor = context.engine.entities.get(actorEntityId);
+  if (!actor) {
+    return false;
+  }
+  const baseDuration = actionDurationTicks(action);
+  const D = selectEffectiveDurationTicks(actor, action.name, baseDuration);
+  const delta = Math.min(
+    selectContinuousProgressDelta(actor, action.name),
+    D,
   );
+  const slice = buildOverTimeSlice(
+    action.costsOverTime ?? [],
+    delta / D,
+    baseDuration <= 1,
+  );
+  return costsPayable(registry, slice, context);
 }
 
 /**
@@ -63,6 +112,8 @@ export function isActionAvailable<THost>(
  * 3. Apply all sideEffects in order.
  *
  * Prefer checking `isActionAvailable` first. For guarded application, use `executeActionSafe`.
+ * Hosts should prefer the `execute-action` command (continuous pipeline); this helper
+ * remains for tests and one-shot application of a full recipe.
  */
 export function executeAction<THost>(
   registry: EngineRegistry<THost>,

@@ -12,6 +12,16 @@ import {
   assertCompatibleEngineVersion,
   ENGINE_VERSION,
 } from './version';
+import {
+  continuousActionsFromJSON,
+  continuousActionsToJSON,
+  continuousProgressFromJSON,
+  continuousProgressToJSON,
+  type ContinuousActiveJobJSON,
+  type ContinuousActiveMap,
+  type ContinuousProgressMap,
+  type ContinuousProgressRecordJSON,
+} from './continuous-types';
 
 /** Serializable, framework-neutral engine slice owned by the core package. */
 export interface EngineState {
@@ -33,6 +43,10 @@ export interface EngineState {
    * Hosts may treat it as the default actor; run-wide facts often live here.
    */
   readonly primaryEntityId: string;
+  /** Currently running continuous jobs (occupy slots). */
+  readonly continuousActions: ContinuousActiveMap;
+  /** Persisted progress by key (survives pause / auto-stop). */
+  readonly continuousProgress: ContinuousProgressMap;
 }
 
 export type EngineStateJSON = {
@@ -41,6 +55,8 @@ export type EngineStateJSON = {
   entities: EntityInstanceJSON[];
   spawnCounts: Record<string, number>;
   primaryEntityId: string;
+  continuousActions?: ContinuousActiveJobJSON[];
+  continuousProgress?: ContinuousProgressRecordJSON[];
 };
 
 export function createEngineState(input: {
@@ -48,6 +64,8 @@ export function createEngineState(input: {
   entities: readonly EntityInstance[];
   spawnCounts?: Readonly<Record<string, number>>;
   primaryEntityId: string;
+  continuousActions?: ContinuousActiveMap;
+  continuousProgress?: ContinuousProgressMap;
 }): EngineState {
   const entities = new Map<string, EntityInstance>();
   for (const entity of input.entities) {
@@ -70,6 +88,8 @@ export function createEngineState(input: {
     entities,
     spawnCounts: Object.freeze({ ...(input.spawnCounts ?? {}) }),
     primaryEntityId,
+    continuousActions: input.continuousActions ?? new Map(),
+    continuousProgress: input.continuousProgress ?? new Map(),
   };
 }
 
@@ -80,6 +100,8 @@ export function engineStateToJSON(state: EngineState): EngineStateJSON {
     entities: [...state.entities.values()].map(entityInstanceToJSON),
     spawnCounts: { ...state.spawnCounts },
     primaryEntityId: state.primaryEntityId,
+    continuousActions: continuousActionsToJSON(state.continuousActions),
+    continuousProgress: continuousProgressToJSON(state.continuousProgress),
   };
 }
 
@@ -93,6 +115,8 @@ export function engineStateFromJSON(json: EngineStateJSON): EngineState {
     entities: (json.entities ?? []).map(entityInstanceFromJSON),
     spawnCounts: json.spawnCounts ?? {},
     primaryEntityId: json.primaryEntityId,
+    continuousActions: continuousActionsFromJSON(json.continuousActions),
+    continuousProgress: continuousProgressFromJSON(json.continuousProgress),
   });
 }
 

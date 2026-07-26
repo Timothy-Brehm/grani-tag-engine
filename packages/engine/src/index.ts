@@ -27,6 +27,34 @@ export type {
 export type { ActionDefinition, RequirementCheck } from './action';
 
 export type {
+  ContinuousActionSnapshot,
+  ContinuousProgressRecord,
+  ContinuousActiveJob,
+  ContinuousProgressMap,
+  ContinuousActiveMap,
+  ContinuousProgressRecordJSON,
+  ContinuousActiveJobJSON,
+} from './continuous';
+export {
+  actionDurationTicks,
+  continuousProgressKey,
+  continuousProgressPercent,
+  snapshotAction,
+  actionFromSnapshot,
+  selectContinuousSlotMax,
+  selectAllowInstantWhileContinuous,
+  selectEffectiveDurationTicks,
+  selectContinuousProgressDelta,
+  startContinuousAction,
+  pauseContinuousAction,
+  cancelContinuousAction,
+  advanceContinuousActions,
+  pulseGenerators,
+  buildOverTimeSlice,
+  scaleEffectStrength,
+} from './continuous';
+
+export type {
   EntityScope,
   EntityPoolMap,
   EntityInstance,
@@ -153,6 +181,8 @@ export {
   selectSpawnCount,
   selectPrimaryEntity,
   selectPrimaryEntityId,
+  selectContinuousActiveJobs,
+  selectContinuousProgress,
 } from './selectors';
 
 export type {

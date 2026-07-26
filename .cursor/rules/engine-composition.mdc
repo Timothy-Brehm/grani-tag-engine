@@ -17,8 +17,8 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`Event_CrateFound` → also `Event_CrateOpened`), not erasing history by default.
 5. **Track metrics for gates** — action counts, pool currents, high/low-waters, lifetime used, and tick timestamps live on `entity.metrics`. Prefer engine ticks over wall-clock for rules; hosts may display `tick / N` as time. Use `execute-action.execution` (`manual` default / `automatic`). Low-water metric requirements use `<= amount`.
 6. **Novelty is tag-based** — discoverables declare `novelty: { seenTag, scope? }`; novel while that catalog tag is absent. Ack with `grant-tag` / `add-tag`. Player copy in **`displayText`** on the `seenTag` definition. Conventions: `message_*` / `seen_*` / `milestone_*` / `badge_*` for novelty copy; `Event_*` for durable facts; `Pool_Initial_*` / `Stat_Initial_*` / `Item_*` / `Tech_*` for mechanical roles. Omit `novelty` when not highlighting.
-7. **Actions are recipes** — requirements → costs → results (+ side effects), with actor / source / target roles.
-8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist).
+7. **Actions are recipes** — requirements → start `costs` → optional prorated `costsOverTime` → results (+ side effects) on completion; `durationTicks` omitted ⇒ 1. Actor / source / target roles.
+8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Passive regen uses `generate-pool` tag passives, not fake idle entities.
 9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
 10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content.
 

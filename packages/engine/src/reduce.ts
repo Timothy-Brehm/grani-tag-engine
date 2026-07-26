@@ -2,14 +2,12 @@ import type { EngineCommand } from './command';
 import type { EngineRegistry } from './registry';
 import {
   removeEntity,
-  toEngineContext,
   upsertEntity,
   withEngineTick,
   withPrimaryEntityId,
   withEngineSpawnCounts,
   type EngineState,
 } from './state';
-import { executeAction, executeActionSafe } from './evaluate';
 import { TagCollection } from './tag-collection';
 import { clearProcessPool, setProcessAllocation } from './process';
 import {
@@ -17,13 +15,39 @@ import {
   instantiateEntity,
   withEntityTags,
 } from './entity';
-import { recordActionExecution } from './metrics';
 import { selectPoolMax, selectSpawnCount } from './selectors';
+import {
+  advanceContinuousActions,
+  cancelContinuousAction,
+  continuousProgressKey,
+  pauseContinuousAction,
+  pulseGenerators,
+  startContinuousAction,
+} from './continuous';
 
 export type ReduceEngineOptions<THost = unknown> = {
   readonly registry: EngineRegistry<THost>;
   readonly host: THost;
 };
+
+function resolveProgressKey(command: {
+  readonly progressKey?: string;
+  readonly actorEntityId?: string;
+  readonly actionName?: string;
+  readonly sourceEntityId?: string;
+}): string | undefined {
+  if (command.progressKey) {
+    return command.progressKey;
+  }
+  if (command.actorEntityId && command.actionName) {
+    return continuousProgressKey({
+      actorEntityId: command.actorEntityId,
+      actionName: command.actionName,
+      sourceEntityId: command.sourceEntityId,
+    });
+  }
+  return undefined;
+}
 
 /**
  * Pure engine transition. Returns the next EngineState; never mutates input.
@@ -120,35 +144,41 @@ export function reduceEngineState<THost = unknown>(
       return withPrimaryEntityId(state, command.entityId);
     case 'tick': {
       const steps = command.steps ?? 1;
-      return withEngineTick(state, state.tick + steps);
+      let next = state;
+      for (let i = 0; i < steps; i += 1) {
+        next = withEngineTick(next, next.tick + 1);
+        next = pulseGenerators(next);
+        next = advanceContinuousActions(next, options);
+      }
+      return next;
     }
     case 'execute-action': {
-      const ctx = toEngineContext(state, options.host, {
-        actorEntityId: command.actorEntityId,
+      const actorEntityId =
+        command.actorEntityId ?? state.primaryEntityId;
+      return startContinuousAction(state, {
+        registry: options.registry,
+        host: options.host,
+        action: command.action,
+        actorEntityId,
         sourceEntityId: command.sourceEntityId,
         targetEntityId: command.targetEntityId,
+        execution: command.execution ?? 'manual',
+        mode: command.mode ?? 'strict',
       });
-      const nextCtx =
-        command.mode === 'safe'
-          ? executeActionSafe(options.registry, command.action, ctx)
-          : executeAction(options.registry, command.action, ctx);
-      let nextState = nextCtx.engine;
-      const actorId = command.actorEntityId;
-      if (actorId) {
-        const actor = nextState.entities.get(actorId);
-        if (actor) {
-          nextState = upsertEntity(
-            nextState,
-            recordActionExecution(
-              actor,
-              command.action.name,
-              command.execution ?? 'manual',
-              nextState.tick,
-            ),
-          );
-        }
+    }
+    case 'pause-continuous-action': {
+      const key = resolveProgressKey(command);
+      if (!key) {
+        return state;
       }
-      return nextState;
+      return pauseContinuousAction(state, key);
+    }
+    case 'cancel-continuous-action': {
+      const key = resolveProgressKey(command);
+      if (!key) {
+        return state;
+      }
+      return cancelContinuousAction(state, key);
     }
     case 'set-process-allocation':
       return setProcessAllocation({

@@ -4,8 +4,22 @@ export interface TagEffect {
   readonly strength: number;
   /** Optional payload for `stat` effects. */
   readonly stat?: string;
-  /** Optional payload for `pool-max` / regen effects. */
+  /** Optional payload for `pool-max` / `generate-pool` effects. */
   readonly pool?: string;
+  /** Pulse amount for `generate-pool` (falls back to `strength`). */
+  readonly amount?: number;
+  /** Tick interval for `generate-pool`. */
+  readonly everyTicks?: number;
+  /** Optional action filter for `continuous-speed` (`*` or omit = all). */
+  readonly actionName?: string;
+  /** Additive duration modifier for `continuous-speed` (applied first). */
+  readonly addTicks?: number;
+  /** Multiplicative duration modifier for `continuous-speed`. */
+  readonly multiply?: number;
+  /** Divisor duration modifier for `continuous-speed`. */
+  readonly divide?: number;
+  /** Progress per tick for `continuous-speed` (default 1 when none). */
+  readonly generatorCount?: number;
   /**
    * Optional novelty ack for this pool/stat contribution.
    * Present `seenTag` on the ack scope ⇒ not novel.

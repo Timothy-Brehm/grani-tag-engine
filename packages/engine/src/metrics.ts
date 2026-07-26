@@ -60,6 +60,11 @@ export type EntityMetrics = {
    * Kept after removal so history remains queryable.
    */
   readonly tagGrantedAt: Readonly<Record<string, number>>;
+  /**
+   * Last successful `generate-pool` pulse tick, keyed by `tagName::pool`.
+   * Not advanced when a pulse is skipped because the pool is full.
+   */
+  readonly generatorLastTick: Readonly<Record<string, number>>;
 };
 
 export type EntityMetricsJSON = {
@@ -76,6 +81,7 @@ export type EntityMetricsJSON = {
   statLowWaterAtTick?: Record<string, number>;
   poolLifetimeUsed?: Record<string, number | LifetimeUsedMetric>;
   tagGrantedAt?: Record<string, number>;
+  generatorLastTick?: Record<string, number>;
 };
 
 export type ActionExecutionKind = 'manual' | 'automatic';
@@ -95,6 +101,7 @@ export function emptyEntityMetrics(): EntityMetrics {
     statLowWaterAtTick: Object.freeze({}),
     poolLifetimeUsed: Object.freeze({}),
     tagGrantedAt: Object.freeze({}),
+    generatorLastTick: Object.freeze({}),
   };
 }
 
@@ -113,6 +120,7 @@ export function entityMetricsToJSON(metrics: EntityMetrics): EntityMetricsJSON {
     statLowWaterAtTick: { ...metrics.statLowWaterAtTick },
     poolLifetimeUsed: { ...metrics.poolLifetimeUsed },
     tagGrantedAt: { ...metrics.tagGrantedAt },
+    generatorLastTick: { ...metrics.generatorLastTick },
   };
 }
 
@@ -174,6 +182,7 @@ export function entityMetricsFromJSON(
     statLowWaterAtTick: Object.freeze({ ...(json.statLowWaterAtTick ?? {}) }),
     poolLifetimeUsed: Object.freeze(poolLifetimeUsed),
     tagGrantedAt: Object.freeze({ ...(json.tagGrantedAt ?? {}) }),
+    generatorLastTick: Object.freeze({ ...(json.generatorLastTick ?? {}) }),
   };
 }
 
