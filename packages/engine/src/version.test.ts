@@ -9,11 +9,11 @@ import {
 
 describe('engine version', () => {
   it('exports a four-part ENGINE_VERSION', () => {
-    expect(ENGINE_VERSION).toBe('0.1.0.0');
+    expect(ENGINE_VERSION).toBe('0.1.1.0');
     expect(parseEngineVersion(ENGINE_VERSION)).toEqual({
       major: 0,
       minor: 1,
-      patch: 0,
+      patch: 1,
       build: 0,
     });
   });

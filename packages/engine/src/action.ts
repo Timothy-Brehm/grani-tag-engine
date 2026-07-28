@@ -25,9 +25,19 @@ export interface ActionDefinition<
   /** Generic stand-in for a former card/source identifier. */
   readonly sourceId?: string;
   readonly requirements: readonly TReq[];
+  /** Cost to start a cycle at 0% progress (unchanged vs legacy instant costs). */
   readonly costs: readonly TEffect[];
+  /**
+   * Total cost for one full cycle, prorated as progress advances.
+   * Inability to pay a slice pauses the job and keeps progress.
+   */
+  readonly costsOverTime?: readonly TEffect[];
   readonly results: readonly TEffect[];
   readonly sideEffects: readonly TEffect[];
+  /**
+   * Engine ticks to complete one cycle. Omitted ⇒ 1 (one-tick / “instant”).
+   */
+  readonly durationTicks?: number;
   /**
    * When set, this action is novel while `seenTag` is absent on the ack scope.
    * Ack by granting that catalog tag; display lives on the tag definition.

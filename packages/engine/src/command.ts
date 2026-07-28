@@ -58,6 +58,21 @@ export type EngineCommand<THost = unknown> =
        */
       readonly execution?: 'manual' | 'automatic';
     }
+  | {
+      readonly type: 'pause-continuous-action';
+      /** `${actor}::${actionName}::${source??''}` or pass role fields below. */
+      readonly progressKey?: string;
+      readonly actorEntityId?: string;
+      readonly actionName?: string;
+      readonly sourceEntityId?: string;
+    }
+  | {
+      readonly type: 'cancel-continuous-action';
+      readonly progressKey?: string;
+      readonly actorEntityId?: string;
+      readonly actionName?: string;
+      readonly sourceEntityId?: string;
+    }
   /** Reserved recurring-action endpoints. They currently throw explicitly. */
   | {
       readonly type: 'set-process-allocation';

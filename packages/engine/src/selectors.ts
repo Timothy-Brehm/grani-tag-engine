@@ -2,6 +2,10 @@ import type { EntityInstance } from './entity';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
 import type { TagCollection } from './tag-collection';
+import type {
+  ContinuousActiveJob,
+  ContinuousProgressRecord,
+} from './continuous-types';
 
 /** Sum strength of tag passive effects whose type matches. */
 export function sumTagEffectStrength(
@@ -110,4 +114,22 @@ export function selectPrimaryEntity(state: EngineState): EntityInstance {
 
 export function selectPrimaryEntityId(state: EngineState): string {
   return state.primaryEntityId;
+}
+
+export function selectContinuousActiveJobs(
+  state: EngineState,
+  actorEntityId?: string,
+): ContinuousActiveJob[] {
+  const jobs = [...state.continuousActions.values()];
+  if (!actorEntityId) {
+    return jobs;
+  }
+  return jobs.filter((job) => job.actorEntityId === actorEntityId);
+}
+
+export function selectContinuousProgress(
+  state: EngineState,
+  progressKey: string,
+): ContinuousProgressRecord | undefined {
+  return state.continuousProgress.get(progressKey);
 }
