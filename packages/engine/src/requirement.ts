@@ -27,6 +27,15 @@ export type PoolMaxRequirement = {
   readonly scope?: EntityScope;
 };
 
+export type HasSlotRequirement = {
+  readonly type: 'has-slot';
+  readonly slot: string;
+  /** Default true — own any held tag in this slot. */
+  readonly exists?: boolean;
+  /** Defaults to source, then actor. */
+  readonly scope?: EntityScope;
+};
+
 export type EntityCountRequirement = {
   readonly type: 'entity-count';
   readonly definitionId: string;
@@ -93,6 +102,7 @@ export type BuiltinRequirement =
   | StatRequirement
   | PoolMaxRequirement
   | EntityCountRequirement
+  | HasSlotRequirement
   | MetricRequirement;
 
 export type Requirement =

@@ -17,6 +17,7 @@ import {
   type EntityMetrics,
   type EntityMetricsJSON,
 } from './metrics';
+import type { SlotCatalog } from './slots';
 
 /** Who an effect or requirement resolves against. */
 export type EntityScope = 'actor' | 'source' | 'target';
@@ -32,6 +33,8 @@ export interface EntityInstance {
   readonly pools: EntityPoolMap;
   /** Tracked counters and water marks for gates/effects. */
   readonly metrics: EntityMetrics;
+  /** Selectable slot id → selected held tag name. */
+  readonly slotSelections: Readonly<Record<string, string>>;
 }
 
 export type EntityInstanceJSON = {
@@ -40,6 +43,7 @@ export type EntityInstanceJSON = {
   tags: TagCollectionJSON;
   pools: Record<string, number>;
   metrics?: EntityMetricsJSON;
+  slotSelections?: Record<string, string>;
   /** @deprecated Ignored; novelty is tag-based now. */
   novelty?: unknown;
 };
@@ -73,6 +77,7 @@ export function createEntityInstance(input: {
   tags?: readonly Tag[] | TagCollection;
   pools?: EntityPoolMap;
   metrics?: EntityMetrics;
+  slotSelections?: Readonly<Record<string, string>>;
   /** Engine tick used to stamp initial watermarks / tag grants. Default 0. */
   tick?: number;
 }): EntityInstance {
@@ -94,6 +99,7 @@ export function createEntityInstance(input: {
     tags,
     pools,
     metrics: baseMetrics,
+    slotSelections: Object.freeze({ ...(input.slotSelections ?? {}) }),
   };
   return refreshEntityHighWaters(recordTagGrants(base, tags, tick), tick);
 }
@@ -107,6 +113,9 @@ export function entityInstanceToJSON(
     tags: entity.tags.toJSON(),
     pools: { ...entity.pools },
     metrics: entityMetricsToJSON(entity.metrics),
+    ...(Object.keys(entity.slotSelections).length > 0
+      ? { slotSelections: { ...entity.slotSelections } }
+      : {}),
   };
 }
 
@@ -119,6 +128,7 @@ export function entityInstanceFromJSON(
     tags: TagCollection.fromJSON(json.tags ?? { tags: [] }),
     pools: json.pools ?? {},
     metrics: json.metrics ? entityMetricsFromJSON(json.metrics) : undefined,
+    slotSelections: json.slotSelections ?? {},
   });
 }
 
@@ -126,9 +136,10 @@ export function withEntityTags(
   entity: EntityInstance,
   tags: TagCollection,
   tick = 0,
+  registry?: SlotCatalog,
 ): EntityInstance {
   const withGrants = recordTagGrants(entity, tags, tick);
-  return refreshEntityHighWaters({ ...withGrants, tags }, tick);
+  return refreshEntityHighWaters({ ...withGrants, tags }, tick, registry);
 }
 
 export function withEntityPools(

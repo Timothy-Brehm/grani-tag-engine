@@ -68,6 +68,47 @@ Tags are not the UI label and not the inventory row by themselves—they are the
 
 Removing a tag (or entity) is allowed when something truly leaves play and nothing should hang off the old fact—but default to **grant the next fact** so history, requirements, and metrics remain queryable. Host presentation can hide or restyle based on the new tag without deleting the old one.
 
+**Held vs active:** `TagCollection` stores **held** root tags only. Evaluation (passives, builtin `tag` requirements) uses the **active** view: slot-resolve roots, then flatten `dependentTags` (cycle-guarded by name). Inventory / “do I own this gear?” uses held (`tags.has` / `entityHasHeldTag`). Nested `slot` on dependents is ignored for resolution.
+
+**Host migration (0.1.2):** builtin `tag` requirements used to mean “held on the entity.” They now mean “present in the **active** flattened set.” Unselected slotted tags (and inactive dependents like `CanFly`) no longer satisfy `tag` gates. Use `has-slot` or `tags.has` / `entityHasHeldTag` when you need ownership regardless of selection.
+
+### Catalog definitions (slots, pools, stats)
+
+Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-play instances. Tag / effect payloads stay **string ids**; definitions add metadata and optional soft validation only.
+
+| Catalog | Purpose |
+|---------|---------|
+| `SlotDefinition` | Loadout slot (`id`, optional label/description/novelty, `mode?: 'best-only' \| 'selectable'`) |
+| `PoolDefinition` | Pool metadata for UI / validation |
+| `StatDefinition` | Stat metadata for UI / validation |
+
+**Soft validation:** `collectCatalogWarnings(registry, state)` reports referenced ids with no catalog entry (in-play entities + registered entity definitions when `listEntityDefinitions` is available). Missing defs do **not** hard-fail. Missing `SlotDefinition` → treat the tag as **unslotted** (all held tags stack). Default slot `mode` → `'selectable'`.
+
+### Slotted tags
+
+On a tag: `slot?: string` (`SlotDefinition.id`), `dependentTags?: Tag[]` (nested full tags projected while the parent is an active root).
+
+| Situation | Behavior |
+|-----------|----------|
+| No `slot` | Stack; dependents active while parent held |
+| Catalog `mode: 'best-only'` | Winner’s passives + dependents (`sum(abs(strength))` on own effects; ties by name) |
+| Catalog `mode: 'selectable'` / default | Selected tag’s passives + dependents |
+| `slot` set, no SlotDefinition | Unslotted stack (+ warning if validated) |
+
+**Selection:** `entity.slotSelections[slotId] = tagName`. First grant into an empty selectable slot selects the new tag; removing the selected item repairs to earliest `tagGrantedAt` (tie → name). Command: `{ type: 'select-slot-item', entityId, slot, tagName }` (no-op if not selectable / not held / wrong slot).
+
+**`has-slot`:** held any tag with that `slot` id—UI / first-equip, not capability gates (those use active tags, e.g. `CanFly`).
+
+```ts
+registerSlotDefinition({ id: 'vehicle', label: 'Vehicle' }) // selectable by default
+createTag({
+  name: 'Vehicle_Plane',
+  slot: 'vehicle',
+  dependentTags: [createTag({ name: 'CanFly', effects: [] })],
+  effects: [/* passives */],
+})
+```
+
 ### Trait (lasting quantity or flag)
 
 A **trait** is a lasting property used for gating and progression. Traits are **not spent** when used as requirements (contrast with pools).
@@ -260,6 +301,7 @@ Action
   └─ sideEffects  →  same toolbox, applied after results
 
 EntityInstance
+  ├─ tags (held roots) + slotSelections
   └─ metrics → actionCounts + pool/stat high-waters + generatorLastTick
 
 EngineState
@@ -269,6 +311,10 @@ EngineState
   ├─ continuousActions (active jobs / slots)
   ├─ continuousProgress (persisted % by actor::action::source)
   └─ tick
+
+EngineRegistry (catalogs, not serialized in EngineState)
+  ├─ EntityDefinition / SlotDefinition / PoolDefinition / StatDefinition
+  └─ requirement + effect adaptors
 ```
 
 **Recipe graph:** unlocking is usually `grant-tag` or `spawn-entity` or raising `pool-max`, which then satisfies requirements on other actions. Prefer expanding that graph over special-case code paths.
@@ -279,9 +325,10 @@ EngineState
 
 ## Builtin toolbox (current)
 
-**Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
+**Requirements:** `free`, `forbidden`, `tag` (active view), `has-slot` (held), `stat`, `pool-max`, `entity-count`, `metric`  
 **Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`  
-**Tag passives:** `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+**Commands (selection):** `select-slot-item`  
+**Tag passives:** `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed` (from **active** tags)
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 

@@ -8,6 +8,7 @@ import {
 } from './context';
 import type {
   EntityCountRequirement,
+  HasSlotRequirement,
   MetricRequirement,
   PoolMaxRequirement,
   StatRequirement,
@@ -25,6 +26,16 @@ import {
   instantiateEntity,
   withEntityTags,
 } from './entity';
+import {
+  entityHasActiveTag,
+  entityHasHeldSlot,
+  reconcileSlotSelections,
+} from './slots';
+import type {
+  PoolDefinition,
+  SlotDefinition,
+  StatDefinition,
+} from './catalog';
 import {
   selectActionCount,
   selectPoolHighWater,
@@ -124,6 +135,9 @@ export class EngineRegistry<THost = unknown> {
   private readonly requirements = new Map<string, RequirementAdaptor<any, THost>>();
   private readonly effects = new Map<string, EffectAdaptor<any, THost>>();
   private readonly entityDefinitions = new Map<string, EntityDefinition>();
+  private readonly slotDefinitions = new Map<string, SlotDefinition>();
+  private readonly poolDefinitions = new Map<string, PoolDefinition>();
+  private readonly statDefinitions = new Map<string, StatDefinition>();
 
   registerRequirement(
     type: string,
@@ -149,6 +163,45 @@ export class EngineRegistry<THost = unknown> {
 
   listEntityDefinitions(): readonly EntityDefinition[] {
     return Object.freeze([...this.entityDefinitions.values()]);
+  }
+
+  registerSlotDefinition(definition: SlotDefinition): this {
+    this.slotDefinitions.set(definition.id, definition);
+    return this;
+  }
+
+  getSlotDefinition(id: string): SlotDefinition | undefined {
+    return this.slotDefinitions.get(id);
+  }
+
+  listSlotDefinitions(): readonly SlotDefinition[] {
+    return Object.freeze([...this.slotDefinitions.values()]);
+  }
+
+  registerPoolDefinition(definition: PoolDefinition): this {
+    this.poolDefinitions.set(definition.id, definition);
+    return this;
+  }
+
+  getPoolDefinition(id: string): PoolDefinition | undefined {
+    return this.poolDefinitions.get(id);
+  }
+
+  listPoolDefinitions(): readonly PoolDefinition[] {
+    return Object.freeze([...this.poolDefinitions.values()]);
+  }
+
+  registerStatDefinition(definition: StatDefinition): this {
+    this.statDefinitions.set(definition.id, definition);
+    return this;
+  }
+
+  getStatDefinition(id: string): StatDefinition | undefined {
+    return this.statDefinitions.get(id);
+  }
+
+  listStatDefinitions(): readonly StatDefinition[] {
+    return Object.freeze([...this.statDefinitions.values()]);
   }
 
   isRequirementMet(
@@ -185,7 +238,7 @@ export class EngineRegistry<THost = unknown> {
   }
 
   /**
-   * Registers builtins: free/forbidden/tag/stat/pool-max/entity-count/metric
+   * Registers builtins: free/forbidden/tag/has-slot/stat/pool-max/entity-count/metric
    * requirements and grant-tag/adjust-pool/spawn-entity/remove-entity effects.
    */
   createBuiltinAdaptors(): this {
@@ -195,9 +248,24 @@ export class EngineRegistry<THost = unknown> {
     this.registerRequirement('tag', (requirement: TagRequirement, context) => {
       const scope = defaultRequirementScope(context, requirement.scope);
       const entity = getScopedEntity(context, scope);
-      const present = entity?.tags.has(requirement.tagName) ?? false;
+      const present = entity
+        ? entityHasActiveTag(entity, requirement.tagName, this)
+        : false;
       return requirement.exists ? present : !present;
     });
+
+    this.registerRequirement(
+      'has-slot',
+      (requirement: HasSlotRequirement, context) => {
+        const scope = defaultRequirementScope(context, requirement.scope);
+        const entity = getScopedEntity(context, scope);
+        const present = entity
+          ? entityHasHeldSlot(entity, requirement.slot)
+          : false;
+        const exists = requirement.exists ?? true;
+        return exists ? present : !present;
+      },
+    );
 
     this.registerRequirement('stat', (requirement: StatRequirement, context) => {
       const scope = defaultRequirementScope(context, requirement.scope);
@@ -205,7 +273,7 @@ export class EngineRegistry<THost = unknown> {
       if (!entity) {
         return false;
       }
-      return selectStatValue(entity, requirement.stat) >= requirement.amount;
+      return selectStatValue(entity, requirement.stat, this) >= requirement.amount;
     });
 
     this.registerRequirement(
@@ -216,7 +284,7 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return false;
         }
-        return selectPoolMax(entity, requirement.pool) > requirement.amount;
+        return selectPoolMax(entity, requirement.pool, this) > requirement.amount;
       },
     );
 
@@ -323,10 +391,15 @@ export class EngineRegistry<THost = unknown> {
         const tag = fromCatalog
           ? createTag(fromCatalog)
           : createTag({ name: effect.name, effects: [] });
-        const nextEntity = withEntityTags(
-          entity,
-          entity.tags.add(tag),
-          context.engine.tick,
+        const nextEntity = reconcileSlotSelections(
+          withEntityTags(
+            entity,
+            entity.tags.add(tag),
+            context.engine.tick,
+            this,
+          ),
+          this,
+          tag.name,
         );
         return withScopedEntity(context, scope, nextEntity);
       },
@@ -340,7 +413,7 @@ export class EngineRegistry<THost = unknown> {
           return false;
         }
         const current = selectPoolCurrent(entity, effect.pool);
-        const max = selectPoolMax(entity, effect.pool);
+        const max = selectPoolMax(entity, effect.pool, this);
         return effect.strength > 0
           ? current < max
           : current > -effect.strength;
@@ -351,7 +424,7 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return context;
         }
-        const max = selectPoolMax(entity, effect.pool);
+        const max = selectPoolMax(entity, effect.pool, this);
         const nextEntity = adjustEntityPool(
           entity,
           effect.pool,

@@ -6,6 +6,23 @@ import type {
   ContinuousActiveJob,
   ContinuousProgressRecord,
 } from './continuous-types';
+import type { SlotCatalog } from './slots';
+import {
+  sumActiveTaggedFieldStrength,
+} from './slots';
+
+export {
+  entityHasActiveTag,
+  entityHasHeldSlot,
+  entityHasHeldTag,
+  listHeldTagsInSlot,
+  selectActiveTags,
+  selectActiveRootTags,
+  selectSlotSelection,
+  selectSlotWinner,
+  reconcileSlotSelections,
+  withSlotSelection,
+} from './slots';
 
 /** Sum strength of tag passive effects whose type matches. */
 export function sumTagEffectStrength(
@@ -69,15 +86,29 @@ export function selectEntitiesByDefinition(
 export function selectStatValue(
   entity: EntityInstance,
   stat: string,
+  registry?: SlotCatalog,
 ): number {
-  return sumTaggedFieldStrength(entity.tags, 'stat', 'stat', stat);
+  return sumActiveTaggedFieldStrength(
+    entity,
+    'stat',
+    'stat',
+    stat,
+    registry,
+  );
 }
 
 export function selectPoolMax(
   entity: EntityInstance,
   pool: string,
+  registry?: SlotCatalog,
 ): number {
-  return sumTaggedFieldStrength(entity.tags, 'pool-max', 'pool', pool);
+  return sumActiveTaggedFieldStrength(
+    entity,
+    'pool-max',
+    'pool',
+    pool,
+    registry,
+  );
 }
 
 export function selectPoolCurrent(

@@ -73,6 +73,12 @@ export type EngineCommand<THost = unknown> =
       readonly actionName?: string;
       readonly sourceEntityId?: string;
     }
+  | {
+      readonly type: 'select-slot-item';
+      readonly entityId: string;
+      readonly slot: string;
+      readonly tagName: string;
+    }
   /** Reserved recurring-action endpoints. They currently throw explicitly. */
   | {
       readonly type: 'set-process-allocation';

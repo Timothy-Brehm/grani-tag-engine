@@ -52,6 +52,16 @@ export interface Tag<TEffect extends TagEffect = TagEffect> {
     readonly seenTag: string;
     readonly scope?: 'instance' | 'primary';
   };
+  /**
+   * Catalog slot id (`SlotDefinition.id`). When set, only the active item in
+   * that slot contributes passives / dependent tags.
+   */
+  readonly slot?: string;
+  /**
+   * Nested tags projected into the active evaluation set while this tag is an
+   * active root. Not held in TagCollection.
+   */
+  readonly dependentTags?: readonly Tag<TEffect>[];
   readonly effects: readonly TEffect[];
 }
 
@@ -69,6 +79,14 @@ export function createTag<TEffect extends TagEffect = TagEffect>(
       : {}),
     ...(input.image !== undefined ? { image: input.image } : {}),
     ...(input.novelty !== undefined ? { novelty: input.novelty } : {}),
+    ...(input.slot !== undefined ? { slot: input.slot } : {}),
+    ...(input.dependentTags !== undefined
+      ? {
+          dependentTags: Object.freeze(
+            input.dependentTags.map((child) => createTag(child)),
+          ),
+        }
+      : {}),
     effects: Object.freeze([...input.effects]),
   };
 }
