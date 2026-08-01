@@ -1,6 +1,17 @@
 import type { ActiveEffect } from './effect';
 import type { Requirement } from './requirement';
 
+/** Reject starting actions whose (effective) duration exceeds this. */
+export const MAX_ACTION_DURATION_TICKS = 10_000;
+
+/** Progress and paid-fraction values use two decimal places (0..100 percent). */
+export const CONTINUOUS_PROGRESS_DECIMALS = 2;
+
+/** Round a continuous percent (0..100) to two decimal places. */
+export function roundContinuousProgress(value: number): number {
+  return Number(value.toFixed(CONTINUOUS_PROGRESS_DECIMALS));
+}
+
 /** Serializable snapshot of an action recipe for continuous jobs. */
 export type ContinuousActionSnapshot = {
   readonly name: string;
@@ -15,18 +26,20 @@ export type ContinuousActionSnapshot = {
   readonly durationTicks: number;
 };
 
+/**
+ * Persisted continuous progress. `progress` is percent complete (0..100),
+ * rounded to two decimals — same basis used to prorate `costsOverTime`
+ * (`payFraction = deltaProgress / 100`). Effective duration is recomputed
+ * each tick so mid-action speed changes affect remaining work only.
+ */
 export type ContinuousProgressRecord = {
   readonly progressKey: string;
   readonly actorEntityId: string;
   readonly sourceEntityId?: string;
   readonly targetEntityId?: string;
   readonly action: ContinuousActionSnapshot;
-  /** Progress toward one cycle (0 .. effectiveDurationTicks). */
-  readonly progressTicks: number;
-  /** Duration used for this cycle (speed modifiers applied at start/resume). */
-  readonly effectiveDurationTicks: number;
-  /** Fraction of `costsOverTime` already paid this cycle (0..1). */
-  readonly costsOverTimePaidFraction: number;
+  /** Percent complete for this cycle (0..100), two decimal places. */
+  readonly progress: number;
 };
 
 export type ContinuousActiveJob = {
@@ -43,9 +56,14 @@ export type ContinuousProgressRecordJSON = {
   sourceEntityId?: string;
   targetEntityId?: string;
   action: ContinuousActionSnapshot;
-  progressTicks: number;
-  effectiveDurationTicks: number;
-  costsOverTimePaidFraction: number;
+  /** Percent 0..100. Legacy saves may send progressTicks + effectiveDurationTicks. */
+  progress?: number;
+  /** @deprecated Prefer `progress` (percent). */
+  progressTicks?: number;
+  /** @deprecated Prefer `progress` (percent). */
+  effectiveDurationTicks?: number;
+  /** @deprecated Progress percent is the paid basis now. */
+  costsOverTimePaidFraction?: number;
 };
 
 export type ContinuousActiveJobJSON = {
@@ -61,13 +79,39 @@ export function continuousProgressKey(input: {
   return `${input.actorEntityId}::${input.actionName}::${input.sourceEntityId ?? ''}`;
 }
 
+/** First-class percent complete (0..100), already rounded on the record. */
 export function continuousProgressPercent(
   record: ContinuousProgressRecord,
 ): number {
-  if (record.effectiveDurationTicks <= 0) {
-    return 0;
+  return record.progress;
+}
+
+function progressFromLegacyJSON(entry: ContinuousProgressRecordJSON): number {
+  if (typeof entry.progress === 'number' && Number.isFinite(entry.progress)) {
+    return roundContinuousProgress(Math.min(100, Math.max(0, entry.progress)));
   }
-  return record.progressTicks / record.effectiveDurationTicks;
+  const ticks = entry.progressTicks;
+  const duration = entry.effectiveDurationTicks;
+  if (
+    typeof ticks === 'number' &&
+    typeof duration === 'number' &&
+    duration > 0
+  ) {
+    const paid =
+      typeof entry.costsOverTimePaidFraction === 'number'
+        ? entry.costsOverTimePaidFraction * 100
+        : (ticks / duration) * 100;
+    return roundContinuousProgress(Math.min(100, Math.max(0, paid)));
+  }
+  if (
+    typeof entry.costsOverTimePaidFraction === 'number' &&
+    Number.isFinite(entry.costsOverTimePaidFraction)
+  ) {
+    return roundContinuousProgress(
+      Math.min(100, Math.max(0, entry.costsOverTimePaidFraction * 100)),
+    );
+  }
+  return 0;
 }
 
 export function continuousProgressToJSON(
@@ -90,9 +134,7 @@ export function continuousProgressToJSON(
       results: [...record.action.results],
       sideEffects: [...record.action.sideEffects],
     },
-    progressTicks: record.progressTicks,
-    effectiveDurationTicks: record.effectiveDurationTicks,
-    costsOverTimePaidFraction: record.costsOverTimePaidFraction,
+    progress: record.progress,
   }));
 }
 
@@ -119,9 +161,7 @@ export function continuousProgressFromJSON(
         sideEffects: Object.freeze([...(entry.action.sideEffects ?? [])]),
         durationTicks: entry.action.durationTicks ?? 1,
       },
-      progressTicks: entry.progressTicks ?? 0,
-      effectiveDurationTicks: entry.effectiveDurationTicks ?? 1,
-      costsOverTimePaidFraction: entry.costsOverTimePaidFraction ?? 0,
+      progress: progressFromLegacyJSON(entry),
     });
   }
   return map;

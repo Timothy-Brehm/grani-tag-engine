@@ -168,9 +168,9 @@ describe('generators and continuous actions', () => {
     state = reduceEngineState(state, { type: 'tick', steps: 5 }, options);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
     expect(state.continuousActions.has(key)).toBe(false);
-    expect(state.continuousProgress.get(key)?.progressTicks).toBe(4);
+    expect(state.continuousProgress.get(key)?.progress).toBe(40);
     expect(continuousProgressPercent(state.continuousProgress.get(key)!)).toBe(
-      0.4,
+      40,
     );
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(0);
 
@@ -187,7 +187,7 @@ describe('generators and continuous actions', () => {
       options,
     );
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
-    expect(state.continuousProgress.get(key)?.progressTicks).toBe(4);
+    expect(state.continuousProgress.get(key)?.progress).toBe(40);
 
     state = reduceEngineState(state, { type: 'tick', steps: 6 }, options);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
@@ -221,7 +221,7 @@ describe('generators and continuous actions', () => {
       actionName: 'gated',
     });
     state = reduceEngineState(state, { type: 'tick', steps: 2 }, options);
-    expect(state.continuousProgress.get(key)?.progressTicks).toBe(2);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
 
     state = reduceEngineState(
       state,
@@ -230,7 +230,7 @@ describe('generators and continuous actions', () => {
     );
     state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
     expect(state.continuousActions.has(key)).toBe(false);
-    expect(state.continuousProgress.get(key)?.progressTicks).toBe(2);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
     expect(state.entities.get('hero')?.tags.has('done')).toBe(false);
   });
 
@@ -354,7 +354,7 @@ describe('generators and continuous actions', () => {
       actionName: 'slow',
     });
     expect(restored.continuousActions.has(key)).toBe(true);
-    expect(restored.continuousProgress.get(key)?.progressTicks).toBe(2);
+    expect(restored.continuousProgress.get(key)?.progress).toBe(40);
     expect(restored.engineVersion).toBe(state.engineVersion);
   });
 
@@ -390,5 +390,96 @@ describe('generators and continuous actions', () => {
     expect(state.continuousProgress.size).toBe(0);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(3);
     expect(state.entities.get('hero')?.tags.has('worked')).toBe(false);
+  });
+
+  it('rejects starting actions with durationTicks above 10000', () => {
+    const action: ActionDefinition = {
+      name: 'too-long',
+      durationTicks: 10_001,
+      requirements: [{ type: 'free' }],
+      costs: [],
+      results: [{ type: 'grant-tag', name: 'nope', strength: 1 }],
+      sideEffects: [],
+    };
+    const state = reduceEngineState(
+      withHero({ Stamina: 5 }),
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    expect(state.continuousActions.size).toBe(0);
+    expect(state.entities.get('hero')?.tags.has('nope')).toBe(false);
+  });
+
+  it('recomputes duration mid-action so efficiency only affects remaining work', () => {
+    const action: ActionDefinition = {
+      name: 'haul',
+      durationTicks: 10,
+      requirements: [{ type: 'free' }],
+      costs: [],
+      results: [{ type: 'grant-tag', name: 'hauled', strength: 1 }],
+      sideEffects: [],
+    };
+    let state = withHero({ Stamina: 5 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'haul',
+    });
+    state = reduceEngineState(state, { type: 'tick', steps: 5 }, options);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
+
+    // Halve remaining duration via multiply 0.5 on base 10 → D=5; +20% per tick.
+    state = reduceEngineState(
+      state,
+      {
+        type: 'add-tag',
+        entityId: 'hero',
+        tag: createTag({
+          name: 'boost',
+          effects: [
+            {
+              type: 'continuous-speed',
+              name: 'speed',
+              strength: 1,
+              actionName: 'haul',
+              multiply: 0.5,
+            },
+          ],
+        }),
+      },
+      options,
+    );
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(state.continuousProgress.get(key)?.progress).toBe(70);
+    state = reduceEngineState(state, { type: 'tick', steps: 2 }, options);
+    expect(state.entities.get('hero')?.tags.has('hauled')).toBe(true);
+    expect(state.continuousProgress.has(key)).toBe(false);
+  });
+
+  it('applies results even when a side effect cannot happen', () => {
+    const action: ActionDefinition = {
+      name: 'engine-run',
+      requirements: [{ type: 'free' }],
+      costs: [],
+      results: [
+        { type: 'adjust-pool', name: 'co2', strength: 1, pool: 'Stick' },
+      ],
+      sideEffects: [
+        { type: 'adjust-pool', name: 'miles', strength: 1, pool: 'Stamina' },
+      ],
+    };
+    // Stamina already at max → side effect cannot happen; Stick has room.
+    let state = withHero({ Stamina: 10, Stick: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
   });
 });

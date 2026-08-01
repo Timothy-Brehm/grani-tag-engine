@@ -102,10 +102,12 @@ An **action** is one atomic recipe:
 1. **Requirements** — may it be offered / started?
 2. **Costs** (`costs`) — cost to **start** a cycle at 0% progress
 3. **Costs over time** (`costsOverTime`, optional) — total for one full cycle; **prorated** as progress advances; inability to pay pauses and keeps progress
-4. **Results** — what is produced on **completion**
-5. **Side effects** — optional extras after results
+4. **Results** — what **must** be produced on **completion** (always applied; pools clamp / grants may no-op)
+5. **Side effects** — optional extras after results; applied **only if able** (`canHappen`)
 
-**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible.
+**Results vs side effects:** use results for the unavoidable outcome of finishing the recipe; use side effects for “nice to have” changes that should not block completion when a pool is full or a tag already exists. Example: an engine’s result is `+CO2` (always emitted); a side effect is `+Miles` (skipped when you are already at max distance / up against a wall).
+
+**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; `costsOverTime` uses the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
 
 Actions are data (`ActionDefinition`). Execution is `execute-action` with roles:
 
@@ -296,9 +298,12 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 ### Continuous actions
 
 - Progress key: `actorEntityId::actionName::sourceEntityId??''`
+- Progress: percent **0..100** (two decimals); over-time costs use the same percent delta
+- Effective `durationTicks` recomputed each tick (mid-action speed changes do not rewrite stored %)
+- Max start duration: **10 000** ticks (base or effective)
 - **Start** (`execute-action`): pay `costs` only at 0%; resume mid-cycle keeps progress and does not re-pay start costs
 - **Pause** / auto-stop (requirements fail or cannot pay `costsOverTime` slice): free slot, **keep** progress
-- **Complete**: fire results/sideEffects; clear progress to 0%; free slot
+- **Complete**: results must apply; side effects only if able; clear progress; free slot
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; effective duration min 1

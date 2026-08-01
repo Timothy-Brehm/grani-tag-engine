@@ -52,6 +52,9 @@ export {
   pulseGenerators,
   buildOverTimeSlice,
   scaleEffectStrength,
+  MAX_ACTION_DURATION_TICKS,
+  CONTINUOUS_PROGRESS_DECIMALS,
+  roundContinuousProgress,
 } from './continuous';
 
 export type {

@@ -12,6 +12,8 @@ import { recordActionExecution } from './metrics';
 
 import {
   continuousProgressKey,
+  MAX_ACTION_DURATION_TICKS,
+  roundContinuousProgress,
   type ContinuousActionSnapshot,
   type ContinuousActiveJob,
   type ContinuousActiveMap,
@@ -35,6 +37,9 @@ export {
   continuousProgressFromJSON,
   continuousActionsToJSON,
   continuousActionsFromJSON,
+  MAX_ACTION_DURATION_TICKS,
+  CONTINUOUS_PROGRESS_DECIMALS,
+  roundContinuousProgress,
 } from './continuous-types';
 
 
@@ -337,6 +342,9 @@ export function startContinuousAction<THost>(
   }
 
   const baseDuration = actionDurationTicks(options.action);
+  if (baseDuration > MAX_ACTION_DURATION_TICKS) {
+    return state;
+  }
   const isInstant = baseDuration <= 1;
   const activeCount = countActiveJobsForActor(state, options.actorEntityId);
   const slotMax = selectContinuousSlotMax(actor);
@@ -368,25 +376,32 @@ export function startContinuousAction<THost>(
   const existing = state.continuousProgress.get(progressKey);
   const midCycle =
     existing !== undefined &&
-    existing.progressTicks > 0 &&
-    existing.progressTicks < existing.effectiveDurationTicks;
+    existing.progress > 0 &&
+    existing.progress < 100;
 
-  const effectiveDuration = midCycle
-    ? existing.effectiveDurationTicks
-    : selectEffectiveDurationTicks(actor, options.action.name, baseDuration);
+  const effectiveDuration = selectEffectiveDurationTicks(
+    actor,
+    options.action.name,
+    baseDuration,
+  );
+  if (effectiveDuration > MAX_ACTION_DURATION_TICKS) {
+    return state;
+  }
 
   if (!midCycle) {
     if (!costsPayable(options.registry, options.action.costs, ctx)) {
       return state;
     }
-    const firstDelta = Math.min(
+    const firstDeltaTicks = Math.min(
       selectContinuousProgressDelta(actor, options.action.name),
       effectiveDuration,
     );
-    const firstFraction = firstDelta / effectiveDuration;
+    const firstDeltaProgress = roundContinuousProgress(
+      (firstDeltaTicks / effectiveDuration) * 100,
+    );
     const firstSlice = buildOverTimeSlice(
       options.action.costsOverTime ?? [],
-      firstFraction,
+      firstDeltaProgress / 100,
       false,
     );
     if (!canPayEffectList(options.registry, firstSlice, ctx)) {
@@ -422,9 +437,7 @@ export function startContinuousAction<THost>(
           ? { targetEntityId: options.targetEntityId }
           : {}),
         action: snapshot,
-        progressTicks: 0,
-        effectiveDurationTicks: effectiveDuration,
-        costsOverTimePaidFraction: 0,
+        progress: 0,
       };
 
   let nextState = withContinuousState(ctx.engine, {
@@ -570,20 +583,30 @@ function advanceOneJob<THost>(
     return pauseContinuousAction(state, progressKey);
   }
 
-  const D = record.effectiveDurationTicks;
-  const remaining = D - record.progressTicks;
-  if (remaining <= 0) {
+  if (record.progress >= 100) {
     return completeContinuousJob(state, progressKey, options);
   }
 
-  const rawDelta = selectContinuousProgressDelta(actor, action.name);
-  const delta = Math.min(rawDelta, remaining);
-  const fraction = delta / D;
-  const willComplete = record.progressTicks + delta >= D;
-  const paid = record.costsOverTimePaidFraction;
+  // Recompute duration each tick so mid-action speed changes affect rate only.
+  const baseDuration = actionDurationTicks(action);
+  const D = selectEffectiveDurationTicks(actor, action.name, baseDuration);
+  if (D > MAX_ACTION_DURATION_TICKS) {
+    return pauseContinuousAction(state, progressKey);
+  }
+
+  const rawDeltaTicks = selectContinuousProgressDelta(actor, action.name);
+  const remaining = roundContinuousProgress(100 - record.progress);
+  const deltaProgress = roundContinuousProgress(
+    Math.min((rawDeltaTicks / D) * 100, remaining),
+  );
+  if (deltaProgress <= 0) {
+    return state;
+  }
+
+  const willComplete = roundContinuousProgress(record.progress + deltaProgress) >= 100;
   const payFraction = willComplete
-    ? Math.max(0, 1 - paid)
-    : fraction;
+    ? roundContinuousProgress(100 - record.progress) / 100
+    : deltaProgress / 100;
   const slice = buildOverTimeSlice(
     action.costsOverTime ?? [],
     payFraction,
@@ -598,26 +621,51 @@ function advanceOneJob<THost>(
     ctx = applyEffectList(options.registry, slice, ctx);
   }
 
-  const nextPaid = willComplete
-    ? 1
-    : Number((paid + fraction).toFixed(8));
-  const nextProgress = Number(
-    Math.min(D, record.progressTicks + delta).toFixed(6),
-  );
+  const nextProgress = willComplete
+    ? 100
+    : roundContinuousProgress(record.progress + deltaProgress);
 
   let nextState = withContinuousState(ctx.engine, {
     continuousProgress: upsertProgress(ctx.engine.continuousProgress, {
       ...record,
-      progressTicks: nextProgress,
-      costsOverTimePaidFraction: nextPaid,
+      progress: nextProgress,
     }),
   });
 
-  if (nextProgress >= D) {
+  if (nextProgress >= 100) {
     nextState = completeContinuousJob(nextState, progressKey, options);
   }
 
   return nextState;
+}
+
+function applyResultsAndSideEffects<THost>(
+  registry: EngineRegistry<THost>,
+  results: readonly ActiveEffect[],
+  sideEffects: readonly ActiveEffect[],
+  context: EngineContext<THost>,
+  mode: 'strict' | 'safe',
+): EngineContext<THost> {
+  let next = context;
+  if (mode === 'safe') {
+    for (const result of results) {
+      if (registry.canApplyEffect(result, next)) {
+        next = registry.applyEffect(result, next);
+      }
+    }
+  } else {
+    // Results must happen (apply always; pool clamps / no-ops are fine).
+    for (const result of results) {
+      next = registry.applyEffect(result, next);
+    }
+  }
+  // Side effects happen only if able.
+  for (const side of sideEffects) {
+    if (registry.canApplyEffect(side, next)) {
+      next = registry.applyEffect(side, next);
+    }
+  }
+  return next;
 }
 
 function completeContinuousJob<THost>(
@@ -639,7 +687,7 @@ function completeContinuousJob<THost>(
   });
 
   const action = actionFromSnapshot(record.action);
-  const settleFraction = Math.max(0, 1 - record.costsOverTimePaidFraction);
+  const settleFraction = Math.max(0, (100 - record.progress) / 100);
   if (settleFraction > 1e-9) {
     const settle = buildOverTimeSlice(
       action.costsOverTime ?? [],
@@ -651,21 +699,13 @@ function completeContinuousJob<THost>(
     }
   }
 
-  if (options.mode === 'safe') {
-    for (const result of action.results) {
-      if (options.registry.canApplyEffect(result, ctx)) {
-        ctx = options.registry.applyEffect(result, ctx);
-      }
-    }
-    for (const side of action.sideEffects) {
-      if (options.registry.canApplyEffect(side, ctx)) {
-        ctx = options.registry.applyEffect(side, ctx);
-      }
-    }
-  } else {
-    ctx = applyEffectList(options.registry, action.results, ctx);
-    ctx = applyEffectList(options.registry, action.sideEffects, ctx);
-  }
+  ctx = applyResultsAndSideEffects(
+    options.registry,
+    action.results,
+    action.sideEffects,
+    ctx,
+    options.mode,
+  );
 
   let nextState = ctx.engine;
   const actorEntity = nextState.entities.get(record.actorEntityId);
