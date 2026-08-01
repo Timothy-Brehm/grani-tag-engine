@@ -75,9 +75,7 @@ export function isActionAvailable<THost>(
   });
   const existing = context.engine.continuousProgress.get(key);
   const midCycle =
-    existing !== undefined &&
-    existing.progressTicks > 0 &&
-    existing.progressTicks < existing.effectiveDurationTicks;
+    existing !== undefined && existing.progress > 0 && existing.progress < 100;
 
   if (midCycle) {
     return true;
@@ -93,13 +91,14 @@ export function isActionAvailable<THost>(
   }
   const baseDuration = actionDurationTicks(action);
   const D = selectEffectiveDurationTicks(actor, action.name, baseDuration);
-  const delta = Math.min(
+  const deltaTicks = Math.min(
     selectContinuousProgressDelta(actor, action.name),
     D,
   );
+  const deltaProgress = (deltaTicks / D) * 100;
   const slice = buildOverTimeSlice(
     action.costsOverTime ?? [],
-    delta / D,
+    deltaProgress / 100,
     baseDuration <= 1,
   );
   return costsPayable(registry, slice, context);
@@ -108,12 +107,14 @@ export function isActionAvailable<THost>(
 /**
  * FireAction-style execution (immutable context):
  * 1. Apply all costs in order (caller should ensure canHappen).
- * 2. Apply all results in order (original ResultsHappen applied all without re-check).
- * 3. Apply all sideEffects in order.
+ * 2. Apply all **results** in order — results **must happen** (always applied;
+ *    pools clamp / idempotent grants may no-op).
+ * 3. Apply **side effects** only when `canHappen` is true — useful when a
+ *    stockpile is full: the result still fires, optional extras skip.
  *
- * Prefer checking `isActionAvailable` first. For guarded application, use `executeActionSafe`.
- * Hosts should prefer the `execute-action` command (continuous pipeline); this helper
- * remains for tests and one-shot application of a full recipe.
+ * Prefer checking `isActionAvailable` first. For fully soft application, use
+ * `executeActionSafe`. Hosts should prefer the `execute-action` command
+ * (continuous pipeline); this helper remains for tests and one-shot recipes.
  */
 export function executeAction<THost>(
   registry: EngineRegistry<THost>,
@@ -128,7 +129,9 @@ export function executeAction<THost>(
     next = registry.applyEffect(result, next);
   }
   for (const side of action.sideEffects) {
-    next = registry.applyEffect(side, next);
+    if (registry.canApplyEffect(side, next)) {
+      next = registry.applyEffect(side, next);
+    }
   }
   return next;
 }
