@@ -13,22 +13,31 @@ export type CatalogMeta = {
 export type SlotDefinition = CatalogMeta & {
   /**
    * Resolution mode for tags that reference this slot.
-   * Default when omitted: `'selectable'` (Best Only off).
+   * Default when omitted (or when no SlotDefinition is registered): `'selectable'`.
    */
   readonly mode?: 'best-only' | 'selectable';
 };
 
+/**
+ * Pool catalog entry. Prefer authored `label` / `description` for UI
+ * (spaces, special characters, alternate capitalization)—do not derive display
+ * text by stripping id prefixes.
+ */
 export type PoolDefinition = CatalogMeta;
 
+/**
+ * Stat catalog entry. Same `label` / `description` UI pattern as pools.
+ */
 export type StatDefinition = CatalogMeta;
 
 export type SlotMode = 'best-only' | 'selectable';
 
+/** Missing or incomplete defs resolve to selectable. */
 export function slotDefinitionMode(def: SlotDefinition | undefined): SlotMode {
   return def?.mode === 'best-only' ? 'best-only' : 'selectable';
 }
 
-export type CatalogWarningKind = 'slot' | 'pool' | 'stat';
+export type CatalogWarningKind = 'slot' | 'pool' | 'stat' | 'tier';
 
 export type CatalogWarning = {
   readonly kind: CatalogWarningKind;
@@ -120,9 +129,69 @@ function walkTagRefs(
 }
 
 /**
- * Soft validation: report referenced slot/pool/stat ids with no catalog entry.
- * Walks in-play entities and, when available, registered entity definitions.
- * Does not affect runtime; hosts may show these in designer UI.
+ * Soft tier checks for tags that share a slot id:
+ * - duplicate non-zero `tier` values
+ * - mix of `tier: 0` with non-zero tiers
+ */
+function walkSlotTierWarnings(
+  tags: readonly Tag[],
+  source: string,
+  warnings: CatalogWarning[],
+  seen: Set<string>,
+): void {
+  const bySlot = new Map<string, Tag[]>();
+  for (const tag of tags) {
+    if (!tag.slot) {
+      continue;
+    }
+    const list = bySlot.get(tag.slot) ?? [];
+    list.push(tag);
+    bySlot.set(tag.slot, list);
+  }
+
+  for (const [slotId, slotted] of bySlot) {
+    const nonzeroTiers = new Map<number, string[]>();
+    let hasZero = false;
+    let hasNonzero = false;
+
+    for (const tag of slotted) {
+      if (typeof tag.tier !== 'number' || !Number.isFinite(tag.tier)) {
+        continue;
+      }
+      if (tag.tier === 0) {
+        hasZero = true;
+        continue;
+      }
+      hasNonzero = true;
+      const names = nonzeroTiers.get(tag.tier) ?? [];
+      names.push(tag.name);
+      nonzeroTiers.set(tag.tier, names);
+    }
+
+    if (hasZero && hasNonzero) {
+      pushUnique(warnings, seen, {
+        kind: 'tier',
+        id: slotId,
+        source: `${source}#slot:${slotId}:zero-mixed`,
+      });
+    }
+
+    for (const [tier, names] of nonzeroTiers) {
+      if (names.length > 1) {
+        pushUnique(warnings, seen, {
+          kind: 'tier',
+          id: slotId,
+          source: `${source}#slot:${slotId}:tier-${tier}:[${names.join(',')}]`,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Soft validation: report referenced slot/pool/stat ids with no catalog entry,
+ * plus tier consistency within a slot. Walks in-play entities and, when
+ * available, registered entity definitions. Does not affect runtime.
  */
 export function collectCatalogWarnings(
   registry: CatalogRegistryView,
@@ -133,7 +202,8 @@ export function collectCatalogWarnings(
 
   const defs = registry.listEntityDefinitions?.() ?? [];
   for (const def of defs) {
-    for (const tag of def.initialTags ?? []) {
+    const initialTags = def.initialTags ?? [];
+    for (const tag of initialTags) {
       walkTagRefs(
         tag,
         `definition:${def.id}`,
@@ -143,6 +213,12 @@ export function collectCatalogWarnings(
         new Set(),
       );
     }
+    walkSlotTierWarnings(
+      initialTags,
+      `definition:${def.id}`,
+      warnings,
+      seen,
+    );
     for (const pool of Object.keys(def.initialPools ?? {})) {
       if (!registry.getPoolDefinition(pool)) {
         pushUnique(warnings, seen, {
@@ -155,9 +231,11 @@ export function collectCatalogWarnings(
   }
 
   for (const entity of state.entities.values()) {
-    for (const tag of entity.tags.list()) {
+    const held = entity.tags.list();
+    for (const tag of held) {
       walkTagRefs(tag, `entity:${entity.id}`, registry, warnings, seen, new Set());
     }
+    walkSlotTierWarnings(held, `entity:${entity.id}`, warnings, seen);
     for (const pool of Object.keys(entity.pools)) {
       if (!registry.getPoolDefinition(pool)) {
         pushUnique(warnings, seen, {

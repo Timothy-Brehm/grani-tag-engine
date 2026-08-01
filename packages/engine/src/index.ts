@@ -35,6 +35,7 @@ export {
 export type { SlotCatalog } from './slots';
 export {
   tagBestOnlyScore,
+  tagBestOnlyTier,
   listHeldTagsInSlot,
   entityHasHeldSlot,
   entityHasHeldTag,

@@ -17,6 +17,7 @@ import {
   selectSlotSelection,
   selectSlotWinner,
   tagBestOnlyScore,
+  withSlotSelection,
 } from './slots';
 import { selectStatValue } from './selectors';
 import { TagCollection } from './tag-collection';
@@ -109,25 +110,81 @@ describe('catalog definitions and soft validation', () => {
     );
   });
 
-  it('missing slot definition treats tags as unslotted (both active)', () => {
+  it('missing slot definition acts as default selectable (not stacking)', () => {
+    const registry = new EngineRegistry().createBuiltinAdaptors();
+    const entity = reconcileSlotSelections(
+      createEntityInstance({
+        id: 'hero',
+        definitionId: 'hero',
+        tags: [
+          createTag({
+            name: 'A',
+            slot: 'mystery',
+            effects: [{ type: 'stat', name: 'S', strength: 1, stat: 'S' }],
+          }),
+          createTag({
+            name: 'B',
+            slot: 'mystery',
+            effects: [{ type: 'stat', name: 'S', strength: 2, stat: 'S' }],
+          }),
+        ],
+      }),
+      registry,
+    );
+    // Default selectable: only one active; earliest grant / name wins repair.
+    expect(selectSlotSelection(entity, 'mystery')).toBe('A');
+    expect(selectStatValue(entity, 'S', registry)).toBe(1);
+  });
+
+  it('warns on duplicate non-zero tiers and zero/non-zero mix', () => {
     const registry = new EngineRegistry().createBuiltinAdaptors();
     const entity = createEntityInstance({
       id: 'hero',
       definitionId: 'hero',
       tags: [
         createTag({
-          name: 'A',
-          slot: 'mystery',
-          effects: [{ type: 'stat', name: 'S', strength: 1, stat: 'S' }],
+          name: 'T2a',
+          slot: 'ring',
+          tier: 2,
+          effects: [],
         }),
         createTag({
-          name: 'B',
-          slot: 'mystery',
-          effects: [{ type: 'stat', name: 'S', strength: 2, stat: 'S' }],
+          name: 'T2b',
+          slot: 'ring',
+          tier: 2,
+          effects: [],
+        }),
+        createTag({
+          name: 'T0',
+          slot: 'amulet',
+          tier: 0,
+          effects: [],
+        }),
+        createTag({
+          name: 'T3',
+          slot: 'amulet',
+          tier: 3,
+          effects: [],
         }),
       ],
     });
-    expect(selectStatValue(entity, 'S', registry)).toBe(3);
+    const warnings = collectCatalogWarnings(
+      registry,
+      createPrimaryEngineState(entity),
+    );
+    expect(
+      warnings.some(
+        (w) => w.kind === 'tier' && w.id === 'ring' && w.source.includes('tier-2'),
+      ),
+    ).toBe(true);
+    expect(
+      warnings.some(
+        (w) =>
+          w.kind === 'tier' &&
+          w.id === 'amulet' &&
+          w.source.includes('zero-mixed'),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -179,7 +236,7 @@ describe('slotted tags', () => {
     ).toBe(true);
   });
 
-  it('best-only picks highest abs(strength) sum; ties by name', () => {
+  it('best-only: tier, then abs(strength) sum, then name', () => {
     const registry = new EngineRegistry()
       .createBuiltinAdaptors()
       .registerSlotDefinition({ id: 'vehicle', mode: 'best-only' });
@@ -196,14 +253,44 @@ describe('slotted tags', () => {
     expect(selectStatValue(entity, 'Speed', registry)).toBe(5);
     expect(entityHasActiveTag(entity, 'CanFly', registry)).toBe(true);
 
+    const weakHighTier = createTag({
+      name: 'Weak_High',
+      slot: 'ring',
+      tier: 1,
+      effects: [{ type: 'stat', name: 'X', strength: 1, stat: 'X' }],
+    });
+    const strongLowTier = createTag({
+      name: 'Strong_Low',
+      slot: 'ring',
+      tier: 5,
+      effects: [{ type: 'stat', name: 'X', strength: 99, stat: 'X' }],
+    });
+    const forgotten = createTag({
+      name: 'Forgotten',
+      slot: 'ring',
+      effects: [{ type: 'stat', name: 'X', strength: 1000, stat: 'X' }],
+    });
+    const tiered = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [forgotten, strongLowTier, weakHighTier],
+    });
+    const bestRegistry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'ring', mode: 'best-only' });
+    expect(selectSlotWinner(tiered, 'ring')?.name).toBe('Weak_High');
+    expect(selectStatValue(tiered, 'X', bestRegistry)).toBe(1);
+
     const tieA = createTag({
       name: 'Alpha',
       slot: 'ring',
+      tier: 1,
       effects: [{ type: 'stat', name: 'X', strength: 4, stat: 'X' }],
     });
     const tieB = createTag({
       name: 'Beta',
       slot: 'ring',
+      tier: 1,
       effects: [{ type: 'stat', name: 'X', strength: 4, stat: 'X' }],
     });
     const tied = createEntityInstance({
@@ -211,11 +298,18 @@ describe('slotted tags', () => {
       definitionId: 'hero',
       tags: [tieB, tieA],
     });
-    const bestRegistry = new EngineRegistry()
-      .createBuiltinAdaptors()
-      .registerSlotDefinition({ id: 'ring', mode: 'best-only' });
     expect(selectSlotWinner(tied, 'ring')?.name).toBe('Alpha');
-    expect(selectStatValue(tied, 'X', bestRegistry)).toBe(4);
+  });
+
+  it('withSlotSelection no-ops when tag.slot does not match slot id', () => {
+    const entity = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [boat],
+      slotSelections: { vehicle: 'Vehicle_Boat' },
+    });
+    const next = withSlotSelection(entity, 'weapon', 'Vehicle_Boat');
+    expect(next).toBe(entity);
   });
 
   it('tag requirement uses active view; has-slot uses held', () => {

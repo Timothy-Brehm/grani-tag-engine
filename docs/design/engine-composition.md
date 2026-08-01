@@ -70,7 +70,7 @@ Removing a tag (or entity) is allowed when something truly leaves play and nothi
 
 **Held vs active:** `TagCollection` stores **held** root tags only. Evaluation (passives, builtin `tag` requirements) uses the **active** view: slot-resolve roots, then flatten `dependentTags` (cycle-guarded by name). Inventory / “do I own this gear?” uses held (`tags.has` / `entityHasHeldTag`). Nested `slot` on dependents is ignored for resolution.
 
-**Host migration (0.1.2):** builtin `tag` requirements used to mean “held on the entity.” They now mean “present in the **active** flattened set.” Unselected slotted tags (and inactive dependents like `CanFly`) no longer satisfy `tag` gates. Use `has-slot` or `tags.has` / `entityHasHeldTag` when you need ownership regardless of selection.
+Builtin `tag` means “present in the **active** flattened set,” not merely held. Unselected slotted tags (and inactive dependents like `CanFly`) do not satisfy `tag` gates. Use `has-slot` or `tags.has` / `entityHasHeldTag` when you need ownership regardless of selection.
 
 ### Catalog definitions (slots, pools, stats)
 
@@ -78,27 +78,27 @@ Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-pla
 
 | Catalog | Purpose |
 |---------|---------|
-| `SlotDefinition` | Loadout slot (`id`, optional label/description/novelty, `mode?: 'best-only' \| 'selectable'`) |
-| `PoolDefinition` | Pool metadata for UI / validation |
-| `StatDefinition` | Stat metadata for UI / validation |
+| `SlotDefinition` | Loadout slot (`id`, optional `label` / `description` / novelty, `mode?: 'best-only' \| 'selectable'`) |
+| `PoolDefinition` | Pool UI metadata: optional `label` (may include spaces / special caps—do not derive from id) and `description` (e.g. mouseover) |
+| `StatDefinition` | Stat UI metadata: same `label` / `description` pattern as pools |
 
-**Soft validation:** `collectCatalogWarnings(registry, state)` reports referenced ids with no catalog entry (in-play entities + registered entity definitions when `listEntityDefinitions` is available). Missing defs do **not** hard-fail. Missing `SlotDefinition` → treat the tag as **unslotted** (all held tags stack). Default slot `mode` → `'selectable'`.
+**Soft validation:** `collectCatalogWarnings(registry, state)` reports referenced ids with no catalog entry (in-play entities + registered entity definitions when `listEntityDefinitions` is available). Missing defs do **not** hard-fail. A missing `SlotDefinition` is treated as an empty default (`mode: 'selectable'`, no label/description). Explicit default when `mode` omitted → `'selectable'`.
 
 ### Slotted tags
 
-On a tag: `slot?: string` (`SlotDefinition.id`), `dependentTags?: Tag[]` (nested full tags projected while the parent is an active root).
+On a tag: `slot?: string` (`SlotDefinition.id`), `dependentTags?: Tag[]` (nested full tags projected while the parent is an active root), optional `tier?: number` (best-only ordinal).
 
 | Situation | Behavior |
 |-----------|----------|
 | No `slot` | Stack; dependents active while parent held |
-| Catalog `mode: 'best-only'` | Winner’s passives + dependents (`sum(abs(strength))` on own effects; ties by name) |
-| Catalog `mode: 'selectable'` / default | Selected tag’s passives + dependents |
-| `slot` set, no SlotDefinition | Unslotted stack (+ warning if validated) |
+| Catalog `mode: 'best-only'` | Winner’s passives + dependents (see scoring below) |
+| Catalog `mode: 'selectable'` / default / missing def | Selected tag’s passives + dependents |
 
-**Selection:** `entity.slotSelections[slotId] = tagName`. First grant into an empty selectable slot selects the new tag; removing the selected item repairs to earliest `tagGrantedAt` (tie → name). Command: `{ type: 'select-slot-item', entityId, slot, tagName }` (no-op if not selectable / not held / wrong slot).
+**Best-only scoring (optional `tier`):** smaller `tier` wins; omit `tier` ⇒ lowest priority (will not beat a numbered tier). Ties → higher `sum(abs(strength))` on the tag’s own effects; then `tag.name`. Soft warnings when a slot mixes `tier: 0` with non-zero tiers, or has duplicate non-zero tier values.
 
-**`has-slot`:** held any tag with that `slot` id—UI / first-equip, not capability gates (those use active tags, e.g. `CanFly`).
+**Selection:** `entity.slotSelections[slotId] = tagName`. First grant into an empty selectable slot selects the new tag; removing the selected item repairs to earliest `tagGrantedAt` (tie → name). Command: `{ type: 'select-slot-item', entityId, slot, tagName }` (no-op if not selectable / not held / tag’s `slot` ≠ that id).
 
+**`has-slot`:** “owns at least one held tag assigned to this slot” (inventory / first-equip UX)—not “currently using the selected item,” and not “has an empty slot available.” Capability gates (e.g. flight) use active tags like `CanFly`.
 ```ts
 registerSlotDefinition({ id: 'vehicle', label: 'Vehicle' }) // selectable by default
 createTag({
@@ -301,8 +301,12 @@ Action
   └─ sideEffects  →  same toolbox, applied after results
 
 EntityInstance
-  ├─ tags (held roots) + slotSelections
-  └─ metrics → actionCounts + pool/stat high-waters + generatorLastTick
+  ├─ tags (held roots)
+  ├─ slotSelections
+  └─ metrics
+       ├─ actionCounts
+       ├─ pool / stat high-waters
+       └─ generatorLastTick
 
 EngineState
   ├─ engineVersion (major.minor.patch.build; compat = major.minor)
@@ -313,8 +317,12 @@ EngineState
   └─ tick
 
 EngineRegistry (catalogs, not serialized in EngineState)
-  ├─ EntityDefinition / SlotDefinition / PoolDefinition / StatDefinition
-  └─ requirement + effect adaptors
+  ├─ EntityDefinition
+  ├─ SlotDefinition
+  ├─ PoolDefinition
+  ├─ StatDefinition
+  ├─ requirement adaptors
+  └─ effect adaptors
 ```
 
 **Recipe graph:** unlocking is usually `grant-tag` or `spawn-entity` or raising `pool-max`, which then satisfies requirements on other actions. Prefer expanding that graph over special-case code paths.
@@ -325,10 +333,17 @@ EngineRegistry (catalogs, not serialized in EngineState)
 
 ## Builtin toolbox (current)
 
-**Requirements:** `free`, `forbidden`, `tag` (active view), `has-slot` (held), `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`  
-**Commands (selection):** `select-slot-item`  
-**Tag passives:** `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed` (from **active** tags)
+**Requirements**
+- `free`, `forbidden`
+- `tag` — active flattened view
+- `has-slot` — holds any tag assigned to that slot (ownership, not “equipped/selected”)
+- `stat`, `pool-max`, `entity-count`, `metric`
+
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+
+**Commands:** `select-slot-item` (choose which held tag is active in a selectable slot)
+
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 

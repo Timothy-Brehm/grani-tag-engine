@@ -58,6 +58,11 @@ export interface Tag<TEffect extends TagEffect = TagEffect> {
    */
   readonly slot?: string;
   /**
+   * Optional best-only ordinal (smaller wins). Omit ⇒ lowest priority so a
+   * forgotten tier does not beat numbered competitors.
+   */
+  readonly tier?: number;
+  /**
    * Nested tags projected into the active evaluation set while this tag is an
    * active root. Not held in TagCollection.
    */
@@ -80,6 +85,7 @@ export function createTag<TEffect extends TagEffect = TagEffect>(
     ...(input.image !== undefined ? { image: input.image } : {}),
     ...(input.novelty !== undefined ? { novelty: input.novelty } : {}),
     ...(input.slot !== undefined ? { slot: input.slot } : {}),
+    ...(input.tier !== undefined ? { tier: input.tier } : {}),
     ...(input.dependentTags !== undefined
       ? {
           dependentTags: Object.freeze(

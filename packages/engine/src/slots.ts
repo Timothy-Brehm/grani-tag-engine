@@ -15,6 +15,17 @@ export function tagBestOnlyScore(tag: Tag): number {
   return total;
 }
 
+/**
+ * Effective best-only tier; omitted ⇒ lowest priority.
+ * Uses a finite sentinel so omitted−omitted sorts do not become NaN.
+ */
+export function tagBestOnlyTier(tag: Tag): number {
+  if (typeof tag.tier === 'number' && Number.isFinite(tag.tier)) {
+    return tag.tier;
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
 export function listHeldTagsInSlot(
   entity: EntityInstance,
   slotId: string,
@@ -43,6 +54,9 @@ export function selectSlotSelection(
   return entity.slotSelections[slotId];
 }
 
+/**
+ * Best-only winner: smaller tier, then higher abs(strength) sum, then name.
+ */
 export function selectSlotWinner(
   entity: EntityInstance,
   slotId: string,
@@ -52,6 +66,10 @@ export function selectSlotWinner(
     return undefined;
   }
   candidates.sort((a, b) => {
+    const tierDiff = tagBestOnlyTier(a) - tagBestOnlyTier(b);
+    if (tierDiff !== 0) {
+      return tierDiff;
+    }
     const scoreDiff = tagBestOnlyScore(b) - tagBestOnlyScore(a);
     if (scoreDiff !== 0) {
       return scoreDiff;
@@ -64,14 +82,9 @@ export function selectSlotWinner(
 function slotModeFor(
   registry: SlotCatalog | undefined,
   slotId: string,
-): SlotMode | 'unslotted' {
-  if (!registry) {
-    return 'unslotted';
-  }
-  const def = registry.getSlotDefinition(slotId);
-  if (!def) {
-    return 'unslotted';
-  }
+): SlotMode {
+  const def = registry?.getSlotDefinition(slotId);
+  // Missing SlotDefinition ⇒ empty default (selectable, no label/description).
   return slotDefinitionMode(def);
 }
 
@@ -94,15 +107,11 @@ export function selectActiveRootTags(
       continue;
     }
     const mode = slotModeFor(registry, slotId);
-    if (mode === 'unslotted') {
-      active.push(tag);
-      continue;
-    }
     if (mode === 'best-only') {
       bestOnlySlots.add(slotId);
       continue;
     }
-    // selectable
+    // selectable (including missing SlotDefinition)
     const selected = entity.slotSelections[slotId];
     if (selected === tag.name) {
       active.push(tag);
@@ -288,11 +297,19 @@ export function reconcileSlotSelections(
   };
 }
 
+/**
+ * Select a held tag into a slot. No-op unless the tag is held and its `slot`
+ * field equals `slotId` (item type must match the slot).
+ */
 export function withSlotSelection(
   entity: EntityInstance,
   slotId: string,
   tagName: string,
 ): EntityInstance {
+  const tag = entity.tags.get(tagName);
+  if (!tag || tag.slot !== slotId) {
+    return entity;
+  }
   return {
     ...entity,
     slotSelections: Object.freeze({
