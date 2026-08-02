@@ -5,7 +5,9 @@ These are **living documents**. When design debates or agent guidance conflict w
 | Doc | Purpose |
 |-----|---------|
 | [engine-composition.md](./engine-composition.md) | Game-agnostic composition of entities, tags, traits, pools, and actions |
+| [host-content/astrevno/](./host-content/astrevno/) | Temporary Astrevno content backlog (no Astrevno wiki yet) |
+| [host-content/astrevno/game-tiers/](./host-content/astrevno/game-tiers/) | Colony / personal / other exclusive choice ladders |
 
 Implementation status and package layout: [../architecture.md](../architecture.md).
 
-Host games (e.g. Astrevno) keep their own design principles in their repos; this folder describes only the shared engine model.
+Prefer host-game design in the host repo when one exists. Astrevno notes are parked under `host-content/` until they can move.
