@@ -462,27 +462,29 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
         ▼  unlock subset of Tier N options (some hard)
 [ exclusive choice among unlocked options ]
         │
-        ├─ grant base “tier crossed” tag  →  lock/open whole bands
-        └─ grant path-specific tags     →  benefits + path unlocks
+        ├─ grant base “tier entered” tag  →  benefits + unlocks for entering the tier
+        └─ grant path / choice tag      →  benefits + unlocks for that specific pick
 ```
 
-**Tag pattern (two grants, accretion):**
+**Tag pattern (two grants, accretion — not slots):**
 
 | Tag | Role | Example |
 |-----|------|---------|
-| Path | Specific pick; benefits + path-only unlocks | `Tier1Choice_WentLeft` |
-| Base | “This tier was resolved”; gates whole bands | `Tier1Choice` |
+| Base | “This tier was entered / selection made”; entering-tier benefits and band unlocks | `ColonyTier1` |
+| Path | Which option; pick-specific benefits and unlocks | `ColonyTier1_Choice_Clearing` |
 
-Choice action grants **both**. Shared post-tier content requires the base tag; path-unique content requires the path tag (and/or its passives / `dependentTags`).
+Choice action grants **both**. Shared post-tier content and “entered Tier N” passives live on the **base** tag. Pick-specific passives/unlocks live on the **path** tag (and/or its `dependentTags`).
 
-**Unlock vs choose:** unlock = option eligible (requirements met). Choose = commit; grant base + path; stop offering rivals (chooser `remove-entity`, exclusive slot, or forbidden tags).
+Hosts pick naming (`PersonalTier2_Choice_Scout`, `Choice_Squirrels` + `Choice_Squirrels_Feed`, etc.). Theme-specific option *lists* belong in the host game.
 
-**Practical exclusive pattern** (same as before):
+**Unlock vs choose:** unlock = option eligible (requirements met). Choose = commit; grant base + path; stop offering rivals (chooser `remove-entity`, forbidden tags, etc.).
+
+**Practical exclusive pattern:**
 1. Temporary chooser entity offers one action per unlocked option.
 2. Each action grants base + path tags, then removes the chooser.
 3. Downstream recipes require the base tag, optionally plus a path tag.
 
-Selectable `SlotDefinition`s may host tier options when loadout UI is desired; one-shot encounter forks use the same base+path shape (`Choice_Squirrels` + `Choice_Squirrels_Feed`). Theme-specific tier *lists* belong in the **host** game, not this package.
+Do **not** model tier ladders as loadout `SlotDefinition`s—slots are for equippable inventory. Tiers are permanent (or long-lived) fact tags.
 
 Analyzer **Gate** milestones (when they exist) should align with tier boundaries.
 
