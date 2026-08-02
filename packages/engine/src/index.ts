@@ -48,7 +48,10 @@ export {
   sumActiveTaggedFieldStrength,
   sumActiveTagEffectStrength,
   reconcileSlotSelections,
+  reconcileAllSlotSelections,
   withSlotSelection,
+  holdingIsSelectedElsewhere,
+  resolveSlotSelectionTag,
 } from './slots';
 
 export type {
@@ -98,6 +101,9 @@ export type {
   EntityInstance,
   EntityInstanceJSON,
   EntityDefinition,
+  EntityMap,
+  SlotSelectionRef,
+  SlotSelectionJSON,
 } from './entity';
 export {
   createEntityInstance,
@@ -108,6 +114,8 @@ export {
   withEntityMetrics,
   adjustEntityPool,
   instantiateEntity,
+  normalizeSlotSelection,
+  normalizeSlotSelections,
 } from './entity';
 
 export type {

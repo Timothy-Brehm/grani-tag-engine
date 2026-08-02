@@ -26,6 +26,8 @@ import {
   startContinuousAction,
 } from './continuous';
 import {
+  holdingIsSelectedElsewhere,
+  reconcileAllSlotSelections,
   reconcileSlotSelections,
   withSlotSelection,
 } from './slots';
@@ -43,14 +45,21 @@ function applyEntityTags<THost>(
   options: ReduceEngineOptions<THost>,
   preferTagName?: string,
 ): EngineState {
-  return upsertEntity(
-    state,
-    reconcileSlotSelections(
-      withEntityTags(entity, tags, state.tick, options.registry),
-      options.registry,
-      preferTagName,
-    ),
+  const withTags = withEntityTags(
+    entity,
+    tags,
+    state.tick,
+    options.registry,
+    state.entities,
   );
+  const provisional = upsertEntity(state, withTags);
+  const reconciled = reconcileSlotSelections(
+    provisional.entities.get(entity.id)!,
+    provisional,
+    options.registry,
+    preferTagName,
+  );
+  return upsertEntity(provisional, reconciled);
 }
 
 function resolveProgressKey(command: {
@@ -99,31 +108,38 @@ export function reduceEngineState<THost = unknown>(
       if (!entity) {
         return state;
       }
-      return applyEntityTags(
+      const next = applyEntityTags(
         state,
         entity,
         entity.tags.remove(command.name),
         options,
       );
+      return reconcileAllSlotSelections(next, options.registry);
     }
     case 'replace-tags': {
       const entity = state.entities.get(command.entityId);
       if (!entity) {
         return state;
       }
-      return applyEntityTags(
+      const next = applyEntityTags(
         state,
         entity,
         TagCollection.create(command.tags),
         options,
       );
+      return reconcileAllSlotSelections(next, options.registry);
     }
     case 'adjust-pool': {
       const entity = state.entities.get(command.entityId);
       if (!entity) {
         return state;
       }
-      const max = selectPoolMax(entity, command.pool, options.registry);
+      const max = selectPoolMax(
+        entity,
+        command.pool,
+        options.registry,
+        state.entities,
+      );
       return upsertEntity(
         state,
         adjustEntityPool(
@@ -163,14 +179,21 @@ export function reduceEngineState<THost = unknown>(
         return state;
       }
       const entity = instantiateEntity(definition, entityId, state.tick);
-      const reconciled = reconcileSlotSelections(entity, options.registry);
-      return withEngineSpawnCounts(upsertEntity(state, reconciled), {
+      const provisional = upsertEntity(state, entity);
+      const reconciled = reconcileSlotSelections(
+        provisional.entities.get(entityId)!,
+        provisional,
+        options.registry,
+      );
+      return withEngineSpawnCounts(upsertEntity(provisional, reconciled), {
         ...state.spawnCounts,
         [definition.id]: created + 1,
       });
     }
-    case 'remove-entity':
-      return removeEntity(state, command.entityId);
+    case 'remove-entity': {
+      const next = removeEntity(state, command.entityId);
+      return reconcileAllSlotSelections(next, options.registry);
+    }
     case 'set-primary-entity':
       return withPrimaryEntityId(state, command.entityId);
     case 'tick': {
@@ -216,17 +239,36 @@ export function reduceEngineState<THost = unknown>(
       if (!entity) {
         return state;
       }
-      const tag = entity.tags.get(command.tagName);
+      const holderId = command.holderEntityId ?? command.entityId;
+      const holder = state.entities.get(holderId);
+      const tag = holder?.tags.get(command.tagName);
       if (!tag || tag.slot !== command.slot) {
         return state;
       }
-      const def = options.registry.getSlotDefinition(command.slot);
-      if (!def || slotDefinitionMode(def) !== 'selectable') {
+      if (slotDefinitionMode(options.registry.getSlotDefinition(command.slot)) !== 'selectable') {
+        return state;
+      }
+      if (
+        options.registry.getSlotDefinition(command.slot)?.cannotShareTag &&
+        holdingIsSelectedElsewhere(
+          state,
+          command.slot,
+          { holderEntityId: holderId, tagName: command.tagName },
+          command.entityId,
+        )
+      ) {
         return state;
       }
       return upsertEntity(
         state,
-        withSlotSelection(entity, command.slot, command.tagName),
+        withSlotSelection(
+          entity,
+          command.slot,
+          command.tagName,
+          holderId,
+          state,
+          options.registry,
+        ),
       );
     }
     case 'set-process-allocation':

@@ -1,4 +1,4 @@
-import type { EntityInstance } from './entity';
+import type { EntityInstance, EntityMap } from './entity';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
 import type { TagCollection } from './tag-collection';
@@ -21,7 +21,10 @@ export {
   selectSlotSelection,
   selectSlotWinner,
   reconcileSlotSelections,
+  reconcileAllSlotSelections,
   withSlotSelection,
+  holdingIsSelectedElsewhere,
+  resolveSlotSelectionTag,
 } from './slots';
 
 /** Sum strength of tag passive effects whose type matches. */
@@ -87,6 +90,7 @@ export function selectStatValue(
   entity: EntityInstance,
   stat: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
   return sumActiveTaggedFieldStrength(
     entity,
@@ -94,6 +98,7 @@ export function selectStatValue(
     'stat',
     stat,
     registry,
+    entities,
   );
 }
 
@@ -101,6 +106,7 @@ export function selectPoolMax(
   entity: EntityInstance,
   pool: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
   return sumActiveTaggedFieldStrength(
     entity,
@@ -108,6 +114,7 @@ export function selectPoolMax(
     'pool',
     pool,
     registry,
+    entities,
   );
 }
 

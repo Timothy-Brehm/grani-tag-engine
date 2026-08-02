@@ -249,7 +249,12 @@ export class EngineRegistry<THost = unknown> {
       const scope = defaultRequirementScope(context, requirement.scope);
       const entity = getScopedEntity(context, scope);
       const present = entity
-        ? entityHasActiveTag(entity, requirement.tagName, this)
+        ? entityHasActiveTag(
+            entity,
+            requirement.tagName,
+            this,
+            context.engine.entities,
+          )
         : false;
       return requirement.exists ? present : !present;
     });
@@ -273,7 +278,14 @@ export class EngineRegistry<THost = unknown> {
       if (!entity) {
         return false;
       }
-      return selectStatValue(entity, requirement.stat, this) >= requirement.amount;
+      return (
+        selectStatValue(
+          entity,
+          requirement.stat,
+          this,
+          context.engine.entities,
+        ) >= requirement.amount
+      );
     });
 
     this.registerRequirement(
@@ -284,7 +296,14 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return false;
         }
-        return selectPoolMax(entity, requirement.pool, this) > requirement.amount;
+        return (
+          selectPoolMax(
+            entity,
+            requirement.pool,
+            this,
+            context.engine.entities,
+          ) > requirement.amount
+        );
       },
     );
 
@@ -391,17 +410,24 @@ export class EngineRegistry<THost = unknown> {
         const tag = fromCatalog
           ? createTag(fromCatalog)
           : createTag({ name: effect.name, effects: [] });
+        const withTags = withEntityTags(
+          entity,
+          entity.tags.add(tag),
+          context.engine.tick,
+          this,
+          context.engine.entities,
+        );
+        const provisional = upsertEntity(context.engine, withTags);
         const nextEntity = reconcileSlotSelections(
-          withEntityTags(
-            entity,
-            entity.tags.add(tag),
-            context.engine.tick,
-            this,
-          ),
+          provisional.entities.get(entity.id)!,
+          provisional,
           this,
           tag.name,
         );
-        return withScopedEntity(context, scope, nextEntity);
+        return withEngineState(
+          context,
+          upsertEntity(provisional, nextEntity),
+        );
       },
     });
 
@@ -413,7 +439,12 @@ export class EngineRegistry<THost = unknown> {
           return false;
         }
         const current = selectPoolCurrent(entity, effect.pool);
-        const max = selectPoolMax(entity, effect.pool, this);
+        const max = selectPoolMax(
+          entity,
+          effect.pool,
+          this,
+          context.engine.entities,
+        );
         return effect.strength > 0
           ? current < max
           : current > -effect.strength;
@@ -424,8 +455,12 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return context;
         }
-        const max = selectPoolMax(entity, effect.pool, this);
-        const nextEntity = adjustEntityPool(
+        const max = selectPoolMax(
+          entity,
+          effect.pool,
+          this,
+          context.engine.entities,
+        );        const nextEntity = adjustEntityPool(
           entity,
           effect.pool,
           effect.strength,

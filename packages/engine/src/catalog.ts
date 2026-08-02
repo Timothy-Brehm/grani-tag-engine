@@ -16,6 +16,11 @@ export type SlotDefinition = CatalogMeta & {
    * Default when omitted (or when no SlotDefinition is registered): `'selectable'`.
    */
   readonly mode?: 'best-only' | 'selectable';
+  /**
+   * When true, a given holding `(holderEntityId, tagName)` may be selected by
+   * at most one slot owner worldwide for this slot id.
+   */
+  readonly cannotShareTag?: boolean;
 };
 
 /**
@@ -37,7 +42,7 @@ export function slotDefinitionMode(def: SlotDefinition | undefined): SlotMode {
   return def?.mode === 'best-only' ? 'best-only' : 'selectable';
 }
 
-export type CatalogWarningKind = 'slot' | 'pool' | 'stat' | 'tier';
+export type CatalogWarningKind = 'slot' | 'pool' | 'stat' | 'tier' | 'share';
 
 export type CatalogWarning = {
   readonly kind: CatalogWarningKind;
@@ -244,6 +249,29 @@ export function collectCatalogWarnings(
           source: `entity:${entity.id}.pools`,
         });
       }
+    }
+  }
+
+  const assigneesByHolding = new Map<string, string[]>();
+  for (const entity of state.entities.values()) {
+    for (const [slotId, ref] of Object.entries(entity.slotSelections)) {
+      if (!registry.getSlotDefinition(slotId)?.cannotShareTag) {
+        continue;
+      }
+      const key = `${slotId}::${ref.holderEntityId}::${ref.tagName}`;
+      const owners = assigneesByHolding.get(key) ?? [];
+      owners.push(entity.id);
+      assigneesByHolding.set(key, owners);
+    }
+  }
+  for (const [key, owners] of assigneesByHolding) {
+    if (owners.length > 1) {
+      const slotId = key.split('::')[0] ?? key;
+      pushUnique(warnings, seen, {
+        kind: 'share',
+        id: slotId,
+        source: `holding:${key};owners:[${owners.join(',')}]`,
+      });
     }
   }
 

@@ -1,4 +1,4 @@
-import type { EntityInstance, EntityPoolMap } from './entity';
+import type { EntityInstance, EntityMap, EntityPoolMap } from './entity';
 import { selectPoolCurrent, selectPoolMax, selectStatValue } from './selectors';
 import type { Tag } from './tag';
 import type { SlotCatalog } from './slots';
@@ -264,6 +264,7 @@ export function refreshEntityHighWaters(
   entity: EntityInstance,
   tick = 0,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): EntityInstance {
   let poolHighWater = entity.metrics.poolHighWater as Record<string, number>;
   let poolHighWaterAtTick = entity.metrics
@@ -324,16 +325,16 @@ export function refreshEntityHighWaters(
     touchPool(pool, selectPoolCurrent(entity, pool));
   }
 
-  const activeTags = selectActiveTags(entity, registry);
+  const activeTags = selectActiveTags(entity, registry, entities);
   const poolKeys = collectTaggedKeys(activeTags, 'pool-max', 'pool');
   for (const pool of poolKeys) {
     touchPool(pool, selectPoolCurrent(entity, pool));
-    raisePoolMax(pool, selectPoolMax(entity, pool, registry));
+    raisePoolMax(pool, selectPoolMax(entity, pool, registry, entities));
   }
 
   const statKeys = collectTaggedKeys(activeTags, 'stat', 'stat');
   for (const stat of statKeys) {
-    touchStat(stat, selectStatValue(entity, stat, registry));
+    touchStat(stat, selectStatValue(entity, stat, registry, entities));
   }
 
   if (!changed) {

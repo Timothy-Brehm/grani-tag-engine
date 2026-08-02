@@ -1,8 +1,14 @@
 import type { CatalogRegistryView, SlotMode } from './catalog';
 import { slotDefinitionMode } from './catalog';
-import type { EntityInstance } from './entity';
+import type {
+  EntityInstance,
+  EntityMap,
+  SlotSelectionRef,
+} from './entity';
+import { normalizeSlotSelection } from './entity';
 import type { Tag } from './tag';
 import { createTag } from './tag';
+import { upsertEntity, type EngineState } from './state';
 
 export type SlotCatalog = CatalogRegistryView;
 
@@ -50,12 +56,42 @@ export function entityHasHeldTag(
 export function selectSlotSelection(
   entity: EntityInstance,
   slotId: string,
-): string | undefined {
+): SlotSelectionRef | undefined {
   return entity.slotSelections[slotId];
 }
 
+function resolveHolder(
+  owner: EntityInstance,
+  holderEntityId: string,
+  entities?: EntityMap,
+): EntityInstance | undefined {
+  if (holderEntityId === owner.id) {
+    return owner;
+  }
+  return entities?.get(holderEntityId);
+}
+
+/** Load the tag referenced by a slot selection, if still valid for that slot. */
+export function resolveSlotSelectionTag(
+  owner: EntityInstance,
+  slotId: string,
+  entities?: EntityMap,
+): Tag | undefined {
+  const ref = owner.slotSelections[slotId];
+  if (!ref) {
+    return undefined;
+  }
+  const holder = resolveHolder(owner, ref.holderEntityId, entities);
+  const tag = holder?.tags.get(ref.tagName);
+  if (!tag || tag.slot !== slotId) {
+    return undefined;
+  }
+  return tag;
+}
+
 /**
- * Best-only winner: smaller tier, then higher abs(strength) sum, then name.
+ * Best-only winner among **self-held** tags: smaller tier, then higher
+ * abs(strength) sum, then name.
  */
 export function selectSlotWinner(
   entity: EntityInstance,
@@ -84,8 +120,41 @@ function slotModeFor(
   slotId: string,
 ): SlotMode {
   const def = registry?.getSlotDefinition(slotId);
-  // Missing SlotDefinition ⇒ empty default (selectable, no label/description).
   return slotDefinitionMode(def);
+}
+
+function slotCannotShare(
+  registry: SlotCatalog | undefined,
+  slotId: string,
+): boolean {
+  return registry?.getSlotDefinition(slotId)?.cannotShareTag === true;
+}
+
+function holdingKey(ref: SlotSelectionRef): string {
+  return `${ref.holderEntityId}::${ref.tagName}`;
+}
+
+/**
+ * True if some other slot owner already selects this holding in the same slot
+ * (used when `cannotShareTag` is set).
+ */
+export function holdingIsSelectedElsewhere(
+  state: EngineState,
+  slotId: string,
+  ref: SlotSelectionRef,
+  exceptOwnerId: string,
+): boolean {
+  const key = holdingKey(ref);
+  for (const entity of state.entities.values()) {
+    if (entity.id === exceptOwnerId) {
+      continue;
+    }
+    const sel = entity.slotSelections[slotId];
+    if (sel && holdingKey(sel) === key) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -95,10 +164,12 @@ function slotModeFor(
 export function selectActiveRootTags(
   entity: EntityInstance,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): readonly Tag[] {
   const held = entity.tags.list();
   const bestOnlySlots = new Set<string>();
   const active: Tag[] = [];
+  const entitiesForLookup = entities ?? new Map([[entity.id, entity]]);
 
   for (const tag of held) {
     const slotId = tag.slot;
@@ -111,10 +182,25 @@ export function selectActiveRootTags(
       bestOnlySlots.add(slotId);
       continue;
     }
-    // selectable (including missing SlotDefinition)
-    const selected = entity.slotSelections[slotId];
-    if (selected === tag.name) {
-      active.push(tag);
+    // selectable — may be satisfied by a foreign holding via slotSelections
+  }
+
+  const selectableSlots = new Set<string>();
+  for (const tag of held) {
+    if (tag.slot && slotModeFor(registry, tag.slot) === 'selectable') {
+      selectableSlots.add(tag.slot);
+    }
+  }
+  for (const slotId of Object.keys(entity.slotSelections)) {
+    if (slotModeFor(registry, slotId) === 'selectable') {
+      selectableSlots.add(slotId);
+    }
+  }
+
+  for (const slotId of selectableSlots) {
+    const resolved = resolveSlotSelectionTag(entity, slotId, entitiesForLookup);
+    if (resolved) {
+      active.push(resolved);
     }
   }
 
@@ -153,8 +239,9 @@ export function flattenDependentTags(
 export function selectActiveTags(
   entity: EntityInstance,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): readonly Tag[] {
-  const roots = selectActiveRootTags(entity, registry);
+  const roots = selectActiveRootTags(entity, registry, entities);
   const out: Tag[] = [];
   const seen = new Set<string>();
   for (const root of roots) {
@@ -171,8 +258,11 @@ export function entityHasActiveTag(
   entity: EntityInstance,
   tagName: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): boolean {
-  return selectActiveTags(entity, registry).some((tag) => tag.name === tagName);
+  return selectActiveTags(entity, registry, entities).some(
+    (tag) => tag.name === tagName,
+  );
 }
 
 export function sumActiveTaggedFieldStrength(
@@ -181,9 +271,10 @@ export function sumActiveTaggedFieldStrength(
   field: string,
   keyValue: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
   let total = 0;
-  for (const tag of selectActiveTags(entity, registry)) {
+  for (const tag of selectActiveTags(entity, registry, entities)) {
     for (const effect of tag.effects) {
       if (effect.type !== effectType) {
         continue;
@@ -201,9 +292,10 @@ export function sumActiveTagEffectStrength(
   entity: EntityInstance,
   effectType: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
   let total = 0;
-  for (const tag of selectActiveTags(entity, registry)) {
+  for (const tag of selectActiveTags(entity, registry, entities)) {
     for (const effect of tag.effects) {
       if (effect.type === effectType) {
         total += effect.strength;
@@ -213,16 +305,40 @@ export function sumActiveTagEffectStrength(
   return total;
 }
 
+function selectionStillValid(
+  owner: EntityInstance,
+  slotId: string,
+  ref: SlotSelectionRef,
+  state: EngineState,
+  registry: SlotCatalog | undefined,
+): boolean {
+  const holder = state.entities.get(ref.holderEntityId);
+  const tag = holder?.tags.get(ref.tagName);
+  if (!tag || tag.slot !== slotId) {
+    return false;
+  }
+  if (
+    slotCannotShare(registry, slotId) &&
+    holdingIsSelectedElsewhere(state, slotId, ref, owner.id)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
- * After tags change: ensure selectable slot selections are valid.
- * `preferTagName` — when granting, prefer selecting that tag if the slot was empty.
+ * After tags/selections change: drop invalid refs; auto-select only among
+ * **self-held** tags for empty selectable slots.
  */
 export function reconcileSlotSelections(
   entity: EntityInstance,
+  state: EngineState,
   registry: SlotCatalog | undefined,
   preferTagName?: string,
 ): EntityInstance {
-  const next: Record<string, string> = { ...entity.slotSelections };
+  const next: Record<string, SlotSelectionRef> = {
+    ...entity.slotSelections,
+  };
   let changed = false;
 
   const slotIds = new Set<string>();
@@ -238,21 +354,28 @@ export function reconcileSlotSelections(
   for (const slotId of slotIds) {
     const mode = slotModeFor(registry, slotId);
     const held = listHeldTagsInSlot(entity, slotId);
+    const current = next[slotId];
 
-    if (mode !== 'selectable' || held.length === 0) {
-      if (next[slotId] !== undefined) {
+    if (mode === 'best-only') {
+      if (current !== undefined) {
         delete next[slotId];
         changed = true;
       }
       continue;
     }
 
-    const current = next[slotId];
-    const currentHeld = current
-      ? held.some((tag) => tag.name === current)
-      : false;
+    // selectable
+    if (current && selectionStillValid(entity, slotId, current, state, registry)) {
+      continue;
+    }
 
-    if (currentHeld) {
+    if (current !== undefined) {
+      delete next[slotId];
+      changed = true;
+    }
+
+    // Repair / auto-select only from self-held tags (never steal foreign tags)
+    if (held.length === 0) {
       continue;
     }
 
@@ -278,12 +401,17 @@ export function reconcileSlotSelections(
     }
 
     if (pick) {
-      if (next[slotId] !== pick) {
-        next[slotId] = pick;
-        changed = true;
+      const ref: SlotSelectionRef = {
+        holderEntityId: entity.id,
+        tagName: pick,
+      };
+      if (
+        slotCannotShare(registry, slotId) &&
+        holdingIsSelectedElsewhere(state, slotId, ref, entity.id)
+      ) {
+        continue;
       }
-    } else if (next[slotId] !== undefined) {
-      delete next[slotId];
+      next[slotId] = ref;
       changed = true;
     }
   }
@@ -297,24 +425,98 @@ export function reconcileSlotSelections(
   };
 }
 
+/** Reconcile every entity (e.g. after remove-tag / remove-entity). */
+export function reconcileAllSlotSelections(
+  state: EngineState,
+  registry: SlotCatalog | undefined,
+): EngineState {
+  let next = state;
+  // Break cannotShareTag duplicates: keep lowest owner id, clear others
+  const claimed = new Map<string, string>(); // `${slot}::${holdingKey}` → ownerId
+  for (const entity of [...next.entities.values()].sort((a, b) =>
+    a.id.localeCompare(b.id),
+  )) {
+    let entityNext = entity;
+    let entityChanged = false;
+    const selections: Record<string, SlotSelectionRef> = {
+      ...entity.slotSelections,
+    };
+    for (const [slotId, ref] of Object.entries(selections)) {
+      if (!slotCannotShare(registry, slotId)) {
+        continue;
+      }
+      const key = `${slotId}::${holdingKey(ref)}`;
+      const existing = claimed.get(key);
+      if (existing === undefined) {
+        claimed.set(key, entity.id);
+        continue;
+      }
+      if (existing !== entity.id) {
+        delete selections[slotId];
+        entityChanged = true;
+      }
+    }
+    if (entityChanged) {
+      entityNext = {
+        ...entity,
+        slotSelections: Object.freeze(selections),
+      };
+      next = upsertEntity(next, entityNext);
+    }
+  }
+
+  for (const entityId of [...next.entities.keys()]) {
+    const entity = next.entities.get(entityId);
+    if (!entity) {
+      continue;
+    }
+    const reconciled = reconcileSlotSelections(entity, next, registry);
+    if (reconciled !== entity) {
+      next = upsertEntity(next, reconciled);
+    }
+  }
+  return next;
+}
+
 /**
- * Select a held tag into a slot. No-op unless the tag is held and its `slot`
- * field equals `slotId` (item type must match the slot).
+ * Select a held tag into a slot on `entity` (slot owner). The tag may live on
+ * another entity (`holderEntityId`, default self). No-op if invalid.
  */
 export function withSlotSelection(
   entity: EntityInstance,
   slotId: string,
   tagName: string,
+  holderEntityId?: string,
+  state?: EngineState,
+  registry?: SlotCatalog,
 ): EntityInstance {
-  const tag = entity.tags.get(tagName);
+  const holderId = holderEntityId ?? entity.id;
+  const ref = normalizeSlotSelection(entity.id, {
+    holderEntityId: holderId,
+    tagName,
+  });
+  if (!ref) {
+    return entity;
+  }
+
+  const holder =
+    holderId === entity.id ? entity : state?.entities.get(holderId);
+  const tag = holder?.tags.get(tagName);
   if (!tag || tag.slot !== slotId) {
     return entity;
   }
+
+  if (state && slotCannotShare(registry, slotId)) {
+    if (holdingIsSelectedElsewhere(state, slotId, ref, entity.id)) {
+      return entity;
+    }
+  }
+
   return {
     ...entity,
     slotSelections: Object.freeze({
       ...entity.slotSelections,
-      [slotId]: tagName,
+      [slotId]: ref,
     }),
   };
 }

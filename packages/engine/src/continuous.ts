@@ -9,7 +9,7 @@ import { toEngineContext, upsertEntity, type EngineState } from './state';
 import { selectPoolCurrent, selectPoolMax } from './selectors';
 import { selectActiveTags } from './slots';
 import type { SlotCatalog } from './slots';
-import { adjustEntityPool } from './entity';
+import { adjustEntityPool, type EntityMap } from './entity';
 import { recordActionExecution } from './metrics';
 
 import {
@@ -135,12 +135,13 @@ function listTagEffects(
   entity: EntityInstance | undefined,
   effectType: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): Tag['effects'][number][] {
   if (!entity) {
     return [];
   }
   const out: Tag['effects'][number][] = [];
-  for (const tag of selectActiveTags(entity, registry)) {
+  for (const tag of selectActiveTags(entity, registry, entities)) {
     for (const effect of tag.effects) {
       if (effect.type === effectType) {
         out.push(effect);
@@ -150,12 +151,17 @@ function listTagEffects(
   return out;
 }
 
-/** Max concurrent active continuous jobs for an actor (default 1). */
+/**
+ * Max concurrent active continuous jobs for an actor (default 1).
+ * Enforced at job start only — see composition doc “Known limitation” under
+ * Continuous actions if max drops mid-run.
+ */
 export function selectContinuousSlotMax(
   actor: EntityInstance,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
-  const effects = listTagEffects(actor, 'continuous-slots', registry);
+  const effects = listTagEffects(actor, 'continuous-slots', registry, entities);
   if (effects.length === 0) {
     return 1;
   }
@@ -169,10 +175,15 @@ export function selectContinuousSlotMax(
 export function selectAllowInstantWhileContinuous(
   actor: EntityInstance,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): boolean {
   return (
-    listTagEffects(actor, 'allow-instant-while-continuous', registry).length >
-    0
+    listTagEffects(
+      actor,
+      'allow-instant-while-continuous',
+      registry,
+      entities,
+    ).length > 0
   );
 }
 
@@ -180,8 +191,9 @@ function speedEffectsForAction(
   actor: EntityInstance,
   actionName: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): Tag['effects'][number][] {
-  return listTagEffects(actor, 'continuous-speed', registry).filter(
+  return listTagEffects(actor, 'continuous-speed', registry, entities).filter(
     (effect) => {
       const name = effect.actionName;
       return name === undefined || name === '*' || name === actionName;
@@ -197,9 +209,14 @@ export function selectEffectiveDurationTicks(
   actionName: string,
   baseDurationTicks: number,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
-  const effects = speedEffectsForAction(actor, actionName, registry);
-  let d = baseDurationTicks;
+  const effects = speedEffectsForAction(
+    actor,
+    actionName,
+    registry,
+    entities,
+  );  let d = baseDurationTicks;
   for (const effect of effects) {
     const add =
       typeof effect.addTicks === 'number' && Number.isFinite(effect.addTicks)
@@ -233,9 +250,14 @@ export function selectContinuousProgressDelta(
   actor: EntityInstance,
   actionName: string,
   registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
-  const effects = speedEffectsForAction(actor, actionName, registry);
-  let total = 0;
+  const effects = speedEffectsForAction(
+    actor,
+    actionName,
+    registry,
+    entities,
+  );  let total = 0;
   let any = false;
   for (const effect of effects) {
     if (
@@ -362,10 +384,15 @@ export function startContinuousAction<THost>(
   }
   const isInstant = baseDuration <= 1;
   const activeCount = countActiveJobsForActor(state, options.actorEntityId);
-  const slotMax = selectContinuousSlotMax(actor, options.registry);
+  const slotMax = selectContinuousSlotMax(
+    actor,
+    options.registry,
+    state.entities,
+  );
   const allowInstant = selectAllowInstantWhileContinuous(
     actor,
     options.registry,
+    state.entities,
   );
 
   // Busy lock: any active job blocks new duration-1 starts unless allow tag.
@@ -402,6 +429,7 @@ export function startContinuousAction<THost>(
     options.action.name,
     baseDuration,
     options.registry,
+    state.entities,
   );
   if (effectiveDuration > MAX_ACTION_DURATION_TICKS) {
     return state;
@@ -416,6 +444,7 @@ export function startContinuousAction<THost>(
         actor,
         options.action.name,
         options.registry,
+        state.entities,
       ),
       effectiveDuration,
     );
@@ -617,6 +646,7 @@ function advanceOneJob<THost>(
     action.name,
     baseDuration,
     options.registry,
+    state.entities,
   );
   if (D > MAX_ACTION_DURATION_TICKS) {
     return pauseContinuousAction(state, progressKey);
@@ -626,6 +656,7 @@ function advanceOneJob<THost>(
     actor,
     action.name,
     options.registry,
+    state.entities,
   );
   const remaining = roundContinuousProgress(100 - record.progress);
   const deltaProgress = roundContinuousProgress(
@@ -803,7 +834,7 @@ export function pulseGenerators(
     } as Record<string, number>;
     let changed = false;
 
-    for (const tag of selectActiveTags(entity, registry)) {
+    for (const tag of selectActiveTags(entity, registry, next.entities)) {
       for (const effect of tag.effects) {
         if (effect.type !== 'generate-pool') {
           continue;
@@ -827,7 +858,7 @@ export function pulseGenerators(
         if (!due) {
           continue;
         }
-        const max = selectPoolMax(entity, pool, registry);
+        const max = selectPoolMax(entity, pool, registry, next.entities);
         const cur = selectPoolCurrent(entity, pool);
         if (amount > 0 && cur >= max) {
           continue;

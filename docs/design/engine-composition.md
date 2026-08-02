@@ -78,7 +78,7 @@ Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-pla
 
 | Catalog | Purpose |
 |---------|---------|
-| `SlotDefinition` | Loadout slot (`id`, optional `label` / `description` / novelty, `mode?: 'best-only' \| 'selectable'`) |
+| `SlotDefinition` | Loadout slot (`id`, optional `label` / `description` / novelty, `mode?: 'best-only' \| 'selectable'`, `cannotShareTag?: boolean`) |
 | `PoolDefinition` | Pool UI metadata: optional `label` (may include spaces / special caps—do not derive from id) and `description` (e.g. mouseover) |
 | `StatDefinition` | Stat UI metadata: same `label` / `description` pattern as pools |
 
@@ -96,15 +96,26 @@ On a tag: `slot?: string` (`SlotDefinition.id`), `dependentTags?: Tag[]` (nested
 
 **Best-only scoring (optional `tier`):** smaller `tier` wins; omit `tier` ⇒ lowest priority (will not beat a numbered tier). Ties → higher `sum(abs(strength))` on the tag’s own effects; then `tag.name`. Soft warnings when a slot mixes `tier: 0` with non-zero tiers, or has duplicate non-zero tier values.
 
-**Selection:** `entity.slotSelections[slotId] = tagName`. First grant into an empty selectable slot selects the new tag; removing the selected item repairs to earliest `tagGrantedAt` (tie → name). Command: `{ type: 'select-slot-item', entityId, slot, tagName }` (no-op if not selectable / not held / tag’s `slot` ≠ that id).
+**Selection (cross-entity):** `entity.slotSelections[slotId] = { holderEntityId, tagName }`. The tag may be held on **any** entity; passives / dependents apply on the **slot owner**. Bare JSON string `tagName` means holder = self. First self-grant into an empty selectable slot auto-selects that tag; invalid refs (missing holder/tag) clear and may repair to a self-held tag. Command: `{ type: 'select-slot-item', entityId, slot, tagName, holderEntityId? }` (default holder = slot owner).
 
-**`has-slot`:** “owns at least one held tag assigned to this slot” (inventory / first-equip UX)—not “currently using the selected item,” and not “has an empty slot available.” Capability gates (e.g. flight) use active tags like `CanFly`.
+**`has-slot`:** “owns at least one **held** tag with that slot id” on the scoped entity—not “currently using a selection,” and not “empty slot available.” Capability gates use active tags (e.g. `CanFly`).
+
+**`cannotShareTag` on `SlotDefinition`:** when true, a given holding `(holderEntityId, tagName)` may be selected by at most one owner. A second select no-ops. When false/omitted, many owners may select the same holding. Soft warning if a save duplicates a non-shareable holding. Copies of the same name on different holders are separate holdings (2 Turbos on 2 hangars → 2 assignees max for that slot when `cannotShareTag`).
+
+**Example — armory gun:** Armory holds `Shotgun`; Hero selects `{ holderEntityId: 'armory', tagName: 'Shotgun' }` into `weapon`. Hero gets passives; Armory still holds the tag. Remove Armory (or the tag) → Hero’s selection clears.
+
 ```ts
-registerSlotDefinition({ id: 'vehicle', label: 'Vehicle' }) // selectable by default
+registerSlotDefinition({ id: 'weapon', label: 'Weapon', cannotShareTag: true })
+registerSlotDefinition({ id: 'vehicle', label: 'Vehicle' }) // selectable; shareable by default
 createTag({
   name: 'Vehicle_Plane',
   slot: 'vehicle',
   dependentTags: [createTag({ name: 'CanFly', effects: [] })],
+  effects: [/* passives */],
+})
+createTag({
+  name: 'Shotgun',
+  slot: 'weapon',
   effects: [/* passives */],
 })
 ```
@@ -341,7 +352,7 @@ EngineRegistry (catalogs, not serialized in EngineState)
 
 **Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 
-**Commands:** `select-slot-item` (choose which held tag is active in a selectable slot)
+**Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
 **Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
 
@@ -369,6 +380,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; effective duration min 1
+- **Known limitation (TODO):** `continuous-slots` max is enforced at **start** only. If max drops mid-run (unequip / slot swap / losing the passive), already-active jobs are **not** paused or culled. Fix later: pause or refuse advance when `activeCount > newMax`.
 
 ---
 

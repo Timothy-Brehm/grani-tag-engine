@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createTag } from './tag';
-import { createEntityInstance, entityInstanceFromJSON, entityInstanceToJSON } from './entity';
+import {
+  createEntityInstance,
+  entityInstanceFromJSON,
+  entityInstanceToJSON,
+} from './entity';
 import {
   createPrimaryEngineState,
   toEngineContext,
+  upsertEntity,
 } from './state';
 import { reduceEngineState } from './reduce';
 import { EngineRegistry } from './registry';
@@ -112,28 +117,35 @@ describe('catalog definitions and soft validation', () => {
 
   it('missing slot definition acts as default selectable (not stacking)', () => {
     const registry = new EngineRegistry().createBuiltinAdaptors();
-    const entity = reconcileSlotSelections(
-      createEntityInstance({
-        id: 'hero',
-        definitionId: 'hero',
-        tags: [
-          createTag({
-            name: 'A',
-            slot: 'mystery',
-            effects: [{ type: 'stat', name: 'S', strength: 1, stat: 'S' }],
-          }),
-          createTag({
-            name: 'B',
-            slot: 'mystery',
-            effects: [{ type: 'stat', name: 'S', strength: 2, stat: 'S' }],
-          }),
-        ],
-      }),
+    const entity = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [
+        createTag({
+          name: 'A',
+          slot: 'mystery',
+          effects: [{ type: 'stat', name: 'S', strength: 1, stat: 'S' }],
+        }),
+        createTag({
+          name: 'B',
+          slot: 'mystery',
+          effects: [{ type: 'stat', name: 'S', strength: 2, stat: 'S' }],
+        }),
+      ],
+    });
+    const state = createPrimaryEngineState(entity);
+    const reconciled = reconcileSlotSelections(
+      state.entities.get('hero')!,
+      state,
       registry,
     );
-    // Default selectable: only one active; earliest grant / name wins repair.
-    expect(selectSlotSelection(entity, 'mystery')).toBe('A');
-    expect(selectStatValue(entity, 'S', registry)).toBe(1);
+    expect(selectSlotSelection(reconciled, 'mystery')).toEqual({
+      holderEntityId: 'hero',
+      tagName: 'A',
+    });
+    expect(
+      selectStatValue(reconciled, 'S', registry, state.entities),
+    ).toBe(1);
   });
 
   it('warns on duplicate non-zero tiers and zero/non-zero mix', () => {
@@ -217,22 +229,38 @@ describe('slotted tags', () => {
       tags: [boat, plane],
       slotSelections: { vehicle: 'Vehicle_Boat' },
     });
-    entity = reconcileSlotSelections(entity, registry);
+    const state = createPrimaryEngineState(entity);
+    entity = reconcileSlotSelections(
+      state.entities.get('hero')!,
+      state,
+      registry,
+    );
 
-    expect(selectSlotSelection(entity, 'vehicle')).toBe('Vehicle_Boat');
-    expect(selectStatValue(entity, 'Speed', registry)).toBe(2);
-    expect(entityHasActiveTag(entity, 'CanFly', registry)).toBe(false);
+    expect(selectSlotSelection(entity, 'vehicle')).toEqual({
+      holderEntityId: 'hero',
+      tagName: 'Vehicle_Boat',
+    });
+    expect(selectStatValue(entity, 'Speed', registry, state.entities)).toBe(2);
+    expect(entityHasActiveTag(entity, 'CanFly', registry, state.entities)).toBe(
+      false,
+    );
     expect(entityHasHeldSlot(entity, 'vehicle')).toBe(true);
     expect(entity.tags.has('CanFly')).toBe(false);
 
     entity = {
       ...entity,
-      slotSelections: Object.freeze({ vehicle: 'Vehicle_Plane' }),
+      slotSelections: Object.freeze({
+        vehicle: { holderEntityId: 'hero', tagName: 'Vehicle_Plane' },
+      }),
     };
-    expect(selectStatValue(entity, 'Speed', registry)).toBe(5);
-    expect(entityHasActiveTag(entity, 'CanFly', registry)).toBe(true);
+    expect(selectStatValue(entity, 'Speed', registry, state.entities)).toBe(5);
+    expect(entityHasActiveTag(entity, 'CanFly', registry, state.entities)).toBe(
+      true,
+    );
     expect(
-      selectActiveTags(entity, registry).some((t) => t.name === 'CanFly'),
+      selectActiveTags(entity, registry, state.entities).some(
+        (t) => t.name === 'CanFly',
+      ),
     ).toBe(true);
   });
 
@@ -308,7 +336,14 @@ describe('slotted tags', () => {
       tags: [boat],
       slotSelections: { vehicle: 'Vehicle_Boat' },
     });
-    const next = withSlotSelection(entity, 'weapon', 'Vehicle_Boat');
+    const state = createPrimaryEngineState(entity);
+    const next = withSlotSelection(
+      entity,
+      'weapon',
+      'Vehicle_Boat',
+      'hero',
+      state,
+    );
     expect(next).toBe(entity);
   });
 
@@ -317,16 +352,17 @@ describe('slotted tags', () => {
       .createBuiltinAdaptors()
       .registerSlotDefinition({ id: 'vehicle' });
 
-    const entity = reconcileSlotSelections(
-      createEntityInstance({
-        id: 'hero',
-        definitionId: 'hero',
-        tags: [boat, plane],
-        slotSelections: { vehicle: 'Vehicle_Boat' },
-      }),
-      registry,
+    const entity = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [boat, plane],
+      slotSelections: { vehicle: 'Vehicle_Boat' },
+    });
+    let state = createPrimaryEngineState(entity);
+    state = upsertEntity(
+      state,
+      reconcileSlotSelections(state.entities.get('hero')!, state, registry),
     );
-    const state = createPrimaryEngineState(entity);
     const ctx = toEngineContext(state, {}, { actorEntityId: 'hero' });
 
     expect(
@@ -345,8 +381,10 @@ describe('slotted tags', () => {
     ).toBe(true);
 
     const flying = {
-      ...entity,
-      slotSelections: Object.freeze({ vehicle: 'Vehicle_Plane' }),
+      ...state.entities.get('hero')!,
+      slotSelections: Object.freeze({
+        vehicle: { holderEntityId: 'hero', tagName: 'Vehicle_Plane' },
+      }),
     };
     const flyCtx = toEngineContext(
       createPrimaryEngineState(flying),
@@ -377,8 +415,8 @@ describe('slotted tags', () => {
       { type: 'add-tag', entityId: 'hero', tag: boat },
       options,
     );
-    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toBe(
-      'Vehicle_Boat',
+    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toEqual(
+      { holderEntityId: 'hero', tagName: 'Vehicle_Boat' },
     );
 
     state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
@@ -387,9 +425,8 @@ describe('slotted tags', () => {
       { type: 'add-tag', entityId: 'hero', tag: plane },
       options,
     );
-    // Already had a selection — keep boat
-    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toBe(
-      'Vehicle_Boat',
+    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toEqual(
+      { holderEntityId: 'hero', tagName: 'Vehicle_Boat' },
     );
 
     state = reduceEngineState(
@@ -402,8 +439,8 @@ describe('slotted tags', () => {
       },
       options,
     );
-    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toBe(
-      'Vehicle_Plane',
+    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toEqual(
+      { holderEntityId: 'hero', tagName: 'Vehicle_Plane' },
     );
 
     state = reduceEngineState(
@@ -411,8 +448,8 @@ describe('slotted tags', () => {
       { type: 'remove-tag', entityId: 'hero', name: 'Vehicle_Plane' },
       options,
     );
-    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toBe(
-      'Vehicle_Boat',
+    expect(selectSlotSelection(state.entities.get('hero')!, 'vehicle')).toEqual(
+      { holderEntityId: 'hero', tagName: 'Vehicle_Boat' },
     );
   });
 
@@ -454,7 +491,9 @@ describe('slotted tags', () => {
     expect(json.tags.tags[0]?.dependentTags?.[0]?.name).toBe('CanFly');
 
     const restored = entityInstanceFromJSON(json);
-    expect(restored.slotSelections).toEqual({ vehicle: 'Vehicle_Plane' });
+    expect(restored.slotSelections).toEqual({
+      vehicle: { holderEntityId: 'hero', tagName: 'Vehicle_Plane' },
+    });
     expect(restored.tags.get('Vehicle_Plane')?.dependentTags?.[0]?.name).toBe(
       'CanFly',
     );
@@ -465,5 +504,272 @@ describe('slotted tags', () => {
       TagCollection.fromJSON(collectionJson).get('Vehicle_Plane')
         ?.dependentTags?.[0]?.name,
     ).toBe('CanFly');
+  });
+});
+
+describe('cross-entity slot assignments', () => {
+  const shotgun = createTag({
+    name: 'Shotgun',
+    slot: 'weapon',
+    effects: [{ type: 'stat', name: 'Damage', strength: 4, stat: 'Damage' }],
+  });
+
+  it('hero can select armory-held gun and gain passives', () => {
+    const registry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'weapon', cannotShareTag: true });
+    const options = { registry, host: {} };
+
+    const armory = createEntityInstance({
+      id: 'armory',
+      definitionId: 'armory',
+      tags: [shotgun],
+    });
+    const hero = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [],
+    });
+    let state = createPrimaryEngineState(hero, { others: [armory] });
+
+    state = reduceEngineState(
+      state,
+      {
+        type: 'select-slot-item',
+        entityId: 'hero',
+        slot: 'weapon',
+        tagName: 'Shotgun',
+        holderEntityId: 'armory',
+      },
+      options,
+    );
+
+    const heroNext = state.entities.get('hero')!;
+    expect(selectSlotSelection(heroNext, 'weapon')).toEqual({
+      holderEntityId: 'armory',
+      tagName: 'Shotgun',
+    });
+    expect(state.entities.get('armory')!.tags.has('Shotgun')).toBe(true);
+    expect(
+      selectStatValue(heroNext, 'Damage', registry, state.entities),
+    ).toBe(4);
+    expect(
+      entityHasActiveTag(heroNext, 'Shotgun', registry, state.entities),
+    ).toBe(true);
+  });
+
+  it('cannotShareTag blocks a second assignee of the same holding', () => {
+    const registry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'weapon', cannotShareTag: true });
+    const options = { registry, host: {} };
+
+    const armory = createEntityInstance({
+      id: 'armory',
+      definitionId: 'armory',
+      tags: [shotgun],
+    });
+    const heroA = createEntityInstance({
+      id: 'heroA',
+      definitionId: 'hero',
+      tags: [],
+    });
+    const heroB = createEntityInstance({
+      id: 'heroB',
+      definitionId: 'hero',
+      tags: [],
+    });
+    let state = createPrimaryEngineState(heroA, {
+      others: [heroB, armory],
+    });
+
+    state = reduceEngineState(
+      state,
+      {
+        type: 'select-slot-item',
+        entityId: 'heroA',
+        slot: 'weapon',
+        tagName: 'Shotgun',
+        holderEntityId: 'armory',
+      },
+      options,
+    );
+    const afterFirst = state;
+    state = reduceEngineState(
+      state,
+      {
+        type: 'select-slot-item',
+        entityId: 'heroB',
+        slot: 'weapon',
+        tagName: 'Shotgun',
+        holderEntityId: 'armory',
+      },
+      options,
+    );
+    expect(state.entities.get('heroB')).toEqual(
+      afterFirst.entities.get('heroB'),
+    );
+    expect(selectSlotSelection(state.entities.get('heroA')!, 'weapon')).toEqual(
+      { holderEntityId: 'armory', tagName: 'Shotgun' },
+    );
+  });
+
+  it('shareable slots allow multiple assignees of the same holding', () => {
+    const registry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'weapon' });
+    const options = { registry, host: {} };
+
+    const armory = createEntityInstance({
+      id: 'armory',
+      definitionId: 'armory',
+      tags: [shotgun],
+    });
+    const heroA = createEntityInstance({
+      id: 'heroA',
+      definitionId: 'hero',
+      tags: [],
+    });
+    const heroB = createEntityInstance({
+      id: 'heroB',
+      definitionId: 'hero',
+      tags: [],
+    });
+    let state = createPrimaryEngineState(heroA, {
+      others: [heroB, armory],
+    });
+
+    state = reduceEngineState(
+      state,
+      {
+        type: 'select-slot-item',
+        entityId: 'heroA',
+        slot: 'weapon',
+        tagName: 'Shotgun',
+        holderEntityId: 'armory',
+      },
+      options,
+    );
+    state = reduceEngineState(
+      state,
+      {
+        type: 'select-slot-item',
+        entityId: 'heroB',
+        slot: 'weapon',
+        tagName: 'Shotgun',
+        holderEntityId: 'armory',
+      },
+      options,
+    );
+    expect(selectSlotSelection(state.entities.get('heroB')!, 'weapon')).toEqual(
+      { holderEntityId: 'armory', tagName: 'Shotgun' },
+    );
+  });
+
+  it('removing holder entity clears foreign selections', () => {
+    const registry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'weapon' });
+    const options = { registry, host: {} };
+
+    const armory = createEntityInstance({
+      id: 'armory',
+      definitionId: 'armory',
+      tags: [shotgun],
+    });
+    const hero = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [],
+      slotSelections: {
+        weapon: { holderEntityId: 'armory', tagName: 'Shotgun' },
+      },
+    });
+    let state = createPrimaryEngineState(hero, { others: [armory] });
+    expect(
+      selectStatValue(
+        state.entities.get('hero')!,
+        'Damage',
+        registry,
+        state.entities,
+      ),
+    ).toBe(4);
+
+    state = reduceEngineState(
+      state,
+      { type: 'remove-entity', entityId: 'armory' },
+      options,
+    );
+    expect(selectSlotSelection(state.entities.get('hero')!, 'weapon')).toBe(
+      undefined,
+    );
+    expect(
+      selectStatValue(
+        state.entities.get('hero')!,
+        'Damage',
+        registry,
+        state.entities,
+      ),
+    ).toBe(0);
+  });
+
+  it('JSON migrates legacy string selections and keeps foreign refs', () => {
+    const entity = createEntityInstance({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: [],
+      slotSelections: {
+        weapon: { holderEntityId: 'armory', tagName: 'Shotgun' },
+      },
+    });
+    const json = entityInstanceToJSON(entity);
+    expect(json.slotSelections).toEqual({
+      weapon: { holderEntityId: 'armory', tagName: 'Shotgun' },
+    });
+    const restored = entityInstanceFromJSON({
+      id: 'hero',
+      definitionId: 'hero',
+      tags: { tags: [] },
+      pools: {},
+      slotSelections: { vehicle: 'Vehicle_Boat' },
+    });
+    expect(restored.slotSelections.vehicle).toEqual({
+      holderEntityId: 'hero',
+      tagName: 'Vehicle_Boat',
+    });
+  });
+
+  it('collectCatalogWarnings reports cannotShareTag duplicates', () => {
+    const registry = new EngineRegistry()
+      .createBuiltinAdaptors()
+      .registerSlotDefinition({ id: 'weapon', cannotShareTag: true });
+    const armory = createEntityInstance({
+      id: 'armory',
+      definitionId: 'armory',
+      tags: [shotgun],
+    });
+    const heroA = createEntityInstance({
+      id: 'heroA',
+      definitionId: 'hero',
+      tags: [],
+      slotSelections: {
+        weapon: { holderEntityId: 'armory', tagName: 'Shotgun' },
+      },
+    });
+    const heroB = createEntityInstance({
+      id: 'heroB',
+      definitionId: 'hero',
+      tags: [],
+      slotSelections: {
+        weapon: { holderEntityId: 'armory', tagName: 'Shotgun' },
+      },
+    });
+    const warnings = collectCatalogWarnings(
+      registry,
+      createPrimaryEngineState(heroA, { others: [heroB, armory] }),
+    );
+    expect(warnings.some((w) => w.kind === 'share' && w.id === 'weapon')).toBe(
+      true,
+    );
   });
 });
