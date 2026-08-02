@@ -446,20 +446,67 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 
 **Appearance trait:** e.g. tag `appearance-damaged` → host picks sprite. Engine stores the fact.
 
-### 5. Advancement stage + mutually exclusive path picks
+### 5. Tiers (content partitions + exclusive choice)
 
-**Intent:** large content gated on a stage tag; entering the stage requires choosing exactly one specialization.
+**Intent:** separate large bands of content so design, analysis, and play can stop at a boundary, see what is potentially available *before* that line, then let the player make an **exclusive** choice among unlocked options.
 
-**Composition:**
-- Gate content with requirement `{ type: 'tag', tagName: 'major_stage_colony', exists: true }` (on primary entity or colony entity).
-- **Enter stage** might be automatic when prerequisites met, or an action that only offers **three exclusive choices**:
-  - `Choose Fishing Village` → results: `grant-tag` `major_stage_colony`, `grant-tag` `path_fishing_village`, and grant-tags or removals that **forbid** the others (e.g. grant `path_locked` alternatives, or remove the competing choice actions by replacing a chooser entity).
-  - Same for `path_hunting_village`, `path_mining_village`.
-- Practical exclusive pattern:
-  1. A temporary `stage-chooser` entity offers the three actions.
-  2. Each action grants stage + path tags, then `remove-entity` on the chooser (choices vanish with the entity).
-  3. Downstream recipes require `major_stage_colony` plus optionally a specific `path_*` tag.
-- Deepening a path unlocks path-specific recipes; shared colony recipes need only `major_stage_colony`.
+**Expectations:**
+1. A playthrough unlocks only a **subset** of listed options before tiering up.
+2. Every listed option remains **reachable in principle** (design/analysis guarantee).
+3. Some options are intentionally **hard** to unlock.
+4. After the choice, content may require “tier crossed” and/or “this path.”
+
+```text
+[ content before Tier N ]
+        │
+        ▼  unlock subset of Tier N options (some hard)
+[ exclusive choice among unlocked options ]
+        │
+        ├─ grant base “tier crossed” tag  →  lock/open whole bands
+        └─ grant path-specific tags     →  benefits + path unlocks
+```
+
+**Tag pattern (two grants, accretion):**
+
+| Tag | Role | Example |
+|-----|------|---------|
+| Path | Specific pick; benefits + path-only unlocks | `Tier1Choice_WentLeft` |
+| Base | “This tier was resolved”; gates whole bands | `Tier1Choice` |
+
+Choice action grants **both**. Shared post-tier content requires the base tag; path-unique content requires the path tag (and/or its passives / `dependentTags`).
+
+**Unlock vs choose:** unlock = option eligible (requirements met). Choose = commit; grant base + path; stop offering rivals (chooser `remove-entity`, exclusive slot, or forbidden tags).
+
+**Practical exclusive pattern** (same as before):
+1. Temporary chooser entity offers one action per unlocked option.
+2. Each action grants base + path tags, then removes the chooser.
+3. Downstream recipes require the base tag, optionally plus a path tag.
+
+Selectable `SlotDefinition`s may host tier options when loadout UI is desired; one-shot encounter forks use the same base+path shape (`Choice_Squirrels` + `Choice_Squirrels_Feed`). Theme-specific tier *lists* belong in the **host** game, not this package.
+
+Analyzer **Gate** milestones (when they exist) should align with tier boundaries.
+
+### 5b. Content blocks / groups (self-contained chains)
+
+**Intent:** a **block** (group) is a closed set of actions and tag unlocks that is **fully reachable from a single entry** with **no outside** tags/actions required afterward.
+
+Example: entry **A** unlocks **B**; **B** makes **C** and **D** available; taking both unlocks **E**—all requirements satisfied only by in-block state (plus the entry).
+
+```text
+[ entry A ] ──► B ──► C
+                 │
+                 └──► D ──► (C∧D) ──► E
+```
+
+**Why:** analysis can collapse the block to one unit; play walks the chain; tests can skip via a summary tag.
+
+**Debug collapse pattern:**
+1. Author the full gameplay chain (no debug requirement).
+2. Author a summary tag (e.g. `Block_BasicFireMagic`) whose effects equal the **net outcome** of completing the block.
+3. Gate granting that summary (tag or action) on a host **debug** tag requirement (`debug` / `Debug_Cheats`—host convention).
+4. Normal play never sees the shortcut; debug builds grant `debug` and take the block tag.
+
+Blocks often sit *inside* a tier region (a path’s benefits may be a block). Analyzer **Block** metadata (when it exists) should mark these sets and validate self-sufficiency from the declared start.
 
 ### 6. Novelty highlight — new important content (badge ⚠)
 

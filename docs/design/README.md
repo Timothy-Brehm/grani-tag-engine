@@ -8,4 +8,4 @@ These are **living documents**. When design debates or agent guidance conflict w
 
 Implementation status and package layout: [../architecture.md](../architecture.md).
 
-Host games (e.g. Astrevno) keep their own design principles in their repos; this folder describes only the shared engine model.
+Host games (e.g. Astrevno) keep theme-specific content lists (colony tiers, personal tiers, encounter questions) in the **host** repo. This folder describes only the shared engine model—including genre-neutral **tier** and **content block** patterns in the composition doc.
