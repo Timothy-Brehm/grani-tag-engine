@@ -475,14 +475,17 @@ Same pattern as Life/Stamina: **max from tags, current from pool, change via adj
 
 Choice action grants **both**. Shared post-tier content and “entered Tier N” passives live on the **base** tag. Pick-specific passives/unlocks live on the **path** tag (and/or its `dependentTags`).
 
+**Exclusivity:** each choose action (or path option) requires the base tag to be **absent** (`exists: false` / equivalent). Granting the base on any pick makes every rival path ineligible. That is the exclusivity mechanism—not loadout slots and not relying on deleting a chooser alone.
+
 Hosts pick naming (`PersonalTier2_Choice_Scout`, `Choice_Squirrels` + `Choice_Squirrels_Feed`, etc.). Theme-specific option *lists* belong in the host game.
 
-**Unlock vs choose:** unlock = option eligible (requirements met). Choose = commit; grant base + path; stop offering rivals (chooser `remove-entity`, forbidden tags, etc.).
+**Unlock vs choose:** unlock = option eligible (other requirements met **and** base tag absent). Choose = commit; grant base + path.
 
-**Practical exclusive pattern:**
-1. Temporary chooser entity offers one action per unlocked option.
-2. Each action grants base + path tags, then removes the chooser.
+**Practical pattern:**
+1. Offer one action (or entity) per unlocked option; each requires base tag absent plus any unlock gates.
+2. Each action grants base + path tags.
 3. Downstream recipes require the base tag, optionally plus a path tag.
+4. Optional: remove a temporary chooser entity for UI cleanup (not required for exclusivity).
 
 Do **not** model tier ladders as loadout `SlotDefinition`s—slots are for equippable inventory. Tiers are permanent (or long-lived) fact tags.
 
