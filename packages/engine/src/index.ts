@@ -11,10 +11,48 @@ export type {
   StatRequirement,
   PoolMaxRequirement,
   EntityCountRequirement,
+  HasSlotRequirement,
   MetricRequirement,
   BuiltinRequirement,
   Requirement,
 } from './requirement';
+
+export type {
+  CatalogMeta,
+  SlotDefinition,
+  PoolDefinition,
+  StatDefinition,
+  SlotMode,
+  CatalogWarning,
+  CatalogWarningKind,
+  CatalogRegistryView,
+} from './catalog';
+export {
+  slotDefinitionMode,
+  collectCatalogWarnings,
+} from './catalog';
+
+export type { SlotCatalog } from './slots';
+export {
+  tagBestOnlyScore,
+  tagBestOnlyTier,
+  listHeldTagsInSlot,
+  entityHasHeldSlot,
+  entityHasHeldTag,
+  entityHasActiveTag,
+  selectSlotSelection,
+  selectSlotWinner,
+  selectActiveRootTags,
+  selectActiveTags,
+  flattenDependentTags,
+  sumActiveTaggedFieldStrength,
+  sumActiveTagEffectStrength,
+  reconcileSlotSelections,
+  reconcileAllSlotSelections,
+  withSlotSelection,
+  holdingIsSelectedElsewhere,
+  resolveSlotSelectionTag,
+} from './slots';
 
 export type {
   ActiveEffect,
@@ -63,6 +101,9 @@ export type {
   EntityInstance,
   EntityInstanceJSON,
   EntityDefinition,
+  EntityMap,
+  SlotSelectionRef,
+  SlotSelectionJSON,
 } from './entity';
 export {
   createEntityInstance,
@@ -73,6 +114,8 @@ export {
   withEntityMetrics,
   adjustEntityPool,
   instantiateEntity,
+  normalizeSlotSelection,
+  normalizeSlotSelections,
 } from './entity';
 
 export type {

@@ -73,6 +73,15 @@ export type EngineCommand<THost = unknown> =
       readonly actionName?: string;
       readonly sourceEntityId?: string;
     }
+  | {
+      readonly type: 'select-slot-item';
+      /** Slot owner (receives passives). */
+      readonly entityId: string;
+      readonly slot: string;
+      readonly tagName: string;
+      /** Entity that holds the tag; defaults to `entityId`. */
+      readonly holderEntityId?: string;
+    }
   /** Reserved recurring-action endpoints. They currently throw explicitly. */
   | {
       readonly type: 'set-process-allocation';

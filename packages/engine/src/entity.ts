@@ -17,11 +17,60 @@ import {
   type EntityMetrics,
   type EntityMetricsJSON,
 } from './metrics';
+import type { CatalogRegistryView } from './catalog';
 
 /** Who an effect or requirement resolves against. */
 export type EntityScope = 'actor' | 'source' | 'target';
 
 export type EntityPoolMap = Readonly<Record<string, number>>;
+
+/**
+ * Selection for a selectable slot: which entity holds the tag, and its name.
+ * Passives apply on the slot owner; the tag body lives on the holder.
+ */
+export type SlotSelectionRef = {
+  readonly holderEntityId: string;
+  readonly tagName: string;
+};
+
+/** JSON may use a bare tag name (legacy / self) or a full ref. */
+export type SlotSelectionJSON = string | SlotSelectionRef;
+
+export type EntityMap = ReadonlyMap<string, EntityInstance>;
+
+/** Normalize JSON/input selection; bare string ⇒ holder is the owner. */
+export function normalizeSlotSelection(
+  ownerEntityId: string,
+  value: SlotSelectionJSON | undefined,
+): SlotSelectionRef | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    return { holderEntityId: ownerEntityId, tagName: value };
+  }
+  if (!value.tagName) {
+    return undefined;
+  }
+  return {
+    holderEntityId: value.holderEntityId || ownerEntityId,
+    tagName: value.tagName,
+  };
+}
+
+export function normalizeSlotSelections(
+  ownerEntityId: string,
+  input?: Readonly<Record<string, SlotSelectionJSON>>,
+): Readonly<Record<string, SlotSelectionRef>> {
+  const out: Record<string, SlotSelectionRef> = {};
+  for (const [slotId, value] of Object.entries(input ?? {})) {
+    const ref = normalizeSlotSelection(ownerEntityId, value);
+    if (ref) {
+      out[slotId] = ref;
+    }
+  }
+  return Object.freeze(out);
+}
 
 /** Serializable in-play entity instance. */
 export interface EntityInstance {
@@ -32,6 +81,8 @@ export interface EntityInstance {
   readonly pools: EntityPoolMap;
   /** Tracked counters and water marks for gates/effects. */
   readonly metrics: EntityMetrics;
+  /** Selectable slot id → held-tag ref (any entity may be the holder). */
+  readonly slotSelections: Readonly<Record<string, SlotSelectionRef>>;
 }
 
 export type EntityInstanceJSON = {
@@ -40,6 +91,7 @@ export type EntityInstanceJSON = {
   tags: TagCollectionJSON;
   pools: Record<string, number>;
   metrics?: EntityMetricsJSON;
+  slotSelections?: Record<string, SlotSelectionJSON>;
   /** @deprecated Ignored; novelty is tag-based now. */
   novelty?: unknown;
 };
@@ -73,6 +125,7 @@ export function createEntityInstance(input: {
   tags?: readonly Tag[] | TagCollection;
   pools?: EntityPoolMap;
   metrics?: EntityMetrics;
+  slotSelections?: Readonly<Record<string, SlotSelectionJSON>>;
   /** Engine tick used to stamp initial watermarks / tag grants. Default 0. */
   tick?: number;
 }): EntityInstance {
@@ -94,6 +147,7 @@ export function createEntityInstance(input: {
     tags,
     pools,
     metrics: baseMetrics,
+    slotSelections: normalizeSlotSelections(input.id, input.slotSelections),
   };
   return refreshEntityHighWaters(recordTagGrants(base, tags, tick), tick);
 }
@@ -101,12 +155,20 @@ export function createEntityInstance(input: {
 export function entityInstanceToJSON(
   entity: EntityInstance,
 ): EntityInstanceJSON {
+  const slotSelections: Record<string, SlotSelectionJSON> = {};
+  for (const [slotId, ref] of Object.entries(entity.slotSelections)) {
+    slotSelections[slotId] =
+      ref.holderEntityId === entity.id
+        ? ref.tagName
+        : { holderEntityId: ref.holderEntityId, tagName: ref.tagName };
+  }
   return {
     id: entity.id,
     definitionId: entity.definitionId,
     tags: entity.tags.toJSON(),
     pools: { ...entity.pools },
     metrics: entityMetricsToJSON(entity.metrics),
+    ...(Object.keys(slotSelections).length > 0 ? { slotSelections } : {}),
   };
 }
 
@@ -119,6 +181,7 @@ export function entityInstanceFromJSON(
     tags: TagCollection.fromJSON(json.tags ?? { tags: [] }),
     pools: json.pools ?? {},
     metrics: json.metrics ? entityMetricsFromJSON(json.metrics) : undefined,
+    slotSelections: json.slotSelections ?? {},
   });
 }
 
@@ -126,9 +189,16 @@ export function withEntityTags(
   entity: EntityInstance,
   tags: TagCollection,
   tick = 0,
+  registry?: CatalogRegistryView,
+  entities?: EntityMap,
 ): EntityInstance {
   const withGrants = recordTagGrants(entity, tags, tick);
-  return refreshEntityHighWaters({ ...withGrants, tags }, tick);
+  return refreshEntityHighWaters(
+    { ...withGrants, tags },
+    tick,
+    registry,
+    entities,
+  );
 }
 
 export function withEntityPools(

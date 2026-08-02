@@ -84,6 +84,15 @@ export class TagCollection {
           : {}),
         ...(tag.image !== undefined ? { image: tag.image } : {}),
         ...(tag.novelty !== undefined ? { novelty: tag.novelty } : {}),
+        ...(tag.slot !== undefined ? { slot: tag.slot } : {}),
+        ...(tag.tier !== undefined ? { tier: tag.tier } : {}),
+        ...(tag.dependentTags !== undefined
+          ? {
+              dependentTags: tag.dependentTags.map((child) =>
+                createTag(child),
+              ),
+            }
+          : {}),
         effects: tag.effects.map((e: TagEffect) => ({ ...e })),
       })),
     };

@@ -1,6 +1,8 @@
-import type { EntityInstance, EntityPoolMap } from './entity';
+import type { EntityInstance, EntityMap, EntityPoolMap } from './entity';
 import { selectPoolCurrent, selectPoolMax, selectStatValue } from './selectors';
 import type { Tag } from './tag';
+import type { SlotCatalog } from './slots';
+import { selectActiveTags } from './slots';
 
 function withMetrics(
   entity: EntityInstance,
@@ -261,6 +263,8 @@ export function seedTagGrantedAt(
 export function refreshEntityHighWaters(
   entity: EntityInstance,
   tick = 0,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
 ): EntityInstance {
   let poolHighWater = entity.metrics.poolHighWater as Record<string, number>;
   let poolHighWaterAtTick = entity.metrics
@@ -321,15 +325,16 @@ export function refreshEntityHighWaters(
     touchPool(pool, selectPoolCurrent(entity, pool));
   }
 
-  const poolKeys = collectTaggedKeys(entity.tags.list(), 'pool-max', 'pool');
+  const activeTags = selectActiveTags(entity, registry, entities);
+  const poolKeys = collectTaggedKeys(activeTags, 'pool-max', 'pool');
   for (const pool of poolKeys) {
     touchPool(pool, selectPoolCurrent(entity, pool));
-    raisePoolMax(pool, selectPoolMax(entity, pool));
+    raisePoolMax(pool, selectPoolMax(entity, pool, registry, entities));
   }
 
-  const statKeys = collectTaggedKeys(entity.tags.list(), 'stat', 'stat');
+  const statKeys = collectTaggedKeys(activeTags, 'stat', 'stat');
   for (const stat of statKeys) {
-    touchStat(stat, selectStatValue(entity, stat));
+    touchStat(stat, selectStatValue(entity, stat, registry, entities));
   }
 
   if (!changed) {

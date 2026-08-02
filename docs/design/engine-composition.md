@@ -68,6 +68,58 @@ Tags are not the UI label and not the inventory row by themselves—they are the
 
 Removing a tag (or entity) is allowed when something truly leaves play and nothing should hang off the old fact—but default to **grant the next fact** so history, requirements, and metrics remain queryable. Host presentation can hide or restyle based on the new tag without deleting the old one.
 
+**Held vs active:** `TagCollection` stores **held** root tags only. Evaluation (passives, builtin `tag` requirements) uses the **active** view: slot-resolve roots, then flatten `dependentTags` (cycle-guarded by name). Inventory / “do I own this gear?” uses held (`tags.has` / `entityHasHeldTag`). Nested `slot` on dependents is ignored for resolution.
+
+Builtin `tag` means “present in the **active** flattened set,” not merely held. Unselected slotted tags (and inactive dependents like `CanFly`) do not satisfy `tag` gates. Use `has-slot` or `tags.has` / `entityHasHeldTag` when you need ownership regardless of selection.
+
+### Catalog definitions (slots, pools, stats)
+
+Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-play instances. Tag / effect payloads stay **string ids**; definitions add metadata and optional soft validation only.
+
+| Catalog | Purpose |
+|---------|---------|
+| `SlotDefinition` | Loadout slot (`id`, optional `label` / `description` / novelty, `mode?: 'best-only' \| 'selectable'`, `cannotShareTag?: boolean`) |
+| `PoolDefinition` | Pool UI metadata: optional `label` (may include spaces / special caps—do not derive from id) and `description` (e.g. mouseover) |
+| `StatDefinition` | Stat UI metadata: same `label` / `description` pattern as pools |
+
+**Soft validation:** `collectCatalogWarnings(registry, state)` reports referenced ids with no catalog entry (in-play entities + registered entity definitions when `listEntityDefinitions` is available). Missing defs do **not** hard-fail. A missing `SlotDefinition` is treated as an empty default (`mode: 'selectable'`, no label/description). Explicit default when `mode` omitted → `'selectable'`.
+
+### Slotted tags
+
+On a tag: `slot?: string` (`SlotDefinition.id`), `dependentTags?: Tag[]` (nested full tags projected while the parent is an active root), optional `tier?: number` (best-only ordinal).
+
+| Situation | Behavior |
+|-----------|----------|
+| No `slot` | Stack; dependents active while parent held |
+| Catalog `mode: 'best-only'` | Winner’s passives + dependents (see scoring below) |
+| Catalog `mode: 'selectable'` / default / missing def | Selected tag’s passives + dependents |
+
+**Best-only scoring (optional `tier`):** smaller `tier` wins; omit `tier` ⇒ lowest priority (will not beat a numbered tier). Ties → higher `sum(abs(strength))` on the tag’s own effects; then `tag.name`. Soft warnings when a slot mixes `tier: 0` with non-zero tiers, or has duplicate non-zero tier values.
+
+**Selection (cross-entity):** `entity.slotSelections[slotId] = { holderEntityId, tagName }`. The tag may be held on **any** entity; passives / dependents apply on the **slot owner**. Bare JSON string `tagName` means holder = self. First self-grant into an empty selectable slot auto-selects that tag; invalid refs (missing holder/tag) clear and may repair to a self-held tag. Command: `{ type: 'select-slot-item', entityId, slot, tagName, holderEntityId? }` (default holder = slot owner).
+
+**`has-slot`:** “owns at least one **held** tag with that slot id” on the scoped entity—not “currently using a selection,” and not “empty slot available.” Capability gates use active tags (e.g. `CanFly`).
+
+**`cannotShareTag` on `SlotDefinition`:** when true, a given holding `(holderEntityId, tagName)` may be selected by at most one owner. A second select no-ops. When false/omitted, many owners may select the same holding. Soft warning if a save duplicates a non-shareable holding. Copies of the same name on different holders are separate holdings (2 Turbos on 2 hangars → 2 assignees max for that slot when `cannotShareTag`).
+
+**Example — armory gun:** Armory holds `Shotgun`; Hero selects `{ holderEntityId: 'armory', tagName: 'Shotgun' }` into `weapon`. Hero gets passives; Armory still holds the tag. Remove Armory (or the tag) → Hero’s selection clears.
+
+```ts
+registerSlotDefinition({ id: 'weapon', label: 'Weapon', cannotShareTag: true })
+registerSlotDefinition({ id: 'vehicle', label: 'Vehicle' }) // selectable; shareable by default
+createTag({
+  name: 'Vehicle_Plane',
+  slot: 'vehicle',
+  dependentTags: [createTag({ name: 'CanFly', effects: [] })],
+  effects: [/* passives */],
+})
+createTag({
+  name: 'Shotgun',
+  slot: 'weapon',
+  effects: [/* passives */],
+})
+```
+
 ### Trait (lasting quantity or flag)
 
 A **trait** is a lasting property used for gating and progression. Traits are **not spent** when used as requirements (contrast with pools).
@@ -260,7 +312,12 @@ Action
   └─ sideEffects  →  same toolbox, applied after results
 
 EntityInstance
-  └─ metrics → actionCounts + pool/stat high-waters + generatorLastTick
+  ├─ tags (held roots)
+  ├─ slotSelections
+  └─ metrics
+       ├─ actionCounts
+       ├─ pool / stat high-waters
+       └─ generatorLastTick
 
 EngineState
   ├─ engineVersion (major.minor.patch.build; compat = major.minor)
@@ -269,6 +326,14 @@ EngineState
   ├─ continuousActions (active jobs / slots)
   ├─ continuousProgress (persisted % by actor::action::source)
   └─ tick
+
+EngineRegistry (catalogs, not serialized in EngineState)
+  ├─ EntityDefinition
+  ├─ SlotDefinition
+  ├─ PoolDefinition
+  ├─ StatDefinition
+  ├─ requirement adaptors
+  └─ effect adaptors
 ```
 
 **Recipe graph:** unlocking is usually `grant-tag` or `spawn-entity` or raising `pool-max`, which then satisfies requirements on other actions. Prefer expanding that graph over special-case code paths.
@@ -279,9 +344,17 @@ EngineState
 
 ## Builtin toolbox (current)
 
-**Requirements:** `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `metric`  
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`  
-**Tag passives:** `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+**Requirements**
+- `free`, `forbidden`
+- `tag` — active flattened view
+- `has-slot` — holds any tag assigned to that slot (ownership, not “equipped/selected”)
+- `stat`, `pool-max`, `entity-count`, `metric`
+
+**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+
+**Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
+
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 
@@ -307,6 +380,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; effective duration min 1
+- **Known limitation (TODO):** `continuous-slots` max is enforced at **start** only. If max drops mid-run (unequip / slot swap / losing the passive), already-active jobs are **not** paused or culled. Fix later: pause or refuse advance when `activeCount > newMax`.
 
 ---
 

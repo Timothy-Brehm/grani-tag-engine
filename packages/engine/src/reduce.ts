@@ -14,6 +14,7 @@ import {
   adjustEntityPool,
   instantiateEntity,
   withEntityTags,
+  type EntityInstance,
 } from './entity';
 import { selectPoolMax, selectSpawnCount } from './selectors';
 import {
@@ -24,11 +25,42 @@ import {
   pulseGenerators,
   startContinuousAction,
 } from './continuous';
+import {
+  holdingIsSelectedElsewhere,
+  reconcileAllSlotSelections,
+  reconcileSlotSelections,
+  withSlotSelection,
+} from './slots';
+import { slotDefinitionMode } from './catalog';
 
 export type ReduceEngineOptions<THost = unknown> = {
   readonly registry: EngineRegistry<THost>;
   readonly host: THost;
 };
+
+function applyEntityTags<THost>(
+  state: EngineState,
+  entity: EntityInstance,
+  tags: TagCollection,
+  options: ReduceEngineOptions<THost>,
+  preferTagName?: string,
+): EngineState {
+  const withTags = withEntityTags(
+    entity,
+    tags,
+    state.tick,
+    options.registry,
+    state.entities,
+  );
+  const provisional = upsertEntity(state, withTags);
+  const reconciled = reconcileSlotSelections(
+    provisional.entities.get(entity.id)!,
+    provisional,
+    options.registry,
+    preferTagName,
+  );
+  return upsertEntity(provisional, reconciled);
+}
 
 function resolveProgressKey(command: {
   readonly progressKey?: string;
@@ -63,9 +95,12 @@ export function reduceEngineState<THost = unknown>(
       if (!entity || entity.tags.has(command.tag.name)) {
         return state;
       }
-      return upsertEntity(
+      return applyEntityTags(
         state,
-        withEntityTags(entity, entity.tags.add(command.tag), state.tick),
+        entity,
+        entity.tags.add(command.tag),
+        options,
+        command.tag.name,
       );
     }
     case 'remove-tag': {
@@ -73,27 +108,38 @@ export function reduceEngineState<THost = unknown>(
       if (!entity) {
         return state;
       }
-      return upsertEntity(
+      const next = applyEntityTags(
         state,
-        withEntityTags(entity, entity.tags.remove(command.name), state.tick),
+        entity,
+        entity.tags.remove(command.name),
+        options,
       );
+      return reconcileAllSlotSelections(next, options.registry);
     }
     case 'replace-tags': {
       const entity = state.entities.get(command.entityId);
       if (!entity) {
         return state;
       }
-      return upsertEntity(
+      const next = applyEntityTags(
         state,
-        withEntityTags(entity, TagCollection.create(command.tags), state.tick),
+        entity,
+        TagCollection.create(command.tags),
+        options,
       );
+      return reconcileAllSlotSelections(next, options.registry);
     }
     case 'adjust-pool': {
       const entity = state.entities.get(command.entityId);
       if (!entity) {
         return state;
       }
-      const max = selectPoolMax(entity, command.pool);
+      const max = selectPoolMax(
+        entity,
+        command.pool,
+        options.registry,
+        state.entities,
+      );
       return upsertEntity(
         state,
         adjustEntityPool(
@@ -133,13 +179,21 @@ export function reduceEngineState<THost = unknown>(
         return state;
       }
       const entity = instantiateEntity(definition, entityId, state.tick);
-      return withEngineSpawnCounts(upsertEntity(state, entity), {
+      const provisional = upsertEntity(state, entity);
+      const reconciled = reconcileSlotSelections(
+        provisional.entities.get(entityId)!,
+        provisional,
+        options.registry,
+      );
+      return withEngineSpawnCounts(upsertEntity(provisional, reconciled), {
         ...state.spawnCounts,
         [definition.id]: created + 1,
       });
     }
-    case 'remove-entity':
-      return removeEntity(state, command.entityId);
+    case 'remove-entity': {
+      const next = removeEntity(state, command.entityId);
+      return reconcileAllSlotSelections(next, options.registry);
+    }
     case 'set-primary-entity':
       return withPrimaryEntityId(state, command.entityId);
     case 'tick': {
@@ -147,7 +201,7 @@ export function reduceEngineState<THost = unknown>(
       let next = state;
       for (let i = 0; i < steps; i += 1) {
         next = withEngineTick(next, next.tick + 1);
-        next = pulseGenerators(next);
+        next = pulseGenerators(next, options.registry);
         next = advanceContinuousActions(next, options);
       }
       return next;
@@ -179,6 +233,43 @@ export function reduceEngineState<THost = unknown>(
         return state;
       }
       return cancelContinuousAction(state, key);
+    }
+    case 'select-slot-item': {
+      const entity = state.entities.get(command.entityId);
+      if (!entity) {
+        return state;
+      }
+      const holderId = command.holderEntityId ?? command.entityId;
+      const holder = state.entities.get(holderId);
+      const tag = holder?.tags.get(command.tagName);
+      if (!tag || tag.slot !== command.slot) {
+        return state;
+      }
+      if (slotDefinitionMode(options.registry.getSlotDefinition(command.slot)) !== 'selectable') {
+        return state;
+      }
+      if (
+        options.registry.getSlotDefinition(command.slot)?.cannotShareTag &&
+        holdingIsSelectedElsewhere(
+          state,
+          command.slot,
+          { holderEntityId: holderId, tagName: command.tagName },
+          command.entityId,
+        )
+      ) {
+        return state;
+      }
+      return upsertEntity(
+        state,
+        withSlotSelection(
+          entity,
+          command.slot,
+          command.tagName,
+          holderId,
+          state,
+          options.registry,
+        ),
+      );
     }
     case 'set-process-allocation':
       return setProcessAllocation({

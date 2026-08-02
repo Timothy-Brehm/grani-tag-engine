@@ -27,6 +27,19 @@ export type PoolMaxRequirement = {
   readonly scope?: EntityScope;
 };
 
+export type HasSlotRequirement = {
+  readonly type: 'has-slot';
+  readonly slot: string;
+  /**
+   * Whether the entity must own (`true`, default) or must not own (`false`) at
+   * least one held tag whose `slot` equals this id. Ownership only—does not
+   * require the tag to be the active/selected loadout item.
+   */
+  readonly exists?: boolean;
+  /** Defaults to source, then actor. */
+  readonly scope?: EntityScope;
+};
+
 export type EntityCountRequirement = {
   readonly type: 'entity-count';
   readonly definitionId: string;
@@ -93,6 +106,7 @@ export type BuiltinRequirement =
   | StatRequirement
   | PoolMaxRequirement
   | EntityCountRequirement
+  | HasSlotRequirement
   | MetricRequirement;
 
 export type Requirement =

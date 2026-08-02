@@ -1,4 +1,4 @@
-import type { EntityInstance } from './entity';
+import type { EntityInstance, EntityMap } from './entity';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
 import type { TagCollection } from './tag-collection';
@@ -6,6 +6,26 @@ import type {
   ContinuousActiveJob,
   ContinuousProgressRecord,
 } from './continuous-types';
+import type { SlotCatalog } from './slots';
+import {
+  sumActiveTaggedFieldStrength,
+} from './slots';
+
+export {
+  entityHasActiveTag,
+  entityHasHeldSlot,
+  entityHasHeldTag,
+  listHeldTagsInSlot,
+  selectActiveTags,
+  selectActiveRootTags,
+  selectSlotSelection,
+  selectSlotWinner,
+  reconcileSlotSelections,
+  reconcileAllSlotSelections,
+  withSlotSelection,
+  holdingIsSelectedElsewhere,
+  resolveSlotSelectionTag,
+} from './slots';
 
 /** Sum strength of tag passive effects whose type matches. */
 export function sumTagEffectStrength(
@@ -69,15 +89,33 @@ export function selectEntitiesByDefinition(
 export function selectStatValue(
   entity: EntityInstance,
   stat: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
-  return sumTaggedFieldStrength(entity.tags, 'stat', 'stat', stat);
+  return sumActiveTaggedFieldStrength(
+    entity,
+    'stat',
+    'stat',
+    stat,
+    registry,
+    entities,
+  );
 }
 
 export function selectPoolMax(
   entity: EntityInstance,
   pool: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
 ): number {
-  return sumTaggedFieldStrength(entity.tags, 'pool-max', 'pool', pool);
+  return sumActiveTaggedFieldStrength(
+    entity,
+    'pool-max',
+    'pool',
+    pool,
+    registry,
+    entities,
+  );
 }
 
 export function selectPoolCurrent(
