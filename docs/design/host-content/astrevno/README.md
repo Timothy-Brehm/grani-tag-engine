@@ -7,3 +7,4 @@ These docs are **host/content** (theme, tier lists, fiction). They are not engin
 | Doc | Status |
 |-----|--------|
 | [game-tiers/](./game-tiers/) | Colony / personal / other exclusive choice ladders |
+| [content-blocks.md](./content-blocks.md) | Self-contained content groups; collapse for debug/analysis |

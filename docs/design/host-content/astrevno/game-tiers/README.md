@@ -35,6 +35,8 @@ Same shape applies to colony ladders, personal ladders, and one-shot [other ques
 
 Analyzer-style “Gate” milestones (when that exists) should align with these boundaries: stop at the gate, enumerate what can be available before it, then apply the exclusive pick.
 
+Within a tier region, packages of inevitable unlocks may be declared as [content blocks (groups)](../content-blocks.md)—self-contained chains that analysis or debug can collapse to a single summary tag.
+
 ---
 
 ## Tag pattern (choice + base tier)
