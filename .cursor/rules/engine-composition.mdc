@@ -23,7 +23,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 7. **Actions are recipes** — requirements → start `costs` → optional prorated `costsOverTime` → **results must happen** on completion → **side effects if able**; `durationTicks` omitted ⇒ 1. Actor / source / target roles.
 8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Passive regen uses `generate-pool` tag passives, not fake idle entities.
 9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
-10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content.
+10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content. Engine owns reusable patterns (**tiers**: partition + exclusive base/path tags; **content blocks**: self-contained chains collapsible to a debug-gated summary tag). Specific tier option lists live in the host.
 
 ## Vocabulary
 
