@@ -1,6 +1,6 @@
 # Architecture
 
-Related design guidance (living): [design/engine-composition.md](./design/engine-composition.md).
+Related design guidance (living): [design/engine-composition.md](./design/engine-composition.md), [design/settings-and-games.md](./design/settings-and-games.md).
 
 ## Goals
 
@@ -8,7 +8,7 @@ Extract a **framework-neutral** tag/requirement/effect/action evaluation core fr
 
 ## Layers
 
-1. **`grani-tag-engine`** — pure TypeScript library: tags, entities, requirements, effects, actions, registry adaptors, `EngineState`, commands, and `reduceEngineState`.
+1. **`grani-tag-engine`** — pure TypeScript library: tags, entities, requirements, effects, actions, registry adaptors, `EngineDocument` (Settings + Games), per-game `EngineState`, commands, and `reduceEngineDocument`.
 2. **`@grani/react`** — optional React adapter: `EngineProvider`, dispatch hooks, selectors, `useGameLoop`. Peer-depends on React; does not belong in the core package.
 3. **`@grani/schema-tools`** — generic JSON Schema utilities (AJV compile/validate, `$ref` resolve, MVP generation, validation HTML messages). No UI.
 4. **`@grani/content-schema`** — canonical Draft-07 schemas and types for entity catalogs, actions, requirements, and effects.
@@ -17,42 +17,44 @@ Extract a **framework-neutral** tag/requirement/effect/action evaluation core fr
 ## State model
 
 ```ts
-// Core (serializable)
+// Core save/runtime root (serializable) — protocol 0.2+
+EngineDocument {
+  engineVersion: string
+  settings: { activeGameId: string; universalTags: TagCollection }
+  games: Map<gameId, EngineState>   // playthrough slots; includes active
+}
+
+// Per-game slice (inside games)
 EngineState {
-  engineVersion: string              // major.minor.patch.build; compat key = major.minor
+  engineVersion: string
   tick: number
-  entities: Map<id, EntityInstance>  // tags + pools + metrics per entity
+  entities: Map<id, EntityInstance>
   spawnCounts: Record<definitionId, number>
-  primaryEntityId: string            // required default entity for general use (must be in entities)
+  primaryEntityId: string
+  continuousActions / continuousProgress
 }
 
 EntityInstance {
-  id, definitionId, tags, pools,
-  metrics: {
-    actionCounts,
-    poolHighWater, poolLowWater, poolLifetimeUsed,
-    poolMaxHighWater,
-    statHighWater, statLowWater
-  }
+  id, definitionId, tags, pools, slotSelections?,
+  metrics: { … }
 }
 
-// Host game composes presentation around entities
+// Host game composes presentation around the document
 AstrevnoState {
-  engine: EngineState
-  boardPositions: Record<entityId, position>
-  selectedEntityIds / window config
+  engine: EngineDocument   // or alias active game for UI
+  …
 }
 ```
 
-- Engine transitions are pure: `reduceEngineState(state, command, { registry, host })`.
-- Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, …).
+- Engine transitions are pure: `reduceEngineDocument(doc, command, { registry, host })`. Play commands apply to the active game; `settings-*` / `games-*` mutate the document.
+- Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, `games-switch`, `settings-grant-tag`, …).
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Costs/results default to the **actor**; source-state requirements default to the **source**.
-- `primaryEntityId` is a **required** engine pointer to an in-play entity: the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
-- `engineVersion` is stamped on every `EngineState` (`ENGINE_VERSION`, currently `0.1.0.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**—bump `minor` (or `major`) when the serialized protocol is incompatible; `patch`/`build` stay within an epoch. `engineStateFromJSON` rejects missing or foreign epochs.
+- `primaryEntityId` is a **required** per-game pointer to an in-play entity: the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
+- `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.2.0.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves.
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
-- Derived values (stats / pool maxima from tags) live in engine selectors.
+- Derived values (stats / pool maxima from tags) live in engine selectors; UniversalTags merge into active-game evaluation.
 - Entity **metrics** track action counts (manual / automatic / total) and high/low-water marks for pool current, pool-max, and stats so requirements can hang off history.
 
 ## Entity presentation
@@ -63,7 +65,8 @@ AstrevnoState {
 
 ## Requirement / effect builtins
 
-- Requirements: `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`
+- Requirements: `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `has-slot`, `has-slot-local`, `has-slot-universal`, `metric`
+
 - Effects: `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 - Games may still register namespaced custom types when needed.
 - TypeScript-defined actions may use `codeRequirements` (runtime-only, not for JSON).

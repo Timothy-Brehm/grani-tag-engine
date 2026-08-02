@@ -629,3 +629,9 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 - Putting updater functions or React setters into serializable state
 - Genre-specific builtins (`astrevno/…`, `wizard/…`) inside the core package when a generic recipe would do
 - Relying on tag deletion or host-only counters as the only history of what happened
+
+---
+
+## Settings + Games (Universal tags)
+
+The save/runtime root is an **EngineDocument** (`settings` + `games`), not a bare playthrough state. Cross-game tags live in `settings.universalTags` and merge into play-time tag reads. See [settings-and-games.md](./settings-and-games.md). Wiki “prestige” = UniversalTags (host-facing name may differ).

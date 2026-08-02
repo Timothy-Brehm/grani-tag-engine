@@ -126,11 +126,12 @@ export type ActionRoles = {
   readonly targetEntityId?: string;
 };
 
-/** View engine state as an evaluation context for a host payload. */
+/** View a game slice as an evaluation context for a host payload. */
 export function toEngineContext<THost>(
   state: EngineState,
   host: THost,
   roles: ActionRoles = {},
+  universalTags: TagCollection = TagCollection.create(),
 ): EngineContext<THost> {
   const focusId =
     roles.actorEntityId ?? roles.sourceEntityId ?? roles.targetEntityId;
@@ -139,6 +140,7 @@ export function toEngineContext<THost>(
     engine: state,
     host,
     tags: focus?.tags ?? TagCollection.create(),
+    universalTags,
     actorEntityId: roles.actorEntityId,
     sourceEntityId: roles.sourceEntityId,
     targetEntityId: roles.targetEntityId,

@@ -8,9 +8,21 @@ import type {
 import { normalizeSlotSelection } from './entity';
 import type { Tag } from './tag';
 import { createTag } from './tag';
+import type { TagCollection } from './tag-collection';
 import { upsertEntity, type EngineState } from './state';
+import {
+  collectionHasHeldSlot,
+  selectUniversalUnslottedActiveTags,
+  UNIVERSAL_TAGS_HOLDER_ID,
+} from './document';
 
 export type SlotCatalog = CatalogRegistryView;
+
+export type ActiveTagOptions = {
+  readonly universalTags?: TagCollection;
+  /** Merge unslotted universal tags into the active set (primary passives). */
+  readonly mergeUnslottedUniversal?: boolean;
+};
 
 /** Score for Best Only: sum of abs(strength) on the tag's own effects. */
 export function tagBestOnlyScore(tag: Tag): number {
@@ -235,11 +247,13 @@ export function flattenDependentTags(
 
 /**
  * Active roots plus flattened dependents (unique by name; roots first).
+ * When `options.mergeUnslottedUniversal`, also merges unslotted UniversalTags.
  */
 export function selectActiveTags(
   entity: EntityInstance,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: ActiveTagOptions,
 ): readonly Tag[] {
   const roots = selectActiveRootTags(entity, registry, entities);
   const out: Tag[] = [];
@@ -251,6 +265,14 @@ export function selectActiveTags(
     }
     flattenDependentTags(root, out, seen);
   }
+  if (options?.mergeUnslottedUniversal && options.universalTags) {
+    for (const tag of selectUniversalUnslottedActiveTags(options.universalTags)) {
+      if (!seen.has(tag.name)) {
+        seen.add(tag.name);
+        out.push(tag);
+      }
+    }
+  }
   return out;
 }
 
@@ -259,10 +281,21 @@ export function entityHasActiveTag(
   tagName: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: ActiveTagOptions,
 ): boolean {
-  return selectActiveTags(entity, registry, entities).some(
-    (tag) => tag.name === tagName,
-  );
+  if (
+    selectActiveTags(entity, registry, entities, options).some(
+      (tag) => tag.name === tagName,
+    )
+  ) {
+    return true;
+  }
+  if (options?.universalTags) {
+    return selectUniversalUnslottedActiveTags(options.universalTags).some(
+      (tag) => tag.name === tagName,
+    );
+  }
+  return false;
 }
 
 export function sumActiveTaggedFieldStrength(
@@ -272,9 +305,10 @@ export function sumActiveTaggedFieldStrength(
   keyValue: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: ActiveTagOptions,
 ): number {
   let total = 0;
-  for (const tag of selectActiveTags(entity, registry, entities)) {
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
     for (const effect of tag.effects) {
       if (effect.type !== effectType) {
         continue;
@@ -293,9 +327,10 @@ export function sumActiveTagEffectStrength(
   effectType: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: ActiveTagOptions,
 ): number {
   let total = 0;
-  for (const tag of selectActiveTags(entity, registry, entities)) {
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
     for (const effect of tag.effects) {
       if (effect.type === effectType) {
         total += effect.strength;
@@ -305,15 +340,26 @@ export function sumActiveTagEffectStrength(
   return total;
 }
 
+export { collectionHasHeldSlot };
+
 function selectionStillValid(
   owner: EntityInstance,
   slotId: string,
   ref: SlotSelectionRef,
   state: EngineState,
   registry: SlotCatalog | undefined,
+  universalTags?: TagCollection,
 ): boolean {
-  const holder = state.entities.get(ref.holderEntityId);
-  const tag = holder?.tags.get(ref.tagName);
+  let tag: Tag | undefined;
+  if (ref.holderEntityId === UNIVERSAL_TAGS_HOLDER_ID) {
+    tag = universalTags?.get(ref.tagName);
+  } else {
+    const holder =
+      ref.holderEntityId === owner.id
+        ? owner
+        : state.entities.get(ref.holderEntityId);
+    tag = holder?.tags.get(ref.tagName);
+  }
   if (!tag || tag.slot !== slotId) {
     return false;
   }
@@ -335,6 +381,7 @@ export function reconcileSlotSelections(
   state: EngineState,
   registry: SlotCatalog | undefined,
   preferTagName?: string,
+  universalTags?: TagCollection,
 ): EntityInstance {
   const next: Record<string, SlotSelectionRef> = {
     ...entity.slotSelections,
@@ -365,7 +412,17 @@ export function reconcileSlotSelections(
     }
 
     // selectable
-    if (current && selectionStillValid(entity, slotId, current, state, registry)) {
+    if (
+      current &&
+      selectionStillValid(
+        entity,
+        slotId,
+        current,
+        state,
+        registry,
+        universalTags,
+      )
+    ) {
       continue;
     }
 
@@ -429,6 +486,7 @@ export function reconcileSlotSelections(
 export function reconcileAllSlotSelections(
   state: EngineState,
   registry: SlotCatalog | undefined,
+  universalTags?: TagCollection,
 ): EngineState {
   let next = state;
   // Break cannotShareTag duplicates: keep lowest owner id, clear others
@@ -470,7 +528,13 @@ export function reconcileAllSlotSelections(
     if (!entity) {
       continue;
     }
-    const reconciled = reconcileSlotSelections(entity, next, registry);
+    const reconciled = reconcileSlotSelections(
+      entity,
+      next,
+      registry,
+      undefined,
+      universalTags,
+    );
     if (reconciled !== entity) {
       next = upsertEntity(next, reconciled);
     }
@@ -480,7 +544,8 @@ export function reconcileAllSlotSelections(
 
 /**
  * Select a held tag into a slot on `entity` (slot owner). The tag may live on
- * another entity (`holderEntityId`, default self). No-op if invalid.
+ * another entity (`holderEntityId`, default self) or on UniversalTags
+ * (`holderEntityId: 'settings'`). No-op if invalid.
  */
 export function withSlotSelection(
   entity: EntityInstance,
@@ -489,6 +554,7 @@ export function withSlotSelection(
   holderEntityId?: string,
   state?: EngineState,
   registry?: SlotCatalog,
+  universalTags?: TagCollection,
 ): EntityInstance {
   const holderId = holderEntityId ?? entity.id;
   const ref = normalizeSlotSelection(entity.id, {
@@ -499,9 +565,14 @@ export function withSlotSelection(
     return entity;
   }
 
-  const holder =
-    holderId === entity.id ? entity : state?.entities.get(holderId);
-  const tag = holder?.tags.get(tagName);
+  let tag: Tag | undefined;
+  if (holderId === UNIVERSAL_TAGS_HOLDER_ID) {
+    tag = universalTags?.get(tagName);
+  } else {
+    const holder =
+      holderId === entity.id ? entity : state?.entities.get(holderId);
+    tag = holder?.tags.get(tagName);
+  }
   if (!tag || tag.slot !== slotId) {
     return entity;
   }
