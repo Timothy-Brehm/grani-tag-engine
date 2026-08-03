@@ -205,9 +205,17 @@ describe('entity metrics', () => {
       { type: 'adjust-pool', entityId: 'hero', pool: 'Stick', delta: -100 },
       options,
     );
+    // Oversized spend fails entirely (no silent clamp-to-zero).
+    expect(state.entities.get('hero')!.pools.Stick).toBe(11);
+    expect(selectPoolLifetimeUsed(state.entities.get('hero')!, 'Stick')).toBe(4);
+
+    state = reduceEngineState(
+      state,
+      { type: 'adjust-pool', entityId: 'hero', pool: 'Stick', delta: -11 },
+      options,
+    );
     const hero = state.entities.get('hero')!;
     expect(hero.pools.Stick).toBe(0);
-    // Only the 11 actually removed count, not the requested 100.
     expect(selectPoolLifetimeUsed(hero, 'Stick')).toBe(15);
     expect(
       requirementsMet(

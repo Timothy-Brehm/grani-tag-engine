@@ -135,17 +135,22 @@ Today the engine derives numeric traits from tag passive effects of type `stat` 
 
 ### Pool
 
-A **pool** is a spendable (or fillable) quantity with a **current** value and a **maximum**.
+A **pool** is a quantity with a **maximum**, optional **reservation**, and spendable **available**.
 
-| Piece | Engine shape |
-|-------|----------------|
-| Current | `entity.pools[poolId]` |
-| Maximum | derived from tag effects `pool-max` (field `pool`) |
-| Change | `adjust-pool` effect / command (clamped to max) |
+| Term | Storage | Meaning |
+|------|---------|---------|
+| **Max** | Derived | Sum of active `pool-max` |
+| **Reserved** | Derived | Sum of active `reserve-pool` targeting this entity |
+| **Available** | **Stored** in `entity.pools[poolId]` | Spendable / reservable |
+| **Contents** | Derived | Available + Reserved |
 
-Pools model stamina, ingredients on hand, money, mana, stress, reputation points—anything that goes up and down and has capacity.
+**Invariants:** Contents ≤ Max. Spend (`adjust-pool` negative) fails if Available would go below 0. Regen / `generate-pool` fills Available only, capped at Max − Reserved. When Reserved increases (new active `reserve-pool`), Available decreases by the same Δ (transition refused if Available cannot cover it). When Reserved drops (remove tag/entity/unequip), Available rises.
 
-**Storage as progression:** raising `pool-max` is a meaningful unlock when actions require stockpiles.
+`reserve-pool` passive: `{ type: 'reserve-pool', pool, strength, name, scope?: 'primary' }`. Omit scope → reserve on the entity where the tag is active; `scope: 'primary'` → reserve on the primary (buildings/devices).
+
+Pools model stamina, stockpiles, mana, building **Space**, device **Power**—anything with capacity that can be spent and/or reserved.
+
+**Storage as progression:** raising `pool-max` is a meaningful unlock when actions require stockpiles or free capacity to reserve.
 
 ### Action (recipe)
 
@@ -299,8 +304,8 @@ Novelty/message prefixes stay `snake_case` after the role word (`message_strengt
 
 ```text
 EntityDefinition
-  ├─ initialTags  →  traits (stat/…) + pool maxima + generate-pool / continuous-* passives
-  ├─ initialPools →  starting currents
+  ├─ initialTags  →  traits (stat/…) + pool maxima + generate-pool / reserve-pool / continuous-* passives
+  ├─ initialPools →  starting Available amounts
   └─ actions[]    →  recipes offered when this entity is source
 
 Action
@@ -354,7 +359,7 @@ EngineRegistry (catalogs, not serialized in EngineState)
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
-**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 
@@ -403,17 +408,44 @@ These are the patterns we intend to reuse. Names can be thematic; the structure 
 
 ### 2. Capacity + consumption — Computer RAM
 
-**Intent:** usable capacity with a spendable current (programs loaded, buffer used, etc.).
+**Intent:** usable capacity with a spendable Available (programs loaded, buffer used, etc.).
 
 **Composition:**
 - Pool id `RAM` on the relevant entity (primary entity or a `computer` entity).
 - Max from tags: e.g. `Module_Baseboard_RAM` → `{ type: 'pool-max', pool: 'RAM', strength: 8 }`; upgrade stick `Module_DIMM_8G` adds another +8 via another tag.
-- Current in `pools.RAM` (how much is in use, or how much free—pick one convention and keep it).
-- **Load program** action: requirements `pool-max` / free current; costs `adjust-pool` RAM by −size (if current = free) or +size (if current = used).
+- Available in `pools.RAM` (convention: how much is free, or how much is used—pick one and keep it; with free convention, load spends Available).
+- **Load program** action: costs `adjust-pool` RAM by −size when Available is free headroom.
 - **Unload** reverses the adjust.
-- Clamping ensures you cannot exceed installed max.
+- Gains clamp to Max − Reserved; spends fail if Available is insufficient.
 
-Same pattern as Life/Stamina: **max from tags, current from pool, change via adjust-pool.**
+Same pattern as Life/Stamina: **max from tags, Available stored, change via adjust-pool.**
+
+### 2b. Constrained selection via reservation — Building Space + Sawmill
+
+**Intent:** wiki constrained selection (space for buildings) without a separate occupancy system—only **reserve**, never spend Space.
+
+**Composition:**
+- Primary pool `Space` with `pool-max` tags (e.g. `Camp_Space_Base` +8). Start Available = Max.
+- Sawmill entity initial tag `Building_Sawmill`: `{ type: 'reserve-pool', pool: 'Space', strength: 2, scope: 'primary', name: '…' }`.
+- Place = `spawn-entity` Sawmill (build action may also cost sticks). Destroy = `remove-entity` → Reserved drops → Available returns.
+- Continuous mill recipe on Sawmill, `durationTicks: 30`: `costsOverTime` adjust Logs −N on primary; `results` Boards +M. Ongoing run = continuous job (not process API).
+
+### 2c. Reserved mana — Strength spell
+
+**Intent:** ongoing buff that locks mana so it cannot be spent or regenerated into.
+
+**Composition:**
+- Tag `Spell_BullStrength` on primary: `{ type: 'stat', stat: 'Strength', strength: 2 }` + `{ type: 'reserve-pool', pool: 'Mana', strength: 5 }`.
+- Grant while casting; `remove-tag` to end → Mana Available returns; Strength drops.
+
+### 2d. Handheld device — Power + hand slots
+
+**Intent:** equippable item that reserves Power while selected in a hand slot.
+
+**Composition:**
+- SlotDefinitions `hand_left` / `hand_right` (`mode: 'selectable'`).
+- Tag `Item_WristComputer` with `slot: 'hand_left'` (or host picks left/right on select) + `{ type: 'reserve-pool', pool: 'Power', strength: 1, scope: 'primary' }` (+ optional Science `stat`).
+- `select-slot-item` while worn; unequip releases Power. Over-reserve (not enough Available Power) refuses the select.
 
 ### 3. Stockpiles with multiple capacity sources — Rock (+ bins + backpack)
 

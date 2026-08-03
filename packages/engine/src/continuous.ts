@@ -6,10 +6,11 @@ import type { Requirement } from './requirement';
 import type { EntityInstance } from './entity';
 import type { Tag } from './tag';
 import { toEngineContext, upsertEntity, type EngineState } from './state';
-import { selectPoolCurrent, selectPoolMax } from './selectors';
+import { selectPoolCurrent, selectPoolAvailableMax } from './selectors';
 import { selectActiveTags } from './slots';
 import type { SlotCatalog } from './slots';
-import { adjustEntityPool, type EntityMap } from './entity';
+import type { EntityMap } from './entity';
+import { tryAdjustEntityPool } from './pools';
 import { recordActionExecution } from './metrics';
 import { TagCollection } from './tag-collection';
 import { entitiesWithUniversal } from './document';
@@ -891,21 +892,32 @@ export function pulseGenerators(
         if (!due) {
           continue;
         }
-        const max = selectPoolMax(
+        const cur = selectPoolCurrent(entity, pool);
+        const availableMax = selectPoolAvailableMax(
+          next,
           entity,
           pool,
           registry,
-          entities,
-          activeOpts,
+          universalTags,
         );
-        const cur = selectPoolCurrent(entity, pool);
-        if (amount > 0 && cur >= max) {
+        if (amount > 0 && cur >= availableMax) {
           continue;
         }
         if (amount < 0 && cur <= 0) {
           continue;
         }
-        const adjusted = adjustEntityPool(entity, pool, amount, max, next.tick);
+        const adjusted = tryAdjustEntityPool(
+          next,
+          entity,
+          pool,
+          amount,
+          registry,
+          universalTags,
+          next.tick,
+        );
+        if (!adjusted) {
+          continue;
+        }
         entity = {
           ...adjusted,
           metrics: {
