@@ -47,6 +47,13 @@ export class TagCollection {
     return new TagCollection(next);
   }
 
+  /** Insert or replace a tag by name. */
+  set(tag: Tag): TagCollection {
+    const next = new Map(this.byName);
+    next.set(tag.name, createTag(tag));
+    return new TagCollection(next);
+  }
+
   remove(name: string): TagCollection {
     if (!this.byName.has(name)) {
       return this;

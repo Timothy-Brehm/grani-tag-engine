@@ -322,13 +322,27 @@ export function refreshEntityHighWaters(
   };
 
   for (const pool of Object.keys(entity.pools)) {
-    touchPool(pool, selectPoolCurrent(entity, pool));
+    touchPool(pool, selectPoolCurrent(entity, pool, registry));
   }
 
   const activeTags = selectActiveTags(entity, registry, entities);
-  const poolKeys = collectTaggedKeys(activeTags, 'pool-max', 'pool');
+  const poolKeys = new Set(collectTaggedKeys(activeTags, 'pool-max', 'pool'));
+  for (const tag of activeTags) {
+    for (const effect of tag.effects) {
+      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
+        poolKeys.add(effect.toPoolMax);
+      }
+      if (
+        effect.type === 'pool-link' &&
+        typeof effect.toPoolMax === 'string' &&
+        effect.toPoolMax
+      ) {
+        poolKeys.add(effect.toPoolMax);
+      }
+    }
+  }
   for (const pool of poolKeys) {
-    touchPool(pool, selectPoolCurrent(entity, pool));
+    touchPool(pool, selectPoolCurrent(entity, pool, registry));
     raisePoolMax(pool, selectPoolMax(entity, pool, registry, entities));
   }
 

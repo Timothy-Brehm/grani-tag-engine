@@ -53,7 +53,7 @@ import {
 } from './metrics';
 import {
   selectActiveCount,
-  selectPoolAvailableMax,
+  selectPoolEffectiveAvailableMax,
   selectPoolCurrent,
   selectPoolMax,
   selectSpawnCount,
@@ -405,7 +405,10 @@ export class EngineRegistry<THost = unknown> {
             requirement.amount
           );
         case 'pool-current':
-          return selectPoolCurrent(entity, requirement.pool) >= requirement.amount;
+          return (
+            selectPoolCurrent(entity, requirement.pool, this) >=
+            requirement.amount
+          );
         case 'pool-high-water':
           return (
             selectPoolHighWater(entity, requirement.pool) >= requirement.amount
@@ -493,10 +496,10 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return false;
         }
-        const current = selectPoolCurrent(entity, effect.pool);
+        const current = selectPoolCurrent(entity, effect.pool, this);
         const universalTags =
           context.universalTags ?? TagCollection.create();
-        const availableMax = selectPoolAvailableMax(
+        const availableMax = selectPoolEffectiveAvailableMax(
           context.engine,
           entity,
           effect.pool,

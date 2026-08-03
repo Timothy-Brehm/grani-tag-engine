@@ -4,17 +4,40 @@ export interface TagEffect {
   readonly strength: number;
   /** Optional payload for `stat` effects. */
   readonly stat?: string;
-  /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool`. */
+  /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool` / `pool-link`. */
   readonly pool?: string;
   /**
    * For `reserve-pool`: `'primary'` reserves on the primary entity;
    * omit to reserve on the entity where the tag is active.
    */
   readonly scope?: 'primary' | string;
-  /** Pulse amount for `generate-pool` (falls back to `strength`). */
+  /** Pulse amount for `generate-pool` (falls back to `strength`). Link coeff when set on outbound `stat`. */
   readonly amount?: number;
-  /** Tick interval for `generate-pool`. */
+  /** Tick interval for `generate-pool` / `toGeneratePool` / product-tag capacity. */
   readonly everyTicks?: number;
+  /**
+   * On `stat`: add `baseStat * (amount ?? 1)` to this pool’s max each select
+   * (live). Ignored for the live term when {@link productTag} is also set.
+   */
+  readonly toPoolMax?: string;
+  /**
+   * On `stat`: each due tick, pulse `baseStat * (amount ?? 1)` into this pool’s Available.
+   */
+  readonly toGeneratePool?: string;
+  /**
+   * On `stat` with {@link toPoolMax}: engine-maintained product tag that
+   * accumulates `pool-max` strength each due tick (growing capacity).
+   */
+  readonly productTag?: string;
+  /**
+   * On `pool-link`: add `effectiveAvailable(pool) * coeff` to this stat.
+   */
+  readonly toStat?: string;
+  /**
+   * On `generate-pool` / `toGeneratePool`: when true, may introduce the pool key.
+   * Default false for passive pulses.
+   */
+  readonly createPool?: boolean;
   /** Optional action filter for `continuous-speed` (`*` or omit = all). */
   readonly actionName?: string;
   /** Additive duration modifier for `continuous-speed` (applied first). */

@@ -8,8 +8,10 @@ import type {
 } from './continuous-types';
 import type { SlotCatalog } from './slots';
 import {
-  sumActiveTaggedFieldStrength,
-} from './slots';
+  selectStatValue as selectStatValueDerived,
+  selectPoolMax as selectPoolMaxDerived,
+  selectPoolEffectiveAvailable,
+} from './derive';
 
 export {
   entityHasActiveTag,
@@ -93,10 +95,8 @@ export function selectStatValue(
   entities?: EntityMap,
   options?: import('./slots').ActiveTagOptions,
 ): number {
-  return sumActiveTaggedFieldStrength(
+  return selectStatValueDerived(
     entity,
-    'stat',
-    'stat',
     stat,
     registry,
     entities,
@@ -111,10 +111,8 @@ export function selectPoolMax(
   entities?: EntityMap,
   options?: import('./slots').ActiveTagOptions,
 ): number {
-  return sumActiveTaggedFieldStrength(
+  return selectPoolMaxDerived(
     entity,
-    'pool-max',
-    'pool',
     pool,
     registry,
     entities,
@@ -125,9 +123,10 @@ export function selectPoolMax(
 export function selectPoolCurrent(
   entity: EntityInstance,
   pool: string,
+  registry?: SlotCatalog,
 ): number {
-  /** Stored value is Available (see pools.ts / composition doc). */
-  return entity.pools[pool] ?? 0;
+  /** Effective Available for requirements / gates. */
+  return selectPoolEffectiveAvailable(entity, pool, registry);
 }
 
 export {
@@ -135,10 +134,28 @@ export {
   selectPoolReserved,
   selectPoolContents,
   selectPoolAvailableMax,
+  selectPoolEffectiveAvailableMax,
+  selectPoolEffectiveReserved,
   computeReservedByEntity,
   reconcilePoolReservations,
   tryAdjustEntityPool,
 } from './pools';
+
+export {
+  selectBaseStatValue,
+  selectPoolMaxRaw,
+  selectPoolEffectiveAvailable,
+  selectPoolDisplayCurrent,
+  selectPoolDisplayMax,
+  poolCapacityStep,
+  poolDisplayStep,
+} from './derive';
+
+export {
+  POOL_QUANTITY_DECIMALS,
+  roundPoolQuantity,
+  floorPoolQuantity,
+} from './quantity';
 
 export function selectActiveCount(
   state: EngineState,
