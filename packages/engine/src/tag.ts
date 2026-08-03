@@ -4,8 +4,13 @@ export interface TagEffect {
   readonly strength: number;
   /** Optional payload for `stat` effects. */
   readonly stat?: string;
-  /** Optional payload for `pool-max` / `generate-pool` effects. */
+  /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool`. */
   readonly pool?: string;
+  /**
+   * For `reserve-pool`: `'primary'` reserves on the primary entity;
+   * omit to reserve on the entity where the tag is active.
+   */
+  readonly scope?: 'primary' | string;
   /** Pulse amount for `generate-pool` (falls back to `strength`). */
   readonly amount?: number;
   /** Tick interval for `generate-pool`. */

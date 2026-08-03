@@ -126,8 +126,19 @@ export function selectPoolCurrent(
   entity: EntityInstance,
   pool: string,
 ): number {
+  /** Stored value is Available (see pools.ts / composition doc). */
   return entity.pools[pool] ?? 0;
 }
+
+export {
+  selectPoolAvailable,
+  selectPoolReserved,
+  selectPoolContents,
+  selectPoolAvailableMax,
+  computeReservedByEntity,
+  reconcilePoolReservations,
+  tryAdjustEntityPool,
+} from './pools';
 
 export function selectActiveCount(
   state: EngineState,

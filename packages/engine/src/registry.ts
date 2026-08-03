@@ -22,7 +22,6 @@ import type {
 } from './effect';
 import type { EntityDefinition, EntityScope } from './entity';
 import {
-  adjustEntityPool,
   instantiateEntity,
   withEntityTags,
 } from './entity';
@@ -35,6 +34,8 @@ import {
   collectionHasHeldSlot,
   entitiesWithUniversal,
 } from './document';
+import { tryAdjustEntityPool } from './pools';
+import { TagCollection } from './tag-collection';
 import type {
   PoolDefinition,
   SlotDefinition,
@@ -52,6 +53,7 @@ import {
 } from './metrics';
 import {
   selectActiveCount,
+  selectPoolAvailableMax,
   selectPoolCurrent,
   selectPoolMax,
   selectSpawnCount,
@@ -245,6 +247,7 @@ export class EngineRegistry<THost = unknown> {
    * Registers builtins: free/forbidden/tag/has-slot/has-slot-local/
    * has-slot-universal/stat/pool-max/entity-count/metric requirements and
    * grant-tag/adjust-pool/spawn-entity/remove-entity effects.
+   * Tag passives include reserve-pool (derived reservation).
    */
   createBuiltinAdaptors(): this {
     this.registerRequirement('free', () => true);
@@ -491,15 +494,18 @@ export class EngineRegistry<THost = unknown> {
           return false;
         }
         const current = selectPoolCurrent(entity, effect.pool);
-        const max = selectPoolMax(
+        const universalTags =
+          context.universalTags ?? TagCollection.create();
+        const availableMax = selectPoolAvailableMax(
+          context.engine,
           entity,
           effect.pool,
           this,
-          context.engine.entities,
+          universalTags,
         );
         return effect.strength > 0
-          ? current < max
-          : current > -effect.strength;
+          ? current < availableMax
+          : current >= -effect.strength;
       },
       apply: (effect: AdjustPoolEffect, context) => {
         const scope = defaultEffectScope(context, effect.scope);
@@ -507,18 +513,20 @@ export class EngineRegistry<THost = unknown> {
         if (!entity) {
           return context;
         }
-        const max = selectPoolMax(
-          entity,
-          effect.pool,
-          this,
-          context.engine.entities,
-        );        const nextEntity = adjustEntityPool(
+        const universalTags =
+          context.universalTags ?? TagCollection.create();
+        const nextEntity = tryAdjustEntityPool(
+          context.engine,
           entity,
           effect.pool,
           effect.strength,
-          max,
+          this,
+          universalTags,
           context.engine.tick,
         );
+        if (!nextEntity) {
+          return context;
+        }
         return withScopedEntity(context, scope, nextEntity);
       },
     });

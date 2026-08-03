@@ -163,22 +163,25 @@ describe('generators and continuous actions', () => {
     expect(state.continuousActions.has(key)).toBe(true);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(5);
 
-    // Builtin canHappen for spend requires current > cost; from 5 we can pay
-    // four -1 slices (→ stamina 1, progress 4), then the next slice pauses.
+    // Spend canHappen allows current >= cost; from 5 we pay five -1 slices
+    // (→ stamina 0, progress 50%). Job remains active until the next unpaid slice.
     state = reduceEngineState(state, { type: 'tick', steps: 5 }, options);
-    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(0);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
+    expect(state.continuousActions.has(key)).toBe(true);
+
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
     expect(state.continuousActions.has(key)).toBe(false);
-    expect(state.continuousProgress.get(key)?.progress).toBe(40);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
     expect(continuousProgressPercent(state.continuousProgress.get(key)!)).toBe(
-      40,
+      50,
     );
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(0);
 
-    // Resume after refill — no re-pay start cost. Need enough stamina that
-    // canHappen (current > slice) still holds through the remaining slices.
+    // Resume after refill — no re-pay start cost.
     state = reduceEngineState(
       state,
-      { type: 'adjust-pool', entityId: 'hero', pool: 'Stamina', delta: 9 },
+      { type: 'adjust-pool', entityId: 'hero', pool: 'Stamina', delta: 10 },
       options,
     );
     state = reduceEngineState(
@@ -187,9 +190,9 @@ describe('generators and continuous actions', () => {
       options,
     );
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
-    expect(state.continuousProgress.get(key)?.progress).toBe(40);
+    expect(state.continuousProgress.get(key)?.progress).toBe(50);
 
-    state = reduceEngineState(state, { type: 'tick', steps: 6 }, options);
+    state = reduceEngineState(state, { type: 'tick', steps: 5 }, options);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
     expect(state.continuousProgress.has(key)).toBe(false);
     expect(state.continuousActions.has(key)).toBe(false);

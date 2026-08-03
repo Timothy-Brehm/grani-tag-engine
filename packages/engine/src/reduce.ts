@@ -12,12 +12,15 @@ import {
 import { TagCollection } from './tag-collection';
 import { clearProcessPool, setProcessAllocation } from './process';
 import {
-  adjustEntityPool,
   instantiateEntity,
   withEntityTags,
   type EntityInstance,
 } from './entity';
-import { selectPoolMax, selectSpawnCount } from './selectors';
+import { selectSpawnCount } from './selectors';
+import {
+  reconcilePoolReservations,
+  tryAdjustEntityPool,
+} from './pools';
 import {
   advanceContinuousActions,
   cancelContinuousAction,
@@ -121,6 +124,23 @@ export function reduceEngineState<THost = unknown>(
   command: EngineCommand<THost>,
   options: ReduceEngineOptions<THost>,
 ): EngineState {
+  const next = reduceEngineStateInner(state, command, options);
+  if (next === state) {
+    return state;
+  }
+  return reconcilePoolReservations(
+    state,
+    next,
+    options.registry,
+    options.universalTags ?? TagCollection.create(),
+  );
+}
+
+function reduceEngineStateInner<THost = unknown>(
+  state: EngineState,
+  command: EngineCommand<THost>,
+  options: ReduceEngineOptions<THost>,
+): EngineState {
   switch (command.type) {
     case 'add-tag': {
       const entity = state.entities.get(command.entityId);
@@ -174,22 +194,19 @@ export function reduceEngineState<THost = unknown>(
       if (!entity) {
         return state;
       }
-      const max = selectPoolMax(
+      const adjusted = tryAdjustEntityPool(
+        state,
         entity,
         command.pool,
+        command.delta,
         options.registry,
-        state.entities,
+        options.universalTags ?? TagCollection.create(),
+        state.tick,
       );
-      return upsertEntity(
-        state,
-        adjustEntityPool(
-          entity,
-          command.pool,
-          command.delta,
-          max,
-          state.tick,
-        ),
-      );
+      if (!adjusted) {
+        return state;
+      }
+      return upsertEntity(state, adjusted);
     }
     case 'spawn-entity': {
       const definition = options.registry.getEntityDefinition(

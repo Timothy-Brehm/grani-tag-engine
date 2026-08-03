@@ -87,6 +87,7 @@ export type {
   AdjustPoolEffect,
   GrantTagEffect,
   RemoveEntityEffect,
+  ReservePoolEffect,
   SpawnEntityEffect,
 } from './effect';
 
@@ -252,6 +253,10 @@ export {
   selectStatValue,
   selectPoolMax,
   selectPoolCurrent,
+  selectPoolAvailable,
+  selectPoolReserved,
+  selectPoolContents,
+  selectPoolAvailableMax,
   selectActiveCount,
   selectSpawnCount,
   selectPrimaryEntity,
@@ -259,6 +264,12 @@ export {
   selectContinuousActiveJobs,
   selectContinuousProgress,
 } from './selectors';
+
+export {
+  computeReservedByEntity,
+  reconcilePoolReservations,
+  tryAdjustEntityPool,
+} from './pools';
 
 export type {
   ProcessPoolKind,
