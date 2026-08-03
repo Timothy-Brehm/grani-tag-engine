@@ -79,8 +79,47 @@ export type EngineCommand<THost = unknown> =
       readonly entityId: string;
       readonly slot: string;
       readonly tagName: string;
-      /** Entity that holds the tag; defaults to `entityId`. */
+      /** Entity that holds the tag; defaults to `entityId`. Use `settings` for UniversalTags. */
       readonly holderEntityId?: string;
+    }
+  | {
+      readonly type: 'settings-grant-tag';
+      readonly tagName: string;
+    }
+  | {
+      readonly type: 'settings-add-tag';
+      readonly tag: Tag;
+    }
+  | {
+      readonly type: 'settings-remove-tag';
+      readonly name: string;
+    }
+  | {
+      readonly type: 'games-create';
+      readonly gameId: string;
+      /**
+       * Host-built initial playthrough. Apply UniversalTags start unlocks
+       * while building this slice (see settings-and-games bootstrap pattern),
+       * then pass the finished game here.
+       */
+      readonly game: import('./state').EngineState;
+      readonly switchTo?: boolean;
+      readonly meta?: import('./document').GameMeta;
+    }
+  | {
+      readonly type: 'games-switch';
+      readonly gameId: string;
+    }
+  | {
+      readonly type: 'games-fork';
+      readonly fromGameId?: string;
+      readonly newGameId: string;
+      readonly switchTo?: boolean;
+      readonly meta?: import('./document').GameMeta;
+    }
+  | {
+      readonly type: 'games-delete';
+      readonly gameId: string;
     }
   /** Reserved recurring-action endpoints. They currently throw explicitly. */
   | {

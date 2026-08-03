@@ -18,6 +18,34 @@ export type {
 } from './requirement';
 
 export type {
+  EngineDocument,
+  EngineDocumentJSON,
+  EngineSettings,
+  EngineSettingsJSON,
+  GameMeta,
+} from './document';
+export {
+  UNIVERSAL_TAGS_HOLDER_ID,
+  DEFAULT_GAME_ID,
+  createEngineDocument,
+  wrapGameAsDocument,
+  getActiveGame,
+  migrateEngineStateToDocument,
+  engineDocumentToJSON,
+  engineDocumentFromJSON,
+  gameStateFromJSON,
+  createUniversalHolderEntity,
+  entitiesWithUniversal,
+  withActiveGame,
+  withActiveGameId,
+  withUniversalTags,
+  collectionHasHeldSlot,
+  selectUniversalUnslottedActiveTags,
+} from './document';
+
+export type { ActiveTagOptions } from './slots';
+
+export type {
   CatalogMeta,
   SlotDefinition,
   PoolDefinition,
@@ -173,6 +201,7 @@ export {
   withScopedEntity,
   getScopedEntity,
   resolveScopedEntityId,
+  withContextUniversalTags,
 } from './context';
 
 export type { RequirementAdaptor, EffectAdaptor, HostWithTagCatalog } from './registry';
@@ -249,4 +278,6 @@ export {
   reduceEngineState,
   reduceEngineCommands,
   foldEngineCommands,
+  reduceEngineDocument,
+  reduceEngineCommandsDocument,
 } from './reduce';

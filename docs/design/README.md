@@ -5,6 +5,7 @@ These are **living documents**. When design debates or agent guidance conflict w
 | Doc | Purpose |
 |-----|---------|
 | [engine-composition.md](./engine-composition.md) | Game-agnostic composition of entities, tags, traits, pools, and actions |
+| [settings-and-games.md](./settings-and-games.md) | EngineDocument: Settings + Games, UniversalTags (wiki prestige) |
 
 Implementation status and package layout: [../architecture.md](../architecture.md).
 

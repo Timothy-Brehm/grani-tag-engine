@@ -31,6 +31,10 @@ import {
   entityHasHeldSlot,
   reconcileSlotSelections,
 } from './slots';
+import {
+  collectionHasHeldSlot,
+  entitiesWithUniversal,
+} from './document';
 import type {
   PoolDefinition,
   SlotDefinition,
@@ -238,12 +242,25 @@ export class EngineRegistry<THost = unknown> {
   }
 
   /**
-   * Registers builtins: free/forbidden/tag/has-slot/stat/pool-max/entity-count/metric
-   * requirements and grant-tag/adjust-pool/spawn-entity/remove-entity effects.
+   * Registers builtins: free/forbidden/tag/has-slot/has-slot-local/
+   * has-slot-universal/stat/pool-max/entity-count/metric requirements and
+   * grant-tag/adjust-pool/spawn-entity/remove-entity effects.
    */
   createBuiltinAdaptors(): this {
     this.registerRequirement('free', () => true);
     this.registerRequirement('forbidden', () => false);
+
+    const evalMap = (context: EngineContext<THost>) =>
+      entitiesWithUniversal(context.engine, context.universalTags);
+
+    const activeOpts = (
+      context: EngineContext<THost>,
+      entity: { id: string },
+    ) => ({
+      universalTags: context.universalTags,
+      mergeUnslottedUniversal:
+        entity.id === context.engine.primaryEntityId,
+    });
 
     this.registerRequirement('tag', (requirement: TagRequirement, context) => {
       const scope = defaultRequirementScope(context, requirement.scope);
@@ -253,24 +270,57 @@ export class EngineRegistry<THost = unknown> {
             entity,
             requirement.tagName,
             this,
-            context.engine.entities,
+            evalMap(context),
+            {
+              universalTags: context.universalTags,
+              mergeUnslottedUniversal: false,
+            },
           )
         : false;
       return requirement.exists ? present : !present;
     });
 
-    this.registerRequirement(
-      'has-slot',
-      (requirement: HasSlotRequirement, context) => {
-        const scope = defaultRequirementScope(context, requirement.scope);
-        const entity = getScopedEntity(context, scope);
-        const present = entity
-          ? entityHasHeldSlot(entity, requirement.slot)
-          : false;
+    const hasSlotPresent = (
+      requirement: HasSlotRequirement,
+      context: EngineContext<THost>,
+      mode: 'any' | 'local' | 'universal',
+    ): boolean => {
+      const local =
+        mode === 'universal'
+          ? false
+          : (() => {
+              const scope = defaultRequirementScope(context, requirement.scope);
+              const entity = getScopedEntity(context, scope);
+              return entity
+                ? entityHasHeldSlot(entity, requirement.slot)
+                : false;
+            })();
+      const universal =
+        mode === 'local'
+          ? false
+          : collectionHasHeldSlot(context.universalTags, requirement.slot);
+      if (mode === 'local') {
+        return local;
+      }
+      if (mode === 'universal') {
+        return universal;
+      }
+      return local || universal;
+    };
+
+    const registerHasSlot = (
+      type: 'has-slot' | 'has-slot-local' | 'has-slot-universal',
+      mode: 'any' | 'local' | 'universal',
+    ) => {
+      this.registerRequirement(type, (requirement: HasSlotRequirement, context) => {
+        const present = hasSlotPresent(requirement, context, mode);
         const exists = requirement.exists ?? true;
         return exists ? present : !present;
-      },
-    );
+      });
+    };
+    registerHasSlot('has-slot', 'any');
+    registerHasSlot('has-slot-local', 'local');
+    registerHasSlot('has-slot-universal', 'universal');
 
     this.registerRequirement('stat', (requirement: StatRequirement, context) => {
       const scope = defaultRequirementScope(context, requirement.scope);
@@ -283,7 +333,8 @@ export class EngineRegistry<THost = unknown> {
           entity,
           requirement.stat,
           this,
-          context.engine.entities,
+          evalMap(context),
+          activeOpts(context, entity),
         ) >= requirement.amount
       );
     });
@@ -301,7 +352,8 @@ export class EngineRegistry<THost = unknown> {
             entity,
             requirement.pool,
             this,
-            context.engine.entities,
+            evalMap(context),
+            activeOpts(context, entity),
           ) > requirement.amount
         );
       },

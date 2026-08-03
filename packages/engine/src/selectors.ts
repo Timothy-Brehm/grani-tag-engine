@@ -91,6 +91,7 @@ export function selectStatValue(
   stat: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: import('./slots').ActiveTagOptions,
 ): number {
   return sumActiveTaggedFieldStrength(
     entity,
@@ -99,6 +100,7 @@ export function selectStatValue(
     stat,
     registry,
     entities,
+    options,
   );
 }
 
@@ -107,6 +109,7 @@ export function selectPoolMax(
   pool: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
+  options?: import('./slots').ActiveTagOptions,
 ): number {
   return sumActiveTaggedFieldStrength(
     entity,
@@ -115,6 +118,7 @@ export function selectPoolMax(
     pool,
     registry,
     entities,
+    options,
   );
 }
 

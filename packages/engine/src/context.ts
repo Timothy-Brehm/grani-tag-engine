@@ -12,6 +12,8 @@ export interface EngineContext<THost = unknown> {
    * target). Prefer scoped helpers for multi-entity actions.
    */
   readonly tags: TagCollection;
+  /** Cross-game tags from Settings.universalTags (may be empty). */
+  readonly universalTags: TagCollection;
   readonly actorEntityId?: string;
   readonly sourceEntityId?: string;
   readonly targetEntityId?: string;
@@ -79,4 +81,11 @@ export function withScopedEntity<THost>(
   entity: EntityInstance,
 ): EngineContext<THost> {
   return withEngineState(ctx, upsertEntity(ctx.engine, entity));
+}
+
+export function withContextUniversalTags<THost>(
+  ctx: EngineContext<THost>,
+  universalTags: TagCollection,
+): EngineContext<THost> {
+  return { ...ctx, universalTags };
 }

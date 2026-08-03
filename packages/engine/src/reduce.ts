@@ -1,11 +1,12 @@
 import type { EngineCommand } from './command';
-import type { EngineRegistry } from './registry';
+import type { EngineRegistry, HostWithTagCatalog } from './registry';
 import {
   removeEntity,
   upsertEntity,
   withEngineTick,
   withPrimaryEntityId,
   withEngineSpawnCounts,
+  engineStateToJSON,
   type EngineState,
 } from './state';
 import { TagCollection } from './tag-collection';
@@ -32,10 +33,40 @@ import {
   withSlotSelection,
 } from './slots';
 import { slotDefinitionMode } from './catalog';
+import { createTag, type Tag } from './tag';
+import {
+  UNIVERSAL_TAGS_HOLDER_ID,
+  getActiveGame,
+  gameStateFromJSON,
+  withActiveGame,
+  withActiveGameId,
+  withUniversalTags,
+  type EngineDocument,
+} from './document';
+
+function lookupCatalogTagFromHost(host: unknown, name: string): Tag | undefined {
+  if (!host || typeof host !== 'object' || !('tagCatalog' in host)) {
+    return undefined;
+  }
+  const catalog = (host as HostWithTagCatalog).tagCatalog;
+  if (!catalog) {
+    return undefined;
+  }
+  if (catalog instanceof Map) {
+    return catalog.get(name);
+  }
+  const record = catalog as Readonly<Record<string, Tag>>;
+  if (Object.prototype.hasOwnProperty.call(record, name)) {
+    return record[name];
+  }
+  return undefined;
+}
 
 export type ReduceEngineOptions<THost = unknown> = {
   readonly registry: EngineRegistry<THost>;
   readonly host: THost;
+  /** Settings.universalTags when reducing inside a document (default empty). */
+  readonly universalTags?: import('./tag-collection').TagCollection;
 };
 
 function applyEntityTags<THost>(
@@ -58,6 +89,7 @@ function applyEntityTags<THost>(
     provisional,
     options.registry,
     preferTagName,
+    options.universalTags,
   );
   return upsertEntity(provisional, reconciled);
 }
@@ -114,7 +146,11 @@ export function reduceEngineState<THost = unknown>(
         entity.tags.remove(command.name),
         options,
       );
-      return reconcileAllSlotSelections(next, options.registry);
+      return reconcileAllSlotSelections(
+        next,
+        options.registry,
+        options.universalTags,
+      );
     }
     case 'replace-tags': {
       const entity = state.entities.get(command.entityId);
@@ -127,7 +163,11 @@ export function reduceEngineState<THost = unknown>(
         TagCollection.create(command.tags),
         options,
       );
-      return reconcileAllSlotSelections(next, options.registry);
+      return reconcileAllSlotSelections(
+        next,
+        options.registry,
+        options.universalTags,
+      );
     }
     case 'adjust-pool': {
       const entity = state.entities.get(command.entityId);
@@ -192,17 +232,27 @@ export function reduceEngineState<THost = unknown>(
     }
     case 'remove-entity': {
       const next = removeEntity(state, command.entityId);
-      return reconcileAllSlotSelections(next, options.registry);
+      return reconcileAllSlotSelections(
+        next,
+        options.registry,
+        options.universalTags,
+      );
     }
     case 'set-primary-entity':
       return withPrimaryEntityId(state, command.entityId);
     case 'tick': {
       const steps = command.steps ?? 1;
       let next = state;
+      const universalTags =
+        options.universalTags ?? TagCollection.create();
       for (let i = 0; i < steps; i += 1) {
         next = withEngineTick(next, next.tick + 1);
-        next = pulseGenerators(next, options.registry);
-        next = advanceContinuousActions(next, options);
+        next = pulseGenerators(next, options.registry, universalTags);
+        next = advanceContinuousActions(next, {
+          registry: options.registry,
+          host: options.host,
+          universalTags,
+        });
       }
       return next;
     }
@@ -218,6 +268,7 @@ export function reduceEngineState<THost = unknown>(
         targetEntityId: command.targetEntityId,
         execution: command.execution ?? 'manual',
         mode: command.mode ?? 'strict',
+        universalTags: options.universalTags,
       });
     }
     case 'pause-continuous-action': {
@@ -240,8 +291,12 @@ export function reduceEngineState<THost = unknown>(
         return state;
       }
       const holderId = command.holderEntityId ?? command.entityId;
-      const holder = state.entities.get(holderId);
-      const tag = holder?.tags.get(command.tagName);
+      const universalTags =
+        options.universalTags ?? TagCollection.create();
+      const tag =
+        holderId === UNIVERSAL_TAGS_HOLDER_ID
+          ? universalTags.get(command.tagName)
+          : state.entities.get(holderId)?.tags.get(command.tagName);
       if (!tag || tag.slot !== command.slot) {
         return state;
       }
@@ -268,9 +323,20 @@ export function reduceEngineState<THost = unknown>(
           holderId,
           state,
           options.registry,
+          universalTags,
         ),
       );
     }
+    case 'settings-grant-tag':
+    case 'settings-add-tag':
+    case 'settings-remove-tag':
+    case 'games-create':
+    case 'games-switch':
+    case 'games-fork':
+    case 'games-delete':
+      throw new Error(
+        `Command "${command.type}" requires reduceEngineDocument`,
+      );
     case 'set-process-allocation':
       return setProcessAllocation({
         processId: command.processId,
@@ -283,6 +349,133 @@ export function reduceEngineState<THost = unknown>(
       return _exhaustive;
     }
   }
+}
+
+function isDocumentCommand(type: string): boolean {
+  return (
+    type.startsWith('settings-') ||
+    type.startsWith('games-')
+  );
+}
+
+/**
+ * Pure document transition. Play commands apply to the active game;
+ * settings-/games- commands mutate the document envelope.
+ */
+export function reduceEngineDocument<THost = unknown>(
+  doc: EngineDocument,
+  command: EngineCommand<THost>,
+  options: ReduceEngineOptions<THost>,
+): EngineDocument {
+  const opts: ReduceEngineOptions<THost> = {
+    ...options,
+    universalTags: doc.settings.universalTags,
+  };
+
+  switch (command.type) {
+    case 'settings-grant-tag': {
+      if (doc.settings.universalTags.has(command.tagName)) {
+        return doc;
+      }
+      const fromCatalog = lookupCatalogTagFromHost(
+        options.host,
+        command.tagName,
+      );
+      const tag = fromCatalog ?? createTag({ name: command.tagName, effects: [] });
+      return withUniversalTags(doc, doc.settings.universalTags.add(tag));
+    }
+    case 'settings-add-tag': {
+      if (doc.settings.universalTags.has(command.tag.name)) {
+        return doc;
+      }
+      return withUniversalTags(
+        doc,
+        doc.settings.universalTags.add(command.tag),
+      );
+    }
+    case 'settings-remove-tag': {
+      if (!doc.settings.universalTags.has(command.name)) {
+        return doc;
+      }
+      return withUniversalTags(
+        doc,
+        doc.settings.universalTags.remove(command.name),
+      );
+    }
+    case 'games-create': {
+      if (doc.games.has(command.gameId)) {
+        return doc;
+      }
+      const games = new Map(doc.games);
+      games.set(command.gameId, command.game);
+      const gameMeta = new Map(doc.gameMeta);
+      if (command.meta) {
+        gameMeta.set(command.gameId, command.meta);
+      }
+      let next: EngineDocument = {
+        ...doc,
+        games,
+        gameMeta,
+      };
+      if (command.switchTo !== false) {
+        next = withActiveGameId(next, command.gameId);
+      }
+      return next;
+    }
+    case 'games-switch':
+      return withActiveGameId(doc, command.gameId);
+    case 'games-fork': {
+      const fromId = command.fromGameId ?? doc.settings.activeGameId;
+      const source = doc.games.get(fromId);
+      if (!source || doc.games.has(command.newGameId)) {
+        return doc;
+      }
+      const clone = gameStateFromJSON(engineStateToJSON(source));
+      const games = new Map(doc.games);
+      games.set(command.newGameId, clone);
+      const gameMeta = new Map(doc.gameMeta);
+      if (command.meta) {
+        gameMeta.set(command.newGameId, command.meta);
+      }
+      let next: EngineDocument = { ...doc, games, gameMeta };
+      if (command.switchTo) {
+        next = withActiveGameId(next, command.newGameId);
+      }
+      return next;
+    }
+    case 'games-delete': {
+      if (
+        command.gameId === doc.settings.activeGameId ||
+        doc.games.size <= 1 ||
+        !doc.games.has(command.gameId)
+      ) {
+        return doc;
+      }
+      const games = new Map(doc.games);
+      games.delete(command.gameId);
+      const gameMeta = new Map(doc.gameMeta);
+      gameMeta.delete(command.gameId);
+      return { ...doc, games, gameMeta };
+    }
+    default: {
+      if (isDocumentCommand(command.type)) {
+        return doc;
+      }
+      const nextGame = reduceEngineState(getActiveGame(doc), command, opts);
+      return withActiveGame(doc, nextGame);
+    }
+  }
+}
+
+export function reduceEngineCommandsDocument<THost = unknown>(
+  doc: EngineDocument,
+  commands: readonly EngineCommand<THost>[],
+  options: ReduceEngineOptions<THost>,
+): EngineDocument {
+  return commands.reduce(
+    (next, command) => reduceEngineDocument(next, command, options),
+    doc,
+  );
 }
 
 export function reduceEngineCommands<THost = unknown>(

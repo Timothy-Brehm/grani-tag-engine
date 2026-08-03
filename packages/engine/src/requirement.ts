@@ -28,15 +28,18 @@ export type PoolMaxRequirement = {
 };
 
 export type HasSlotRequirement = {
-  readonly type: 'has-slot';
+  readonly type: 'has-slot' | 'has-slot-local' | 'has-slot-universal';
   readonly slot: string;
   /**
    * Whether the entity must own (`true`, default) or must not own (`false`) at
    * least one held tag whose `slot` equals this id. Ownership only—does not
    * require the tag to be the active/selected loadout item.
+   * - `has-slot`: local entity **or** UniversalTags
+   * - `has-slot-local`: scoped entity only
+   * - `has-slot-universal`: Settings.universalTags only
    */
   readonly exists?: boolean;
-  /** Defaults to source, then actor. */
+  /** Defaults to source, then actor. Ignored for `has-slot-universal`. */
   readonly scope?: EntityScope;
 };
 

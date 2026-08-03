@@ -71,7 +71,7 @@ describe('EngineState and reduceEngineState', () => {
       engineStateFromJSON({ ...json, engineVersion: undefined as never }),
     ).toThrow(/Missing engineVersion/);
     expect(() =>
-      engineStateFromJSON({ ...json, engineVersion: '0.2.0.0' }),
+      engineStateFromJSON({ ...json, engineVersion: '0.1.0.0' }),
     ).toThrow(/Incompatible engineVersion/);
   });
 

@@ -11,6 +11,8 @@ import { selectActiveTags } from './slots';
 import type { SlotCatalog } from './slots';
 import { adjustEntityPool, type EntityMap } from './entity';
 import { recordActionExecution } from './metrics';
+import { TagCollection } from './tag-collection';
+import { entitiesWithUniversal } from './document';
 
 import {
   continuousProgressKey,
@@ -353,6 +355,7 @@ export type StartContinuousOptions<THost = unknown> = {
   readonly targetEntityId?: string;
   readonly execution?: 'manual' | 'automatic';
   readonly mode?: 'strict' | 'safe';
+  readonly universalTags?: import('./tag-collection').TagCollection;
 };
 
 /**
@@ -387,12 +390,18 @@ export function startContinuousAction<THost>(
   const slotMax = selectContinuousSlotMax(
     actor,
     options.registry,
-    state.entities,
+    entitiesWithUniversal(
+      state,
+      options.universalTags ?? TagCollection.create(),
+    ),
   );
   const allowInstant = selectAllowInstantWhileContinuous(
     actor,
     options.registry,
-    state.entities,
+    entitiesWithUniversal(
+      state,
+      options.universalTags ?? TagCollection.create(),
+    ),
   );
 
   // Busy lock: any active job blocks new duration-1 starts unless allow tag.
@@ -404,11 +413,16 @@ export function startContinuousAction<THost>(
     return state;
   }
 
-  let ctx = toEngineContext(state, options.host, {
-    actorEntityId: options.actorEntityId,
-    sourceEntityId: options.sourceEntityId,
-    targetEntityId: options.targetEntityId,
-  });
+  let ctx = toEngineContext(
+    state,
+    options.host,
+    {
+      actorEntityId: options.actorEntityId,
+      sourceEntityId: options.sourceEntityId,
+      targetEntityId: options.targetEntityId,
+    },
+    options.universalTags ?? TagCollection.create(),
+  );
 
   if (
     !requirementsMet(options.registry, options.action.requirements, ctx) ||
@@ -602,6 +616,7 @@ type AdvanceOptions<THost> = {
   readonly host: THost;
   readonly execution: 'manual' | 'automatic';
   readonly mode: 'strict' | 'safe';
+  readonly universalTags?: import('./tag-collection').TagCollection;
 };
 
 function advanceOneJob<THost>(
@@ -620,11 +635,16 @@ function advanceOneJob<THost>(
     return pauseContinuousAction(state, progressKey);
   }
 
-  let ctx = toEngineContext(state, options.host, {
-    actorEntityId: record.actorEntityId,
-    sourceEntityId: record.sourceEntityId,
-    targetEntityId: record.targetEntityId,
-  });
+  let ctx = toEngineContext(
+    state,
+    options.host,
+    {
+      actorEntityId: record.actorEntityId,
+      sourceEntityId: record.sourceEntityId,
+      targetEntityId: record.targetEntityId,
+    },
+    options.universalTags ?? TagCollection.create(),
+  );
 
   const action = actionFromSnapshot(record.action);
 
@@ -743,11 +763,16 @@ function completeContinuousJob<THost>(
     });
   }
 
-  let ctx = toEngineContext(state, options.host, {
-    actorEntityId: record.actorEntityId,
-    sourceEntityId: record.sourceEntityId,
-    targetEntityId: record.targetEntityId,
-  });
+  let ctx = toEngineContext(
+    state,
+    options.host,
+    {
+      actorEntityId: record.actorEntityId,
+      sourceEntityId: record.sourceEntityId,
+      targetEntityId: record.targetEntityId,
+    },
+    options.universalTags ?? TagCollection.create(),
+  );
 
   const action = actionFromSnapshot(record.action);
   const settleFraction = Math.max(0, (100 - record.progress) / 100);
@@ -797,6 +822,7 @@ export function advanceContinuousActions<THost>(
   options: {
     readonly registry: EngineRegistry<THost>;
     readonly host: THost;
+    readonly universalTags?: import('./tag-collection').TagCollection;
   },
 ): EngineState {
   let next = state;
@@ -810,6 +836,7 @@ export function advanceContinuousActions<THost>(
       host: options.host,
       execution: 'automatic',
       mode: 'strict',
+      universalTags: options.universalTags,
     });
   }
   return next;
@@ -822,8 +849,10 @@ export function advanceContinuousActions<THost>(
 export function pulseGenerators(
   state: EngineState,
   registry?: SlotCatalog,
+  universalTags: TagCollection = TagCollection.create(),
 ): EngineState {
   let next = state;
+  const entities = entitiesWithUniversal(next, universalTags);
   for (const entityId of [...next.entities.keys()]) {
     let entity = next.entities.get(entityId);
     if (!entity) {
@@ -834,7 +863,11 @@ export function pulseGenerators(
     } as Record<string, number>;
     let changed = false;
 
-    for (const tag of selectActiveTags(entity, registry, next.entities)) {
+    const activeOpts = {
+      universalTags,
+      mergeUnslottedUniversal: entityId === next.primaryEntityId,
+    };
+    for (const tag of selectActiveTags(entity, registry, entities, activeOpts)) {
       for (const effect of tag.effects) {
         if (effect.type !== 'generate-pool') {
           continue;
@@ -858,7 +891,13 @@ export function pulseGenerators(
         if (!due) {
           continue;
         }
-        const max = selectPoolMax(entity, pool, registry, next.entities);
+        const max = selectPoolMax(
+          entity,
+          pool,
+          registry,
+          entities,
+          activeOpts,
+        );
         const cur = selectPoolCurrent(entity, pool);
         if (amount > 0 && cur >= max) {
           continue;
@@ -867,18 +906,23 @@ export function pulseGenerators(
           continue;
         }
         const adjusted = adjustEntityPool(entity, pool, amount, max, next.tick);
-        generatorLastTick[key] = next.tick;
         entity = {
           ...adjusted,
           metrics: {
             ...adjusted.metrics,
-            generatorLastTick: Object.freeze({ ...generatorLastTick }),
+            generatorLastTick: {
+              ...generatorLastTick,
+              [key]: next.tick,
+            },
           },
         };
+        generatorLastTick = entity.metrics.generatorLastTick as Record<
+          string,
+          number
+        >;
         changed = true;
       }
     }
-
     if (changed) {
       next = upsertEntity(next, entity);
     }
