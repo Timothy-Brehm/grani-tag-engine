@@ -143,12 +143,17 @@ export {
 
 export {
   selectBaseStatValue,
+  selectBasePoolMax,
+  selectCrossLinkPoolMaxBonus,
+  selectCrossLinkStatBonus,
   selectPoolMaxRaw,
   selectPoolEffectiveAvailable,
   selectPoolDisplayCurrent,
   selectPoolDisplayMax,
   poolCapacityStep,
   poolDisplayStep,
+  crossLinkCoeff,
+  crossLinkSourceValue,
 } from './derive';
 
 export {

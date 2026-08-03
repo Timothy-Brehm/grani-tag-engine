@@ -9,7 +9,6 @@ import { toEngineContext, upsertEntity, type EngineState } from './state';
 import {
   selectPoolAvailable,
   selectPoolAvailableMax,
-  selectBaseStatValue,
 } from './selectors';
 import { selectActiveTags } from './slots';
 import type { SlotCatalog } from './slots';
@@ -21,6 +20,7 @@ import { TagCollection } from './tag-collection';
 import { entitiesWithUniversal } from './document';
 import { createTag } from './tag';
 import { roundPoolQuantity } from './quantity';
+import { crossLinkCoeff, crossLinkSourceValue } from './derive';
 
 import {
   continuousProgressKey,
@@ -851,9 +851,9 @@ export function advanceContinuousActions<THost>(
 }
 
 /**
- * Pulse `generate-pool` / `toGeneratePool` and product-tag capacity on active
- * tags. Fullness uses raw Available vs raw Max−Reserved so micro-gains can
- * accumulate under capacityStep. Passive creates require `createPool: true`.
+ * Pulse `generate-pool` and `cross-link` generators / product-tag capacity.
+ * Fullness uses raw Available vs raw Max−Reserved so micro-gains can accumulate
+ * under capacityStep. Passive creates require `createPool: true`.
  */
 export function pulseGenerators(
   state: EngineState,
@@ -975,105 +975,96 @@ export function pulseGenerators(
           continue;
         }
 
-        if (effect.type === 'stat') {
-          const stat =
-            typeof effect.stat === 'string' ? effect.stat : undefined;
-          if (!stat) {
+        if (effect.type !== 'cross-link') {
+          continue;
+        }
+
+        const source = crossLinkSourceValue(
+          entity,
+          effect,
+          registry,
+          entities,
+          activeOpts,
+        );
+        const coeff = crossLinkCoeff(effect);
+        const pulseAmount = roundPoolQuantity(coeff * source);
+
+        const toGenerate =
+          typeof effect.toGeneratePool === 'string'
+            ? effect.toGeneratePool
+            : undefined;
+        if (toGenerate) {
+          const key = `${tag.name}::gen::${toGenerate}`;
+          const last = generatorLastTick[key];
+          const due = last === undefined || next.tick - last >= everyTicks;
+          if (due && pulseAmount !== 0) {
+            tryPulseAvailable(
+              toGenerate,
+              pulseAmount,
+              key,
+              effect.createPool === true,
+            );
+          }
+        }
+
+        const productTag =
+          typeof effect.productTag === 'string' ? effect.productTag : undefined;
+        const toPoolMax =
+          typeof effect.toPoolMax === 'string' ? effect.toPoolMax : undefined;
+        if (productTag && toPoolMax) {
+          const key = `${tag.name}::product::${productTag}`;
+          const last = generatorLastTick[key];
+          const due = last === undefined || next.tick - last >= everyTicks;
+          if (!due) {
             continue;
           }
-          const base = selectBaseStatValue(
-            entity,
-            stat,
+          if (pulseAmount === 0) {
+            markPulse(key);
+            continue;
+          }
+          const existing = entity.tags.get(productTag);
+          let nextStrength = pulseAmount;
+          if (existing) {
+            const prior = existing.effects.find(
+              (e) => e.type === 'pool-max' && e.pool === toPoolMax,
+            );
+            nextStrength = roundPoolQuantity(
+              (prior?.strength ?? 0) + pulseAmount,
+            );
+          }
+          const product = createTag({
+            name: productTag,
+            effects: [
+              {
+                type: 'pool-max',
+                name: `${productTag}:${toPoolMax}`,
+                strength: nextStrength,
+                pool: toPoolMax,
+              },
+            ],
+          });
+          const tags = existing
+            ? entity.tags.set(product)
+            : entity.tags.add(product);
+          entity = withEntityTags(
+            { ...entity, metrics: { ...entity.metrics, generatorLastTick } },
+            tags,
+            next.tick,
             registry,
             entities,
-            activeOpts,
           );
-          const coeff =
-            typeof effect.amount === 'number' && Number.isFinite(effect.amount)
-              ? effect.amount
-              : 1;
-
-          const toGenerate =
-            typeof effect.toGeneratePool === 'string'
-              ? effect.toGeneratePool
-              : undefined;
-          if (toGenerate) {
-            const key = `${tag.name}::gen::${toGenerate}`;
-            const last = generatorLastTick[key];
-            const due = last === undefined || next.tick - last >= everyTicks;
-            if (due) {
-              const amount = roundPoolQuantity(coeff * base);
-              if (amount !== 0) {
-                tryPulseAvailable(
-                  toGenerate,
-                  amount,
-                  key,
-                  effect.createPool === true,
-                );
-              }
-            }
-          }
-
-          const productTag =
-            typeof effect.productTag === 'string' ? effect.productTag : undefined;
-          const toPoolMax =
-            typeof effect.toPoolMax === 'string' ? effect.toPoolMax : undefined;
-          if (productTag && toPoolMax) {
-            const key = `${tag.name}::product::${productTag}`;
-            const last = generatorLastTick[key];
-            const due = last === undefined || next.tick - last >= everyTicks;
-            if (!due) {
-              continue;
-            }
-            const delta = roundPoolQuantity(coeff * base);
-            if (delta === 0) {
-              markPulse(key);
-              continue;
-            }
-            const existing = entity.tags.get(productTag);
-            let nextStrength = delta;
-            if (existing) {
-              const prior = existing.effects.find(
-                (e) => e.type === 'pool-max' && e.pool === toPoolMax,
-              );
-              nextStrength = roundPoolQuantity(
-                (prior?.strength ?? 0) + delta,
-              );
-            }
-            const product = createTag({
-              name: productTag,
-              effects: [
-                {
-                  type: 'pool-max',
-                  name: `${productTag}:${toPoolMax}`,
-                  strength: nextStrength,
-                  pool: toPoolMax,
-                },
-              ],
-            });
-            const tags = existing
-              ? entity.tags.set(product)
-              : entity.tags.add(product);
-            entity = withEntityTags(
-              { ...entity, metrics: { ...entity.metrics, generatorLastTick } },
-              tags,
-              next.tick,
-              registry,
-              entities,
-            );
-            generatorLastTick = {
-              ...entity.metrics.generatorLastTick,
-              [key]: next.tick,
-            };
-            entity = {
-              ...entity,
-              metrics: {
-                ...entity.metrics,
-                generatorLastTick,
-              },
-            };
-            changed = true;
-          }
+          generatorLastTick = {
+            ...entity.metrics.generatorLastTick,
+            [key]: next.tick,
+          };
+          entity = {
+            ...entity,
+            metrics: {
+              ...entity.metrics,
+              generatorLastTick,
+            },
+          };
+          changed = true;
         }
       }
     }

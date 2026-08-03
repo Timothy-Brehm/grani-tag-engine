@@ -32,7 +32,7 @@ describe('stats/pools cross-links', () => {
     expect(ENGINE_VERSION).toBe('0.2.2.0');
   });
 
-  it('live Int toPoolMax raises Mana max', () => {
+  it('live cross-link fromStat toPoolMax raises Mana max', () => {
     const registry = registryWith({
       id: 'hero',
       initialTags: [
@@ -44,8 +44,18 @@ describe('stats/pools cross-links', () => {
               name: 'int',
               strength: 5,
               stat: 'Intelligence',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Link_Int_Mana',
+          effects: [
+            {
+              type: 'cross-link',
+              name: 'int-mana',
+              strength: 2,
+              fromStat: 'Intelligence',
               toPoolMax: 'Mana',
-              amount: 2,
             },
           ],
         }),
@@ -70,7 +80,7 @@ describe('stats/pools cross-links', () => {
     expect(selectPoolMax(player, 'Mana')).toBe(20); // 10 + 5*2
   });
 
-  it('Endurance toGeneratePool pulses Stamina', () => {
+  it('cross-link fromStat toGeneratePool pulses Stamina', () => {
     const registry = registryWith({
       id: 'hero',
       initialTags: [
@@ -82,8 +92,18 @@ describe('stats/pools cross-links', () => {
               name: 'end',
               strength: 3,
               stat: 'Endurance',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Link_End_Stamina',
+          effects: [
+            {
+              type: 'cross-link',
+              name: 'end-stam',
+              strength: 1,
+              fromStat: 'Endurance',
               toGeneratePool: 'Stamina',
-              amount: 1,
               everyTicks: 1,
             },
           ],
@@ -109,21 +129,31 @@ describe('stats/pools cross-links', () => {
     );
   });
 
-  it('product tag accumulates Mana max from Int', () => {
+  it('product tag accumulates Mana max via cross-link', () => {
     const registry = registryWith({
       id: 'hero',
       initialTags: [
         createTag({
-          name: 'Stat_Int_Cap',
+          name: 'Stat_Int',
           effects: [
             {
               type: 'stat',
               name: 'int',
               strength: 2,
               stat: 'Intelligence',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Link_Int_Mana_Grow',
+          effects: [
+            {
+              type: 'cross-link',
+              name: 'grow',
+              strength: 0.5,
+              fromStat: 'Intelligence',
               productTag: 'ManaPoolAddedByInt',
               toPoolMax: 'Mana',
-              amount: 0.5,
               everyTicks: 1,
             },
           ],
@@ -147,18 +177,16 @@ describe('stats/pools cross-links', () => {
     state = reduceEngineState(state, { type: 'tick', steps: 2 }, { registry });
     const player = state.entities.get('player')!;
     expect(player.tags.has('ManaPoolAddedByInt')).toBe(true);
-    // 2 ticks * (0.5 * 2 Int) = +2
     expect(selectPoolMax(player, 'Mana')).toBe(12);
-    // remove source — product remains
     state = reduceEngineState(
       state,
-      { type: 'remove-tag', entityId: 'player', name: 'Stat_Int_Cap' },
+      { type: 'remove-tag', entityId: 'player', name: 'Link_Int_Mana_Grow' },
       { registry },
     );
     expect(selectPoolMax(state.entities.get('player')!, 'Mana')).toBe(12);
   });
 
-  it('pool-link Life toStat Vigor uses effective Available', () => {
+  it('cross-link fromPool toStat uses effective Available', () => {
     const registry = registryWith({
       id: 'hero',
       initialTags: [
@@ -172,10 +200,10 @@ describe('stats/pools cross-links', () => {
           name: 'Link_Life_Vigor',
           effects: [
             {
-              type: 'pool-link',
+              type: 'cross-link',
               name: 'vigor',
               strength: 1,
-              pool: 'Life',
+              fromPool: 'Life',
               toStat: 'Vigor',
             },
           ],
@@ -194,6 +222,70 @@ describe('stats/pools cross-links', () => {
     expect(selectPoolAvailable(player, 'Life')).toBe(4.7);
     expect(selectPoolCurrent(player, 'Life', registry)).toBe(4);
     expect(selectStatValue(player, 'Vigor', registry)).toBe(4);
+  });
+
+  it('cross-links sum once without mid-eval feedback', () => {
+    // Int → Mana max and Mana → Int both read base values only.
+    const registry = registryWith({
+      id: 'hero',
+      initialTags: [
+        createTag({
+          name: 'Stat_Int',
+          effects: [
+            {
+              type: 'stat',
+              name: 'int',
+              strength: 10,
+              stat: 'Intelligence',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Pool_Mana',
+          effects: [
+            { type: 'pool-max', name: 'max', strength: 5, pool: 'Mana' },
+          ],
+        }),
+        createTag({
+          name: 'Link_Int_Mana',
+          effects: [
+            {
+              type: 'cross-link',
+              name: 'a',
+              strength: 1,
+              fromStat: 'Intelligence',
+              toPoolMax: 'Mana',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Link_Mana_Int',
+          effects: [
+            {
+              type: 'cross-link',
+              name: 'b',
+              strength: 1,
+              fromPool: 'Mana',
+              toStat: 'Intelligence',
+            },
+          ],
+        }),
+      ],
+      initialPools: { Mana: 3 },
+    });
+    registry.registerPoolDefinition({ id: 'Mana', capacityStep: 1 });
+    const state = createEngineState({
+      entities: [
+        instantiateEntity(registry.getEntityDefinition('hero')!, 'player'),
+      ],
+      primaryEntityId: 'player',
+    });
+    const player = state.entities.get('player')!;
+    // base Int 10 + fromPool Mana effective 3 = 13 (not feeding Int back into Mana)
+    expect(selectBaseStatValue(player, 'Intelligence')).toBe(10);
+    expect(selectStatValue(player, 'Intelligence', registry)).toBe(13);
+    // base Mana max 5 + fromStat Int 10 = 15
+    expect(selectPoolMax(player, 'Mana', registry)).toBe(15);
   });
 
   it('createPool false skips unlock; true introduces key', () => {
@@ -329,12 +421,11 @@ describe('stats/pools cross-links', () => {
           name: 'Loop_A',
           effects: [
             {
-              type: 'stat',
-              name: 'int',
-              strength: 1,
-              stat: 'Intelligence',
+              type: 'cross-link',
+              name: 'a',
+              strength: 0.0001,
+              fromStat: 'Intelligence',
               toPoolMax: 'Mana',
-              amount: 0.0001,
             },
           ],
         }),
@@ -342,10 +433,10 @@ describe('stats/pools cross-links', () => {
           name: 'Loop_B',
           effects: [
             {
-              type: 'pool-link',
-              name: 'back',
+              type: 'cross-link',
+              name: 'b',
               strength: 1,
-              pool: 'Mana',
+              fromPool: 'Mana',
               toStat: 'Intelligence',
             },
           ],
@@ -366,21 +457,20 @@ describe('stats/pools cross-links', () => {
     expect(warnings.some((w) => w.kind === 'cycle')).toBe(true);
   });
 
-  it('ManaCap-style product pattern has no cycle warn', () => {
+  it('product-tag cross-link pattern has no cycle warn', () => {
     const registry = registryWith({
       id: 'hero',
       initialTags: [
         createTag({
-          name: 'Stat_Int',
+          name: 'Link_Grow',
           effects: [
             {
-              type: 'stat',
-              name: 'int',
-              strength: 1,
-              stat: 'Intelligence',
+              type: 'cross-link',
+              name: 'grow',
+              strength: 0.1,
+              fromStat: 'Intelligence',
               productTag: 'ManaPoolAddedByInt',
               toPoolMax: 'Mana',
-              amount: 0.1,
               everyTicks: 1,
             },
           ],

@@ -73,7 +73,8 @@ AstrevnoState {
 - Requirements: `free`, `forbidden`, `tag`, `stat`, `pool-max`, `entity-count`, `has-slot`, `has-slot-local`, `has-slot-universal`, `metric`
 
 - Effects: `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
-- Tag passives: `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `pool-link`, continuous-*; outbound cross-links `toPoolMax` / `toGeneratePool` / `toStat` / `productTag`
+- Tag passives: `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `cross-link`, continuous-*; cross-links name both ends (`fromStat`/`fromPool` → `toStat`/`toPoolMax`/`toGeneratePool`/`productTag`) and are summed once onto bases
+
 - Games may still register namespaced custom types when needed.
 - TypeScript-defined actions may use `codeRequirements` (runtime-only, not for JSON).
 

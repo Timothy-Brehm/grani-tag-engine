@@ -2,9 +2,16 @@ import type { EntityInstance, EntityMap } from './entity';
 import type { CatalogRegistryView } from './catalog';
 import type { ActiveTagOptions, SlotCatalog } from './slots';
 import { selectActiveTags, sumActiveTaggedFieldStrength } from './slots';
-import { floorPoolQuantity, roundPoolQuantity, DEFAULT_CAPACITY_STEP, DEFAULT_DISPLAY_STEP } from './quantity';
+import {
+  floorPoolQuantity,
+  roundPoolQuantity,
+  DEFAULT_CAPACITY_STEP,
+  DEFAULT_DISPLAY_STEP,
+} from './quantity';
+import type { TagEffect } from './tag';
 
-function linkCoeff(effect: {
+/** Coeff for a `cross-link` effect: `amount` if set, else `strength`. */
+export function crossLinkCoeff(effect: {
   readonly amount?: number;
   readonly strength: number;
 }): number {
@@ -14,13 +21,27 @@ function linkCoeff(effect: {
   return effect.strength;
 }
 
-function outboundStatCoeff(effect: {
-  readonly amount?: number;
-}): number {
-  if (typeof effect.amount === 'number' && Number.isFinite(effect.amount)) {
-    return effect.amount;
+/** Source magnitude for a cross-link (base stat or effective Available). */
+export function crossLinkSourceValue(
+  entity: EntityInstance,
+  effect: TagEffect,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): number {
+  if (typeof effect.fromStat === 'string' && effect.fromStat) {
+    return selectBaseStatValue(
+      entity,
+      effect.fromStat,
+      registry,
+      entities,
+      options,
+    );
   }
-  return 1;
+  if (typeof effect.fromPool === 'string' && effect.fromPool) {
+    return selectPoolEffectiveAvailable(entity, effect.fromPool, registry);
+  }
+  return 0;
 }
 
 /** Resolved capacity step (authored or {@link DEFAULT_CAPACITY_STEP}). */
@@ -68,7 +89,7 @@ export function selectPoolEffectiveAvailable(
 }
 
 /**
- * Base traits from `stat` strengths only (no pool-link contributions).
+ * Base traits from `stat` strengths only (no cross-link contributions).
  */
 export function selectBaseStatValue(
   entity: EntityInstance,
@@ -89,17 +110,17 @@ export function selectBaseStatValue(
 }
 
 /**
- * Raw pool max before capacityStep: fixed `pool-max` + live `toPoolMax` +
- * `pool-link`/`toPoolMax` × effective Available of the source pool.
+ * Base pool max from `pool-max` only (includes product-tag stored max;
+ * excludes live cross-links).
  */
-export function selectPoolMaxRaw(
+export function selectBasePoolMax(
   entity: EntityInstance,
   pool: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  let total = sumActiveTaggedFieldStrength(
+  return sumActiveTaggedFieldStrength(
     entity,
     'pool-max',
     'pool',
@@ -108,42 +129,81 @@ export function selectPoolMaxRaw(
     entities,
     options,
   );
+}
 
+/**
+ * Sum live `cross-link` contributions to a pool’s max (no `productTag`).
+ * Reads sources from base stats / effective Available only — all links are
+ * collected independently then added once (no mid-eval feedback).
+ */
+export function selectCrossLinkPoolMaxBonus(
+  entity: EntityInstance,
+  pool: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): number {
+  let total = 0;
   for (const tag of selectActiveTags(entity, registry, entities, options)) {
     for (const effect of tag.effects) {
-      if (effect.type === 'stat') {
-        const toPoolMax =
-          typeof effect.toPoolMax === 'string' ? effect.toPoolMax : undefined;
-        const productTag =
-          typeof effect.productTag === 'string' ? effect.productTag : undefined;
-        const stat =
-          typeof effect.stat === 'string' ? effect.stat : undefined;
-        // Growing capacity uses product tag only — skip live term.
-        if (
-          toPoolMax === pool &&
-          !productTag &&
-          stat
-        ) {
-          total +=
-            selectBaseStatValue(entity, stat, registry, entities, options) *
-            outboundStatCoeff(effect);
-        }
+      if (effect.type !== 'cross-link') {
+        continue;
       }
-      if (effect.type === 'pool-link') {
-        const toPoolMax =
-          typeof effect.toPoolMax === 'string' ? effect.toPoolMax : undefined;
-        const sourcePool =
-          typeof effect.pool === 'string' ? effect.pool : undefined;
-        if (toPoolMax === pool && sourcePool) {
-          total +=
-            selectPoolEffectiveAvailable(entity, sourcePool, registry) *
-            linkCoeff(effect);
-        }
+      if (typeof effect.productTag === 'string' && effect.productTag) {
+        continue;
       }
+      if (effect.toPoolMax !== pool) {
+        continue;
+      }
+      total +=
+        crossLinkSourceValue(entity, effect, registry, entities, options) *
+        crossLinkCoeff(effect);
     }
   }
-
   return roundPoolQuantity(total);
+}
+
+/**
+ * Sum `cross-link` contributions to a final stat.
+ */
+export function selectCrossLinkStatBonus(
+  entity: EntityInstance,
+  stat: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): number {
+  let total = 0;
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
+    for (const effect of tag.effects) {
+      if (effect.type !== 'cross-link') {
+        continue;
+      }
+      if (effect.toStat !== stat) {
+        continue;
+      }
+      total +=
+        crossLinkSourceValue(entity, effect, registry, entities, options) *
+        crossLinkCoeff(effect);
+    }
+  }
+  return roundPoolQuantity(total);
+}
+
+/**
+ * Raw pool max = base `pool-max` + all live cross-link max bonuses (summed once).
+ */
+export function selectPoolMaxRaw(
+  entity: EntityInstance,
+  pool: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): number {
+  return roundPoolQuantity(
+    selectBasePoolMax(entity, pool, registry, entities, options) +
+      selectCrossLinkPoolMaxBonus(entity, pool, registry, entities, options),
+  );
 }
 
 /** Effective max (capacityStep floor). */
@@ -161,7 +221,7 @@ export function selectPoolMax(
 }
 
 /**
- * Final stat: base + `pool-link`/`toStat` × effective Available.
+ * Final stat = base `stat` + all cross-link stat bonuses (summed once).
  */
 export function selectStatValue(
   entity: EntityInstance,
@@ -170,24 +230,10 @@ export function selectStatValue(
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  let total = selectBaseStatValue(entity, stat, registry, entities, options);
-  for (const tag of selectActiveTags(entity, registry, entities, options)) {
-    for (const effect of tag.effects) {
-      if (effect.type !== 'pool-link') {
-        continue;
-      }
-      const toStat =
-        typeof effect.toStat === 'string' ? effect.toStat : undefined;
-      const sourcePool =
-        typeof effect.pool === 'string' ? effect.pool : undefined;
-      if (toStat === stat && sourcePool) {
-        total +=
-          selectPoolEffectiveAvailable(entity, sourcePool, registry) *
-          linkCoeff(effect);
-      }
-    }
-  }
-  return roundPoolQuantity(total);
+  return roundPoolQuantity(
+    selectBaseStatValue(entity, stat, registry, entities, options) +
+      selectCrossLinkStatBonus(entity, stat, registry, entities, options),
+  );
 }
 
 export function selectPoolDisplayCurrent(

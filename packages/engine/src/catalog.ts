@@ -137,7 +137,6 @@ function walkTagRefs(
     if (
       (effect.type === 'pool-max' ||
         effect.type === 'generate-pool' ||
-        effect.type === 'pool-link' ||
         effect.type === 'reserve-pool') &&
       typeof effect.pool === 'string' &&
       effect.pool
@@ -150,25 +149,45 @@ function walkTagRefs(
         });
       }
     }
-    for (const field of ['toPoolMax', 'toGeneratePool'] as const) {
-      const target = effect[field];
-      if (typeof target === 'string' && target) {
-        if (!registry.getPoolDefinition(target)) {
+    if (effect.type === 'cross-link') {
+      if (typeof effect.fromStat === 'string' && effect.fromStat) {
+        if (!registry.getStatDefinition(effect.fromStat)) {
           pushUnique(warnings, seen, {
-            kind: 'pool',
-            id: target,
-            source: `${source}#${tag.name}.${field}`,
+            kind: 'stat',
+            id: effect.fromStat,
+            source: `${source}#${tag.name}.fromStat`,
           });
         }
       }
-    }
-    if (typeof effect.toStat === 'string' && effect.toStat) {
-      if (!registry.getStatDefinition(effect.toStat)) {
-        pushUnique(warnings, seen, {
-          kind: 'stat',
-          id: effect.toStat,
-          source: `${source}#${tag.name}.toStat`,
-        });
+      if (typeof effect.fromPool === 'string' && effect.fromPool) {
+        if (!registry.getPoolDefinition(effect.fromPool)) {
+          pushUnique(warnings, seen, {
+            kind: 'pool',
+            id: effect.fromPool,
+            source: `${source}#${tag.name}.fromPool`,
+          });
+        }
+      }
+      for (const field of ['toPoolMax', 'toGeneratePool'] as const) {
+        const target = effect[field];
+        if (typeof target === 'string' && target) {
+          if (!registry.getPoolDefinition(target)) {
+            pushUnique(warnings, seen, {
+              kind: 'pool',
+              id: target,
+              source: `${source}#${tag.name}.${field}`,
+            });
+          }
+        }
+      }
+      if (typeof effect.toStat === 'string' && effect.toStat) {
+        if (!registry.getStatDefinition(effect.toStat)) {
+          pushUnique(warnings, seen, {
+            kind: 'stat',
+            id: effect.toStat,
+            source: `${source}#${tag.name}.toStat`,
+          });
+        }
       }
     }
   }
@@ -246,13 +265,6 @@ function effectAddAmount(effect: Tag['effects'][number]): number {
   return effect.strength;
 }
 
-function outboundStatCoeff(effect: Tag['effects'][number]): number {
-  if (typeof effect.amount === 'number' && Number.isFinite(effect.amount)) {
-    return effect.amount;
-  }
-  return 1;
-}
-
 function walkCapacityStepWarnings(
   tag: Tag,
   source: string,
@@ -283,8 +295,8 @@ function walkCapacityStepWarnings(
     if (effect.type === 'generate-pool' && typeof effect.pool === 'string') {
       check(effect.pool, effectAddAmount(effect), 'generate-pool');
     }
-    if (effect.type === 'stat') {
-      const coeff = outboundStatCoeff(effect);
+    if (effect.type === 'cross-link') {
+      const coeff = effectAddAmount(effect);
       if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
         check(
           effect.toPoolMax,
@@ -294,12 +306,6 @@ function walkCapacityStepWarnings(
       }
       if (typeof effect.toGeneratePool === 'string' && effect.toGeneratePool) {
         check(effect.toGeneratePool, coeff, 'toGeneratePool');
-      }
-    }
-    if (effect.type === 'pool-link') {
-      const coeff = effectAddAmount(effect);
-      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
-        check(effect.toPoolMax, coeff, 'pool-link.toPoolMax');
       }
     }
   }
@@ -324,23 +330,26 @@ function collectCrossLinkEdgesFromTag(
   edges: Map<string, Set<string>>,
 ): void {
   for (const effect of tag.effects) {
-    if (effect.type === 'stat' && typeof effect.stat === 'string') {
-      const from = `stat:${effect.stat}`;
-      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
-        addCrossLinkEdge(edges, from, `pool:${effect.toPoolMax}`);
-      }
-      if (typeof effect.toGeneratePool === 'string' && effect.toGeneratePool) {
-        addCrossLinkEdge(edges, from, `pool:${effect.toGeneratePool}`);
-      }
+    if (effect.type !== 'cross-link') {
+      continue;
     }
-    if (effect.type === 'pool-link' && typeof effect.pool === 'string') {
-      const from = `pool:${effect.pool}`;
-      if (typeof effect.toStat === 'string' && effect.toStat) {
-        addCrossLinkEdge(edges, from, `stat:${effect.toStat}`);
-      }
-      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
-        addCrossLinkEdge(edges, from, `pool:${effect.toPoolMax}`);
-      }
+    let from: string | undefined;
+    if (typeof effect.fromStat === 'string' && effect.fromStat) {
+      from = `stat:${effect.fromStat}`;
+    } else if (typeof effect.fromPool === 'string' && effect.fromPool) {
+      from = `pool:${effect.fromPool}`;
+    }
+    if (!from) {
+      continue;
+    }
+    if (typeof effect.toStat === 'string' && effect.toStat) {
+      addCrossLinkEdge(edges, from, `stat:${effect.toStat}`);
+    }
+    if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
+      addCrossLinkEdge(edges, from, `pool:${effect.toPoolMax}`);
+    }
+    if (typeof effect.toGeneratePool === 'string' && effect.toGeneratePool) {
+      addCrossLinkEdge(edges, from, `pool:${effect.toGeneratePool}`);
     }
   }
   for (const child of tag.dependentTags ?? []) {

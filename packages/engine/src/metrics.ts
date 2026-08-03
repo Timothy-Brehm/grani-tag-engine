@@ -329,11 +329,8 @@ export function refreshEntityHighWaters(
   const poolKeys = new Set(collectTaggedKeys(activeTags, 'pool-max', 'pool'));
   for (const tag of activeTags) {
     for (const effect of tag.effects) {
-      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
-        poolKeys.add(effect.toPoolMax);
-      }
       if (
-        effect.type === 'pool-link' &&
+        effect.type === 'cross-link' &&
         typeof effect.toPoolMax === 'string' &&
         effect.toPoolMax
       ) {

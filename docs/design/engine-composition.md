@@ -87,7 +87,7 @@ Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-pla
 - **Missing catalog ids** — referenced `slot` / `pool` / `stat` with no definition
 - **Tier consistency** — duplicate non-zero tiers or mixed `tier: 0` with nonzero in a slot
 - **Share conflicts** — `cannotShareTag` holdings selected by multiple owners
-- **Cross-link cycles** — outbound `toPoolMax` / `toGeneratePool` / `toStat` graph has a cycle
+- **Cross-link cycles** — `cross-link` graph (`fromStat`/`fromPool` → sinks) has a cycle
 - **Sub-capacityStep adds** — per-application add strictly less than the pool’s capacity step (default `0.01`)
 
 A missing `SlotDefinition` is treated as an empty default (`mode: 'selectable'`, no label/description). Explicit default when `mode` omitted → `'selectable'`.
@@ -178,20 +178,20 @@ Pools model stamina, stockpiles, mana, building **Space**, device **Power**—an
 
 ### Stats / pools cross-links
 
-Source-declared outbound fields (not destination `from*`):
+Cross bonuses are **independent** `cross-link` effects (their own tags), not fields on the source `stat` / sink `pool-max`. That keeps bases clean and avoids mid-eval feedback loops: compute bases, collect all link bonuses from those bases, then add once.
 
-| Effect | Fields | Meaning |
-|--------|--------|---------|
-| `stat` | `toPoolMax` | Live: add `baseStat × (amount ?? 1)` to that pool’s max each select |
-| `stat` | `toGeneratePool` + `everyTicks` | Pulse `baseStat × (amount ?? 1)` into Available |
-| `stat` | `productTag` + `toPoolMax` + `everyTicks` | Growing capacity over time: product tag linked to the source tracks total added to the pool (alongside one-off `pool-max` / live `toPoolMax` boosts) |
-| `pool-link` | `pool` + `toStat` / `toPoolMax` | Add **effective** Available × coeff to a stat or another pool’s max |
+| Fields | Meaning |
+|--------|---------|
+| `fromStat` / `fromPool` | Source (base stat, or **effective** Available) |
+| `toStat` / `toPoolMax` / `toGeneratePool` | Sink |
+| `productTag` + `toPoolMax` + `everyTicks` | Growing capacity: accumulate into a product tag’s `pool-max` |
+| `amount` / `strength` | Coeff (`amount` if set, else `strength`) |
 
-**Eval order:** base stats → pool max (incl. live links + product tags) → final stats (pool→stat). One pass; catalog soft-warns on cycles (`kind: 'cycle'`).
+**Eval:** `final = base(stat\|pool-max) + Σ cross-link bonuses` (sources read base / stored Available only). Catalog still soft-warns on graph cycles (`kind: 'cycle'`).
 
-**Product-tag capacity (wiki):** Int slowly raises Mana max via `productTag: 'ManaPoolAddedByInt'` — engine mints/edits that tag’s `pool-max`; removing the source leaves earned capacity.
+**Product-tag capacity:** e.g. `fromStat: 'Intelligence'`, `productTag: 'ManaPoolAddedByInt'`, `toPoolMax: 'Mana'` — engine mints/edits the product tag; removing the link leaves earned capacity. One-off capacity still uses plain `pool-max` or live `toPoolMax` without `productTag`.
 
-**Unlock:** passive `generate-pool` / `toGeneratePool` default `createPool: false` (skip if pool key missing). Actions / commands may still introduce keys. Catalog soft-warns when a per-application add is `< capacityStep` (`kind: 'capacity-step'`).
+**Unlock:** passive `generate-pool` / `cross-link` `toGeneratePool` default `createPool: false`. Actions / commands may still introduce keys. Catalog soft-warns when a per-application add is `< capacityStep` (`kind: 'capacity-step'`).
 
 ### Action (recipe)
 
