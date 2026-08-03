@@ -25,6 +25,7 @@ export const UNIVERSAL_TAGS_HOLDER_ID = 'settings' as const;
 
 export const DEFAULT_GAME_ID = 'game-0' as const;
 
+/** Host lifecycle/presentation for a game slot — not sim fields (primary lives on EngineState). */
 export type GameMeta = {
   readonly label?: string;
   readonly archivedSeq?: number;

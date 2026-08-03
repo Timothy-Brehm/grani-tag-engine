@@ -5,13 +5,16 @@ alwaysApply: true
 
 # Engine composition (grani-tag-engine)
 
-When changing engine APIs, builtins, schemas, or advising how a host should model content, follow [docs/design/engine-composition.md](docs/design/engine-composition.md) and [docs/design/settings-and-games.md](docs/design/settings-and-games.md).
+When changing engine APIs, builtins, schemas, or advising how a host should model content, follow:
+
+- [docs/design/engine-composition.md](docs/design/engine-composition.md)
+- [docs/design/settings-and-games.md](docs/design/settings-and-games.md)
 
 **Living rules.** If we disagree because of these principles, update the design doc and this rule—do not silently override them.
 
 ## Hard preferences
 
-1. **Entities own tags and pools** — anything that acts or holds state is an entity instance from a definition. `EngineState.primaryEntityId` is **required** per game: the default entity for general use (PC sheet, camp bag, or other property store)—not necessarily a character. The save root is **EngineDocument** (`settings` + `games`).
+1. **Entities own tags and pools** — anything that acts or holds state is an entity instance from a definition. The save root is **EngineDocument** (`settings` + `games`). Each game slice keeps its own **`primaryEntityId`** on `EngineState` (required): default entity for general use (PC sheet, camp bag, or other property store)—not necessarily a character. Do **not** put `primaryEntityId` in `gameMeta`; that map is host lifecycle/presentation only (`label`, `archivedSeq`, …).
 2. **Traits vs pools** — lasting quantities/flags for gating are traits (not spent); spendable quantities with maxima are pools.
 3. **Tags derive traits/capacities** — prefer grant-tag / tag passive effects over bespoke fields on `EngineState`.
    - Slot / pool / stat **catalog definitions** on the registry: metadata + soft validation; payloads stay string ids.

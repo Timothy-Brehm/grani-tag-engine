@@ -64,6 +64,59 @@ Play commands (`tick`, `execute-action`, `grant-tag`, `select-slot-item`, …) a
 - `getActiveGame` / `migrateEngineStateToDocument` (0.1 → 0.2 one-shot)
 - No bare-`EngineState` save root; per-game slice remains `EngineState` inside `games`
 
+## Bootstrap from UniversalTags (host pattern)
+
+Play-time merge already applies unslotted universal **gates and passives** without copying tags into the new run. When a meta unlock should also **mint local run state** (extra starting entity, local grant-tag, immediate slot selection), the host applies that while building the `EngineState` passed to `games-create`—no extra engine command is required.
+
+```ts
+// Content: universal tag → play commands to apply on the fresh game slice
+const START_UNLOCKS: ReadonlyArray<{
+  requiresUniversalTag: string;
+  apply: readonly EngineCommand[];
+}> = [
+  {
+    requiresUniversalTag: 'Unlock_ExtraCrate',
+    apply: [
+      { type: 'spawn-entity', definitionId: 'Emergency Supply Card' },
+      {
+        type: 'add-tag',
+        entityId: 'player',
+        tag: createTag({ name: 'Event_BonusStart', effects: [] }),
+      },
+    ],
+  },
+];
+
+function buildNewGame(
+  doc: EngineDocument,
+  options: ReduceEngineOptions,
+): EngineState {
+  let game = createEngineState({ /* base loadout */ });
+  for (const recipe of START_UNLOCKS) {
+    if (!doc.settings.universalTags.has(recipe.requiresUniversalTag)) continue;
+    for (const command of recipe.apply) {
+      game = reduceEngineState(game, command, options);
+    }
+  }
+  return game;
+}
+
+reduceEngineDocument(
+  doc,
+  {
+    type: 'games-create',
+    gameId: 'game-1',
+    game: buildNewGame(doc, options),
+    switchTo: true,
+  },
+  options,
+);
+```
+
+Slotted universal holdings stay in `settings.universalTags`; after create (or inside `apply`), use `select-slot-item` with `holderEntityId: 'settings'` if the new run should start with that selection.
+
 ## Host notes
 
 Astrevno (and others) store the document as the engine blob, bump host save format as needed, and treat player-facing “prestige” as copy over UniversalTags.
+
+`primaryEntityId` stays on each `EngineState` game slice (sim pointer next to entities). `gameMeta` is host-facing lifecycle/presentation only—not a second home for primary.

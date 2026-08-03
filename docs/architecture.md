@@ -1,6 +1,11 @@
 # Architecture
 
-Related design guidance (living): [design/engine-composition.md](./design/engine-composition.md), [design/settings-and-games.md](./design/settings-and-games.md).
+Related design guidance (living):
+
+| Doc | Role |
+|-----|------|
+| [design/engine-composition.md](./design/engine-composition.md) | Entities, tags, traits, pools, actions, novelty |
+| [design/settings-and-games.md](./design/settings-and-games.md) | EngineDocument: Settings + Games, UniversalTags |
 
 ## Goals
 
@@ -50,7 +55,7 @@ AstrevnoState {
 - Commands are plain data (`spawn-entity`, `adjust-pool`, `set-primary-entity`, `execute-action`, `games-switch`, `settings-grant-tag`, …).
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Costs/results default to the **actor**; source-state requirements default to the **source**.
-- `primaryEntityId` is a **required** per-game pointer to an in-play entity: the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets.
+- `primaryEntityId` is a **required** field on each game’s `EngineState` (not `gameMeta`): pointer to an in-play entity—the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets. `gameMeta` is optional host lifecycle/presentation (`label`, `archivedSeq`, …).
 - `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.2.0.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves.
 - React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.

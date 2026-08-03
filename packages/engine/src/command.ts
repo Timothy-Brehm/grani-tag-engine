@@ -97,7 +97,11 @@ export type EngineCommand<THost = unknown> =
   | {
       readonly type: 'games-create';
       readonly gameId: string;
-      /** Host-built initial playthrough. */
+      /**
+       * Host-built initial playthrough. Apply UniversalTags start unlocks
+       * while building this slice (see settings-and-games bootstrap pattern),
+       * then pass the finished game here.
+       */
       readonly game: import('./state').EngineState;
       readonly switchTo?: boolean;
       readonly meta?: import('./document').GameMeta;
