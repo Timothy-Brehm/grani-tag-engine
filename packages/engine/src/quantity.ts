@@ -1,6 +1,12 @@
 /** Float hygiene for stored pool / product-tag quantities (not gameplay step). */
 export const POOL_QUANTITY_DECIMALS = 6;
 
+/** Default pool capacityStep when omitted (`0.01`). */
+export const DEFAULT_CAPACITY_STEP = 0.01;
+
+/** Default pool displayStep when omitted (`1`). */
+export const DEFAULT_DISPLAY_STEP = 1;
+
 /** Round to {@link POOL_QUANTITY_DECIMALS} to limit IEEE noise. */
 export function roundPoolQuantity(value: number): number {
   if (!Number.isFinite(value)) {

@@ -2,7 +2,7 @@ import type { EntityInstance, EntityMap } from './entity';
 import type { CatalogRegistryView } from './catalog';
 import type { ActiveTagOptions, SlotCatalog } from './slots';
 import { selectActiveTags, sumActiveTaggedFieldStrength } from './slots';
-import { floorPoolQuantity, roundPoolQuantity } from './quantity';
+import { floorPoolQuantity, roundPoolQuantity, DEFAULT_CAPACITY_STEP, DEFAULT_DISPLAY_STEP } from './quantity';
 
 function linkCoeff(effect: {
   readonly amount?: number;
@@ -23,27 +23,28 @@ function outboundStatCoeff(effect: {
   return 1;
 }
 
+/** Resolved capacity step (authored or {@link DEFAULT_CAPACITY_STEP}). */
 export function poolCapacityStep(
   registry: CatalogRegistryView | SlotCatalog | undefined,
   poolId: string,
-): number | undefined {
+): number {
   const step = registry?.getPoolDefinition?.(poolId)?.capacityStep;
   if (typeof step === 'number' && step > 0 && Number.isFinite(step)) {
     return step;
   }
-  return undefined;
+  return DEFAULT_CAPACITY_STEP;
 }
 
+/** Resolved display step (authored or {@link DEFAULT_DISPLAY_STEP}). */
 export function poolDisplayStep(
   registry: CatalogRegistryView | SlotCatalog | undefined,
   poolId: string,
-): number | undefined {
-  const def = registry?.getPoolDefinition?.(poolId);
-  const display = def?.displayStep;
+): number {
+  const display = registry?.getPoolDefinition?.(poolId)?.displayStep;
   if (typeof display === 'number' && display > 0 && Number.isFinite(display)) {
     return display;
   }
-  return poolCapacityStep(registry, poolId);
+  return DEFAULT_DISPLAY_STEP;
 }
 
 /** Raw stored Available (no capacity step). */

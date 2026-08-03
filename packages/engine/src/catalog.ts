@@ -1,6 +1,9 @@
 import type { NoveltyAck } from './novelty-types';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
+import { DEFAULT_CAPACITY_STEP } from './quantity';
+
+export { DEFAULT_CAPACITY_STEP, DEFAULT_DISPLAY_STEP } from './quantity';
 
 /** Shared optional presentation for catalog definitions. */
 export type CatalogMeta = {
@@ -32,10 +35,12 @@ export type PoolDefinition = CatalogMeta & {
   /**
    * Gameplay quantum: floor raw Available/Max to this step for requirements,
    * spend affordance, and other gates. e.g. `1` = wholes, `0.1` = tenths.
+   * Default when omitted: {@link DEFAULT_CAPACITY_STEP} (`0.01`).
    */
   readonly capacityStep?: number;
   /**
-   * Host/UI quantum for display selectors. Defaults to {@link capacityStep}.
+   * Host/UI quantum for display selectors.
+   * Default when omitted: {@link DEFAULT_DISPLAY_STEP} (`1`).
    */
   readonly displayStep?: number;
 };
@@ -256,10 +261,11 @@ function walkCapacityStepWarnings(
   seen: Set<string>,
 ): void {
   const check = (poolId: string, amount: number, detail: string) => {
-    const step = registry.getPoolDefinition(poolId)?.capacityStep;
-    if (typeof step !== 'number' || !(step > 0) || !Number.isFinite(step)) {
-      return;
-    }
+    const authored = registry.getPoolDefinition(poolId)?.capacityStep;
+    const step =
+      typeof authored === 'number' && authored > 0 && Number.isFinite(authored)
+        ? authored
+        : DEFAULT_CAPACITY_STEP;
     if (!(amount < step)) {
       return;
     }

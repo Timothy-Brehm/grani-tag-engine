@@ -155,6 +155,8 @@ export {
   POOL_QUANTITY_DECIMALS,
   roundPoolQuantity,
   floorPoolQuantity,
+  DEFAULT_CAPACITY_STEP,
+  DEFAULT_DISPLAY_STEP,
 } from './quantity';
 
 export function selectActiveCount(

@@ -400,10 +400,35 @@ describe('stats/pools cross-links', () => {
     expect(warnings.some((w) => w.kind === 'capacity-step')).toBe(true);
   });
 
-  it('round/floor helpers', () => {
+  it('round/floor helpers and default steps', () => {
     expect(roundPoolQuantity(0.1 + 0.2)).toBe(0.3);
     expect(floorPoolQuantity(4.7, 1)).toBe(4);
     expect(floorPoolQuantity(0.25, 0.1)).toBe(0.2);
+  });
+
+  it('defaults capacityStep to 0.01 and displayStep to 1', () => {
+    const registry = registryWith({
+      id: 'hero',
+      initialTags: [
+        createTag({
+          name: 'Pool_Dust',
+          effects: [
+            { type: 'pool-max', name: 'max', strength: 10, pool: 'Dust' },
+          ],
+        }),
+      ],
+      initialPools: { Dust: 1.234 },
+    });
+    registry.registerPoolDefinition({ id: 'Dust' });
+    const state = createEngineState({
+      entities: [
+        instantiateEntity(registry.getEntityDefinition('hero')!, 'player'),
+      ],
+      primaryEntityId: 'player',
+    });
+    const player = state.entities.get('player')!;
+    expect(selectPoolCurrent(player, 'Dust', registry)).toBe(1.23);
+    expect(selectPoolDisplayCurrent(player, 'Dust', registry)).toBe(1);
   });
 
   it('selectPoolMaxRaw exposes unfloored max', () => {
