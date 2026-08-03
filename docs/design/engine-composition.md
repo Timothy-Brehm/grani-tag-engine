@@ -135,18 +135,26 @@ Today the engine derives numeric traits from tag passive effects of type `stat` 
 
 ### Pool
 
-A **pool** is a quantity with a **maximum**, optional **reservation**, and spendable **available**.
+A **pool** is a measured quantity of some spendable concept with a maximum and current value. It supports adding, subtracting, and reservation of the current value.
 
 | Term | Storage | Meaning |
 |------|---------|---------|
 | **Max** | Derived | Sum of active `pool-max` |
 | **Reserved** | Derived | Sum of active `reserve-pool` targeting this entity |
-| **Available** | **Stored** in `entity.pools[poolId]` | Spendable / reservable |
+| **Available** (current) | **Stored** in `entity.pools[poolId]` | Spendable / reservable headroom |
 | **Contents** | Derived | Available + Reserved |
 
-**Invariants:** Contents ≤ Max. Spend (`adjust-pool` negative) fails if Available would go below 0. Regen / `generate-pool` fills Available only, capped at Max − Reserved. When Reserved increases (new active `reserve-pool`), Available decreases by the same Δ (transition refused if Available cannot cover it). When Reserved drops (remove tag/entity/unequip), Available rises.
+**Invariants**
+
+- Contents ≤ Max
+- Spend (`adjust-pool` negative) fails if Available would go below 0
+- Regen / `generate-pool` fills Available only, capped at Max − Reserved
+- When Reserved increases (new active `reserve-pool`), Available decreases by the same Δ (transition refused if Available cannot cover it)
+- When Reserved drops (remove tag / entity / unequip), Available rises
 
 `reserve-pool` passive: `{ type: 'reserve-pool', pool, strength, name, scope?: 'primary' }`. Omit scope → reserve on the entity where the tag is active; `scope: 'primary'` → reserve on the primary (buildings/devices).
+
+**Host display:** selectors expose `selectPoolAvailable` / `selectPoolReserved` / `selectPoolMax` / `selectPoolContents`. Simple UI is often `Available/Max`; a stacked bar can show reserved, then filled Available, then empty up to Max (spend drains Available down to the reserved floor).
 
 Pools model stamina, stockpiles, mana, building **Space**, device **Power**—anything with capacity that can be spent and/or reserved.
 
