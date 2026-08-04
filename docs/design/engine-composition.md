@@ -431,7 +431,11 @@ EngineRegistry (catalogs, not serialized in EngineState)
 - `has-slot` — holds any tag assigned to that slot (ownership, not “equipped/selected”)
 - `stat`, `pool-max`, `entity-count`, `metric`
 
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+**Effects:** `grant-tag`, `lock-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+
+**`lock-tag` vs “Locks” (UI):** Runtime is **identical to `grant-tag`** (idempotent grant of `name`). There is no separate locking mechanic in the engine—closing off future choices is done the usual way: **grant a tag**, and gate rival / repeat recipes with `{ type: 'tag', tagName: '…', exists: false }` (or other requirements).
+
+Hosts may author that grant as **“Locks”** (tooltip copy: `Locks: Decision_Foo`) as a **presentation hint** that the tag’s job is to prevent further choices. Prefer emitting engine `grant-tag` from that UI type; `lock-tag` remains an optional synonym for the same adaptor (legacy / analyzers that still see it). Typical pattern: path benefit in **results** (`Decision_Foo_Attack`), shared “choice taken” tag in **sideEffects** shown as Locks (`Decision_Foo`), plus `exists: false` on that shared tag so the chooser cannot re-fire.
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 

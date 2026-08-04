@@ -211,7 +211,10 @@ function grantsFromEffects(effects: readonly ActiveEffect[]): {
   const tags: string[] = [];
   const spawns: string[] = [];
   for (const effect of effects) {
-    if (effect.type === 'grant-tag' && effect.name) {
+    if (
+      (effect.type === 'grant-tag' || effect.type === 'lock-tag') &&
+      effect.name
+    ) {
       tags.push(effect.name);
     }
     if (effect.type === 'spawn-entity') {

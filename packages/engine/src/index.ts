@@ -127,6 +127,7 @@ export type {
   ActiveEffect,
   AdjustPoolEffect,
   GrantTagEffect,
+  LockTagEffect,
   RemoveEntityEffect,
   ReservePoolEffect,
   ReserveStatEffect,
