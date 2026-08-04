@@ -82,7 +82,15 @@ Same pattern as entity definitions: **authored on `EngineRegistry`**, not in-pla
 | `PoolDefinition` | Pool UI metadata: optional `label` (may include spaces / special caps—do not derive from id) and `description` (e.g. mouseover) |
 | `StatDefinition` | Stat UI metadata: same `label` / `description` pattern as pools |
 
-**Soft validation:** `collectCatalogWarnings(registry, state)` reports referenced ids with no catalog entry (in-play entities + registered entity definitions when `listEntityDefinitions` is available). Missing defs do **not** hard-fail. A missing `SlotDefinition` is treated as an empty default (`mode: 'selectable'`, no label/description). Explicit default when `mode` omitted → `'selectable'`.
+**Soft validation:** `collectCatalogWarnings(registry, state)` reports issues without hard-failing. Walks in-play entities and registered entity definitions (when `listEntityDefinitions` is available). Warning kinds:
+
+- **Missing catalog ids** — referenced `slot` / `pool` / `stat` with no definition
+- **Tier consistency** — duplicate non-zero tiers or mixed `tier: 0` with nonzero in a slot
+- **Share conflicts** — `cannotShareTag` holdings selected by multiple owners
+- **Cross-link cycles** — `cross-link` graph (`fromStat`/`fromPool` → sinks) has a cycle
+- **Sub-capacityStep adds** — per-application add strictly less than the pool’s capacity step (default `0.01`)
+
+A missing `SlotDefinition` is treated as an empty default (`mode: 'selectable'`, no label/description). Explicit default when `mode` omitted → `'selectable'`.
 
 ### Slotted tags
 
@@ -139,26 +147,51 @@ A **pool** is a measured quantity of some spendable concept with a maximum and c
 
 | Term | Storage | Meaning |
 |------|---------|---------|
-| **Max** | Derived | Sum of active `pool-max` |
+| **Max** | Derived | Sum of active `pool-max` + live cross-links (then floored by `capacityStep`) |
 | **Reserved** | Derived | Sum of active `reserve-pool` targeting this entity |
-| **Available** (current) | **Stored** in `entity.pools[poolId]` | Spendable / reservable headroom |
+| **Available** (raw) | **Stored** in `entity.pools[poolId]` | Spendable / reservable headroom (may be fractional) |
+| **Effective Available / Max** | Derived | `floor(raw / capacityStep) * capacityStep` (default step `0.01`) |
 | **Contents** | Derived | Available + Reserved |
 
 **Invariants**
 
-- Contents ≤ Max
-- Spend (`adjust-pool` negative) fails if Available would go below 0
+- Contents ≤ Max (raw regen clamp uses raw Max − Reserved so micro-gains accumulate)
+- Spend fails if **effective** Available cannot cover the cost
 - Regen / `generate-pool` fills Available only, capped at Max − Reserved
 - When Reserved increases (new active `reserve-pool`), Available decreases by the same Δ (transition refused if Available cannot cover it)
 - When Reserved drops (remove tag / entity / unequip), Available rises
 
+**Per-pool steps** (`PoolDefinition`):
+
+- `capacityStep` — gameplay quantum (gates, spend affordance, requirements); **default `0.01`**
+- `displayStep` — HUD quantum via `selectPoolDisplayCurrent` / `selectPoolDisplayMax`; **default `1`**
+
+Example: Mana `capacityStep: 1`; add `0.0001` per tick until raw crosses 1 — nothing visible or actionable until then.
+
 `reserve-pool` passive: `{ type: 'reserve-pool', pool, strength, name, scope?: 'primary' }`. Omit scope → reserve on the entity where the tag is active; `scope: 'primary'` → reserve on the primary (buildings/devices).
 
-**Host display:** selectors expose `selectPoolAvailable` / `selectPoolReserved` / `selectPoolMax` / `selectPoolContents`. Simple UI is often `Available/Max`; a stacked bar can show reserved, then filled Available, then empty up to Max (spend drains Available down to the reserved floor).
+**Host display:** prefer `selectPoolDisplayCurrent` / `selectPoolDisplayMax`; raw via `selectPoolAvailable` / `selectPoolMaxRaw`. Simple UI is often `Available/Max`; a stacked bar can show reserved, then filled Available, then empty up to Max.
 
 Pools model stamina, stockpiles, mana, building **Space**, device **Power**—anything with capacity that can be spent and/or reserved.
 
 **Storage as progression:** raising `pool-max` is a meaningful unlock when actions require stockpiles or free capacity to reserve.
+
+### Stats / pools cross-links
+
+Cross bonuses are **independent** `cross-link` effects (their own tags), not fields on the source `stat` / sink `pool-max`. That keeps bases clean and avoids mid-eval feedback loops: compute bases, collect all link bonuses from those bases, then add once.
+
+| Fields | Meaning |
+|--------|---------|
+| `fromStat` / `fromPool` | Source (base stat, or **effective** Available) |
+| `toStat` / `toPoolMax` / `toGeneratePool` | Sink |
+| `productTag` + `toPoolMax` + `everyTicks` | Growing capacity: accumulate into a product tag’s `pool-max` |
+| `amount` / `strength` | Coeff (`amount` if set, else `strength`) |
+
+**Eval:** `final = base(stat\|pool-max) + Σ cross-link bonuses` (sources read base / stored Available only). Catalog still soft-warns on graph cycles (`kind: 'cycle'`).
+
+**Product-tag capacity:** e.g. `fromStat: 'Intelligence'`, `productTag: 'ManaPoolAddedByInt'`, `toPoolMax: 'Mana'` — engine mints/edits the product tag; removing the link leaves earned capacity. One-off capacity still uses plain `pool-max` or live `toPoolMax` without `productTag`.
+
+**Unlock:** passive `generate-pool` / `cross-link` `toGeneratePool` default `createPool: false`. Actions / commands may still introduce keys. Catalog soft-warns when a per-application add is `< capacityStep` (`kind: 'capacity-step'`).
 
 ### Action (recipe)
 

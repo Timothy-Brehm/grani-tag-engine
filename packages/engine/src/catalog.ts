@@ -1,6 +1,9 @@
 import type { NoveltyAck } from './novelty-types';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
+import { DEFAULT_CAPACITY_STEP } from './quantity';
+
+export { DEFAULT_CAPACITY_STEP, DEFAULT_DISPLAY_STEP } from './quantity';
 
 /** Shared optional presentation for catalog definitions. */
 export type CatalogMeta = {
@@ -28,7 +31,19 @@ export type SlotDefinition = CatalogMeta & {
  * (spaces, special characters, alternate capitalization)—do not derive display
  * text by stripping id prefixes.
  */
-export type PoolDefinition = CatalogMeta;
+export type PoolDefinition = CatalogMeta & {
+  /**
+   * Gameplay quantum: floor raw Available/Max to this step for requirements,
+   * spend affordance, and other gates. e.g. `1` = wholes, `0.1` = tenths.
+   * Default when omitted: {@link DEFAULT_CAPACITY_STEP} (`0.01`).
+   */
+  readonly capacityStep?: number;
+  /**
+   * Host/UI quantum for display selectors.
+   * Default when omitted: {@link DEFAULT_DISPLAY_STEP} (`1`).
+   */
+  readonly displayStep?: number;
+};
 
 /**
  * Stat catalog entry. Same `label` / `description` UI pattern as pools.
@@ -42,7 +57,14 @@ export function slotDefinitionMode(def: SlotDefinition | undefined): SlotMode {
   return def?.mode === 'best-only' ? 'best-only' : 'selectable';
 }
 
-export type CatalogWarningKind = 'slot' | 'pool' | 'stat' | 'tier' | 'share';
+export type CatalogWarningKind =
+  | 'slot'
+  | 'pool'
+  | 'stat'
+  | 'tier'
+  | 'share'
+  | 'cycle'
+  | 'capacity-step';
 
 export type CatalogWarning = {
   readonly kind: CatalogWarningKind;
@@ -113,7 +135,9 @@ function walkTagRefs(
       }
     }
     if (
-      (effect.type === 'pool-max' || effect.type === 'generate-pool') &&
+      (effect.type === 'pool-max' ||
+        effect.type === 'generate-pool' ||
+        effect.type === 'reserve-pool') &&
       typeof effect.pool === 'string' &&
       effect.pool
     ) {
@@ -123,6 +147,47 @@ function walkTagRefs(
           id: effect.pool,
           source: `${source}#${tag.name}`,
         });
+      }
+    }
+    if (effect.type === 'cross-link') {
+      if (typeof effect.fromStat === 'string' && effect.fromStat) {
+        if (!registry.getStatDefinition(effect.fromStat)) {
+          pushUnique(warnings, seen, {
+            kind: 'stat',
+            id: effect.fromStat,
+            source: `${source}#${tag.name}.fromStat`,
+          });
+        }
+      }
+      if (typeof effect.fromPool === 'string' && effect.fromPool) {
+        if (!registry.getPoolDefinition(effect.fromPool)) {
+          pushUnique(warnings, seen, {
+            kind: 'pool',
+            id: effect.fromPool,
+            source: `${source}#${tag.name}.fromPool`,
+          });
+        }
+      }
+      for (const field of ['toPoolMax', 'toGeneratePool'] as const) {
+        const target = effect[field];
+        if (typeof target === 'string' && target) {
+          if (!registry.getPoolDefinition(target)) {
+            pushUnique(warnings, seen, {
+              kind: 'pool',
+              id: target,
+              source: `${source}#${tag.name}.${field}`,
+            });
+          }
+        }
+      }
+      if (typeof effect.toStat === 'string' && effect.toStat) {
+        if (!registry.getStatDefinition(effect.toStat)) {
+          pushUnique(warnings, seen, {
+            kind: 'stat',
+            id: effect.toStat,
+            source: `${source}#${tag.name}.toStat`,
+          });
+        }
       }
     }
   }
@@ -193,10 +258,150 @@ function walkSlotTierWarnings(
   }
 }
 
+function effectAddAmount(effect: Tag['effects'][number]): number {
+  if (typeof effect.amount === 'number' && Number.isFinite(effect.amount)) {
+    return effect.amount;
+  }
+  return effect.strength;
+}
+
+function walkCapacityStepWarnings(
+  tag: Tag,
+  source: string,
+  registry: CatalogRegistryView,
+  warnings: CatalogWarning[],
+  seen: Set<string>,
+): void {
+  const check = (poolId: string, amount: number, detail: string) => {
+    const authored = registry.getPoolDefinition(poolId)?.capacityStep;
+    const step =
+      typeof authored === 'number' && authored > 0 && Number.isFinite(authored)
+        ? authored
+        : DEFAULT_CAPACITY_STEP;
+    if (!(amount < step)) {
+      return;
+    }
+    pushUnique(warnings, seen, {
+      kind: 'capacity-step',
+      id: poolId,
+      source: `${source}#${tag.name}:${detail}`,
+    });
+  };
+
+  for (const effect of tag.effects) {
+    if (effect.type === 'pool-max' && typeof effect.pool === 'string') {
+      check(effect.pool, effect.strength, 'pool-max');
+    }
+    if (effect.type === 'generate-pool' && typeof effect.pool === 'string') {
+      check(effect.pool, effectAddAmount(effect), 'generate-pool');
+    }
+    if (effect.type === 'cross-link') {
+      const coeff = effectAddAmount(effect);
+      if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
+        check(
+          effect.toPoolMax,
+          coeff,
+          effect.productTag ? 'productTag' : 'toPoolMax',
+        );
+      }
+      if (typeof effect.toGeneratePool === 'string' && effect.toGeneratePool) {
+        check(effect.toGeneratePool, coeff, 'toGeneratePool');
+      }
+    }
+  }
+
+  for (const child of tag.dependentTags ?? []) {
+    walkCapacityStepWarnings(child, source, registry, warnings, seen);
+  }
+}
+
+function addCrossLinkEdge(
+  edges: Map<string, Set<string>>,
+  from: string,
+  to: string,
+): void {
+  const set = edges.get(from) ?? new Set<string>();
+  set.add(to);
+  edges.set(from, set);
+}
+
+function collectCrossLinkEdgesFromTag(
+  tag: Tag,
+  edges: Map<string, Set<string>>,
+): void {
+  for (const effect of tag.effects) {
+    if (effect.type !== 'cross-link') {
+      continue;
+    }
+    let from: string | undefined;
+    if (typeof effect.fromStat === 'string' && effect.fromStat) {
+      from = `stat:${effect.fromStat}`;
+    } else if (typeof effect.fromPool === 'string' && effect.fromPool) {
+      from = `pool:${effect.fromPool}`;
+    }
+    if (!from) {
+      continue;
+    }
+    if (typeof effect.toStat === 'string' && effect.toStat) {
+      addCrossLinkEdge(edges, from, `stat:${effect.toStat}`);
+    }
+    if (typeof effect.toPoolMax === 'string' && effect.toPoolMax) {
+      addCrossLinkEdge(edges, from, `pool:${effect.toPoolMax}`);
+    }
+    if (typeof effect.toGeneratePool === 'string' && effect.toGeneratePool) {
+      addCrossLinkEdge(edges, from, `pool:${effect.toGeneratePool}`);
+    }
+  }
+  for (const child of tag.dependentTags ?? []) {
+    collectCrossLinkEdgesFromTag(child, edges);
+  }
+}
+
+/** DFS cycle detection; pushes one warning per cycle node found. */
+function walkCycleWarnings(
+  edges: Map<string, Set<string>>,
+  warnings: CatalogWarning[],
+  seen: Set<string>,
+): void {
+  const WHITE = 0;
+  const GRAY = 1;
+  const BLACK = 2;
+  const color = new Map<string, number>();
+  const stack: string[] = [];
+
+  const visit = (node: string): void => {
+    color.set(node, GRAY);
+    stack.push(node);
+    for (const next of edges.get(node) ?? []) {
+      const c = color.get(next) ?? WHITE;
+      if (c === GRAY) {
+        const idx = stack.indexOf(next);
+        const path = [...stack.slice(idx), next].join('→');
+        pushUnique(warnings, seen, {
+          kind: 'cycle',
+          id: next,
+          source: path,
+        });
+      } else if (c === WHITE) {
+        visit(next);
+      }
+    }
+    stack.pop();
+    color.set(node, BLACK);
+  };
+
+  for (const node of edges.keys()) {
+    if ((color.get(node) ?? WHITE) === WHITE) {
+      visit(node);
+    }
+  }
+}
+
 /**
  * Soft validation: report referenced slot/pool/stat ids with no catalog entry,
- * plus tier consistency within a slot. Walks in-play entities and, when
- * available, registered entity definitions. Does not affect runtime.
+ * tier consistency, cross-link cycles, and sub-capacityStep adds. Walks in-play
+ * entities and, when available, registered entity definitions. Does not affect
+ * runtime.
  */
 export function collectCatalogWarnings(
   registry: CatalogRegistryView,
@@ -204,19 +409,19 @@ export function collectCatalogWarnings(
 ): CatalogWarning[] {
   const warnings: CatalogWarning[] = [];
   const seen = new Set<string>();
+  const crossEdges = new Map<string, Set<string>>();
+
+  const visitTag = (tag: Tag, source: string) => {
+    walkTagRefs(tag, source, registry, warnings, seen, new Set());
+    walkCapacityStepWarnings(tag, source, registry, warnings, seen);
+    collectCrossLinkEdgesFromTag(tag, crossEdges);
+  };
 
   const defs = registry.listEntityDefinitions?.() ?? [];
   for (const def of defs) {
     const initialTags = def.initialTags ?? [];
     for (const tag of initialTags) {
-      walkTagRefs(
-        tag,
-        `definition:${def.id}`,
-        registry,
-        warnings,
-        seen,
-        new Set(),
-      );
+      visitTag(tag, `definition:${def.id}`);
     }
     walkSlotTierWarnings(
       initialTags,
@@ -238,7 +443,7 @@ export function collectCatalogWarnings(
   for (const entity of state.entities.values()) {
     const held = entity.tags.list();
     for (const tag of held) {
-      walkTagRefs(tag, `entity:${entity.id}`, registry, warnings, seen, new Set());
+      visitTag(tag, `entity:${entity.id}`);
     }
     walkSlotTierWarnings(held, `entity:${entity.id}`, warnings, seen);
     for (const pool of Object.keys(entity.pools)) {
@@ -274,6 +479,8 @@ export function collectCatalogWarnings(
       });
     }
   }
+
+  walkCycleWarnings(crossEdges, warnings, seen);
 
   return warnings;
 }

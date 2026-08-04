@@ -4,16 +4,24 @@ import { upsertEntity, type EngineState } from './state';
 import type { TagCollection } from './tag-collection';
 import { TagCollection as TC } from './tag-collection';
 import type { SlotCatalog, ActiveTagOptions } from './slots';
-import { selectActiveTags, sumActiveTaggedFieldStrength } from './slots';
+import { selectActiveTags } from './slots';
 import { entitiesWithUniversal } from './document';
 import { recordPoolLifetimeUsed } from './metrics';
+import { floorPoolQuantity, roundPoolQuantity } from './quantity';
+import {
+  poolCapacityStep,
+  selectPoolAvailableRaw,
+  selectPoolEffectiveAvailable,
+  selectPoolMax,
+  selectPoolMaxRaw,
+} from './derive';
 
-/** Stored pool value = Available (spendable / reservable). */
+/** Stored pool value = Available (spendable / reservable), raw. */
 export function selectPoolAvailable(
   entity: EntityInstance,
   pool: string,
 ): number {
-  return entity.pools[pool] ?? 0;
+  return selectPoolAvailableRaw(entity, pool);
 }
 
 /**
@@ -31,7 +39,21 @@ export function selectPoolReserved(
   return all.get(entityId)?.[pool] ?? 0;
 }
 
-/** Available + Reserved. */
+/** Effective reserved (capacityStep floor). */
+export function selectPoolEffectiveReserved(
+  state: EngineState,
+  entityId: string,
+  pool: string,
+  registry?: SlotCatalog,
+  universalTags: TagCollection = TC.create(),
+): number {
+  return floorPoolQuantity(
+    selectPoolReserved(state, entityId, pool, registry, universalTags),
+    poolCapacityStep(registry, pool),
+  );
+}
+
+/** Available + Reserved (raw). */
 export function selectPoolContents(
   state: EngineState,
   entityId: string,
@@ -49,7 +71,18 @@ export function selectPoolContents(
   );
 }
 
-function poolMaxFor(
+function activeOptsFor(
+  state: EngineState,
+  entity: EntityInstance,
+  universalTags: TagCollection,
+): ActiveTagOptions {
+  return {
+    universalTags,
+    mergeUnslottedUniversal: entity.id === state.primaryEntityId,
+  };
+}
+
+function poolMaxRawFor(
   state: EngineState,
   entity: EntityInstance,
   pool: string,
@@ -57,22 +90,16 @@ function poolMaxFor(
   universalTags: TagCollection = TC.create(),
 ): number {
   const entities = entitiesWithUniversal(state, universalTags);
-  const activeOpts: ActiveTagOptions = {
-    universalTags,
-    mergeUnslottedUniversal: entity.id === state.primaryEntityId,
-  };
-  return sumActiveTaggedFieldStrength(
+  return selectPoolMaxRaw(
     entity,
-    'pool-max',
-    'pool',
     pool,
     registry,
     entities,
-    activeOpts,
+    activeOptsFor(state, entity, universalTags),
   );
 }
 
-/** Effective ceiling for Available: Max − Reserved. */
+/** Effective ceiling for Available regen clamp: raw Max − raw Reserved. */
 export function selectPoolAvailableMax(
   state: EngineState,
   entity: EntityInstance,
@@ -80,8 +107,36 @@ export function selectPoolAvailableMax(
   registry?: SlotCatalog,
   universalTags: TagCollection = TC.create(),
 ): number {
-  const max = poolMaxFor(state, entity, pool, registry, universalTags);
+  const max = poolMaxRawFor(state, entity, pool, registry, universalTags);
   const reserved = selectPoolReserved(
+    state,
+    entity.id,
+    pool,
+    registry,
+    universalTags,
+  );
+  return Math.max(0, max - reserved);
+}
+
+/**
+ * Effective Available headroom for gates: effective Max − effective Reserved.
+ */
+export function selectPoolEffectiveAvailableMax(
+  state: EngineState,
+  entity: EntityInstance,
+  pool: string,
+  registry?: SlotCatalog,
+  universalTags: TagCollection = TC.create(),
+): number {
+  const entities = entitiesWithUniversal(state, universalTags);
+  const max = selectPoolMax(
+    entity,
+    pool,
+    registry,
+    entities,
+    activeOptsFor(state, entity, universalTags),
+  );
+  const reserved = selectPoolEffectiveReserved(
     state,
     entity.id,
     pool,
@@ -185,15 +240,18 @@ export function applyReservationDeltas(
         continue;
       }
       const available = (pools ?? working.pools)[pool] ?? 0;
-      const nextAvailable = Number((available - delta).toFixed(2));
+      const nextAvailable = roundPoolQuantity(available - delta);
       if (nextAvailable < 0) {
         return undefined;
       }
-      const max = poolMaxFor(next, working, pool, registry, universalTags);
+      const max = poolMaxRawFor(next, working, pool, registry, universalTags);
       const reservedAfter = afterRow[pool] ?? 0;
       const cap = Math.max(0, max - reservedAfter);
       const clamped = Math.min(cap, Math.max(0, nextAvailable));
-      pools = { ...(pools ?? working.pools), [pool]: clamped };
+      pools = {
+        ...(pools ?? working.pools),
+        [pool]: roundPoolQuantity(clamped),
+      };
     }
     if (pools) {
       next = upsertEntity(next, withEntityPools(working, pools, next.tick));
@@ -224,9 +282,19 @@ export function reconcilePoolReservations(
   return applied ?? previous;
 }
 
+export type TryAdjustPoolOptions = {
+  /**
+   * When false, refuse to introduce a new `entity.pools` key.
+   * Default **true** (actions / commands). Passive generators pass false
+   * unless the effect sets `createPool: true`.
+   */
+  readonly createPool?: boolean;
+};
+
 /**
- * Adjust Available. Spend (delta &lt; 0) fails (returns undefined) if it would
- * go below 0. Gains clamp to Max − Reserved.
+ * Adjust Available (raw). Spend fails if **effective** Available cannot cover
+ * the cost. Gains clamp to raw Max − Reserved. Float hygiene via
+ * {@link roundPoolQuantity}.
  */
 export function tryAdjustEntityPool(
   state: EngineState,
@@ -236,8 +304,14 @@ export function tryAdjustEntityPool(
   registry?: SlotCatalog,
   universalTags: TagCollection = TC.create(),
   tick = state.tick,
+  options: TryAdjustPoolOptions = {},
 ): EntityInstance | undefined {
-  const available = selectPoolAvailable(entity, poolId);
+  const createPool = options.createPool !== false;
+  if (!(poolId in entity.pools) && !createPool) {
+    return undefined;
+  }
+
+  const available = selectPoolAvailableRaw(entity, poolId);
   const cap = selectPoolAvailableMax(
     state,
     entity,
@@ -245,12 +319,16 @@ export function tryAdjustEntityPool(
     registry,
     universalTags,
   );
-  if (delta < 0 && available + delta < -1e-9) {
-    return undefined;
+
+  if (delta < 0) {
+    const effective = selectPoolEffectiveAvailable(entity, poolId, registry);
+    if (effective + delta < -1e-9) {
+      return undefined;
+    }
   }
-  const next = Math.min(
-    cap,
-    Math.max(0, Number((available + delta).toFixed(2))),
+
+  const next = roundPoolQuantity(
+    Math.min(cap, Math.max(0, available + delta)),
   );
   const actualDelta = next - available;
   let updated = withEntityPools(
@@ -263,3 +341,10 @@ export function tryAdjustEntityPool(
   }
   return updated;
 }
+
+export {
+  selectPoolEffectiveAvailable,
+  selectPoolMax,
+  selectPoolMaxRaw,
+  poolCapacityStep,
+};

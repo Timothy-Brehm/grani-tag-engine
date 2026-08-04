@@ -4,17 +4,43 @@ export interface TagEffect {
   readonly strength: number;
   /** Optional payload for `stat` effects. */
   readonly stat?: string;
-  /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool`. */
+  /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool` / `cross-link.fromPool`. */
   readonly pool?: string;
   /**
    * For `reserve-pool`: `'primary'` reserves on the primary entity;
    * omit to reserve on the entity where the tag is active.
    */
   readonly scope?: 'primary' | string;
-  /** Pulse amount for `generate-pool` (falls back to `strength`). */
+  /**
+   * Pulse amount for `generate-pool` (falls back to `strength`).
+   * On `cross-link`, coeff when set (else `strength`).
+   */
   readonly amount?: number;
-  /** Tick interval for `generate-pool`. */
+  /** Tick interval for `generate-pool` / `cross-link` generators / product capacity. */
   readonly everyTicks?: number;
+  /** On `cross-link`: read base value of this stat as the source. */
+  readonly fromStat?: string;
+  /** On `cross-link`: read effective Available of this pool as the source. */
+  readonly fromPool?: string;
+  /** On `cross-link`: add source × coeff to this stat (final pass). */
+  readonly toStat?: string;
+  /**
+   * On `cross-link`: add source × coeff to this pool’s max (live), unless
+   * {@link productTag} is set (then capacity accumulates on the product tag).
+   */
+  readonly toPoolMax?: string;
+  /** On `cross-link`: each due tick, pulse source × coeff into this pool’s Available. */
+  readonly toGeneratePool?: string;
+  /**
+   * On `cross-link` with {@link toPoolMax}: engine-maintained product tag that
+   * accumulates `pool-max` strength each due tick (growing capacity).
+   */
+  readonly productTag?: string;
+  /**
+   * On `generate-pool` / `cross-link` `toGeneratePool`: when true, may introduce
+   * the pool key. Default false for passive pulses.
+   */
+  readonly createPool?: boolean;
   /** Optional action filter for `continuous-speed` (`*` or omit = all). */
   readonly actionName?: string;
   /** Additive duration modifier for `continuous-speed` (applied first). */

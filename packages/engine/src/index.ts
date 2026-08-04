@@ -251,18 +251,37 @@ export {
   selectEntity,
   selectEntitiesByDefinition,
   selectStatValue,
+  selectBaseStatValue,
+  selectBasePoolMax,
+  selectCrossLinkPoolMaxBonus,
+  selectCrossLinkStatBonus,
   selectPoolMax,
+  selectPoolMaxRaw,
   selectPoolCurrent,
   selectPoolAvailable,
   selectPoolReserved,
   selectPoolContents,
   selectPoolAvailableMax,
+  selectPoolEffectiveAvailableMax,
+  selectPoolEffectiveAvailable,
+  selectPoolEffectiveReserved,
+  selectPoolDisplayCurrent,
+  selectPoolDisplayMax,
+  poolCapacityStep,
+  poolDisplayStep,
+  crossLinkCoeff,
+  crossLinkSourceValue,
   selectActiveCount,
   selectSpawnCount,
   selectPrimaryEntity,
   selectPrimaryEntityId,
   selectContinuousActiveJobs,
   selectContinuousProgress,
+  POOL_QUANTITY_DECIMALS,
+  roundPoolQuantity,
+  floorPoolQuantity,
+  DEFAULT_CAPACITY_STEP,
+  DEFAULT_DISPLAY_STEP,
 } from './selectors';
 
 export {
@@ -270,6 +289,7 @@ export {
   reconcilePoolReservations,
   tryAdjustEntityPool,
 } from './pools';
+export type { TryAdjustPoolOptions } from './pools';
 
 export type {
   ProcessPoolKind,

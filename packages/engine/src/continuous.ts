@@ -6,14 +6,21 @@ import type { Requirement } from './requirement';
 import type { EntityInstance } from './entity';
 import type { Tag } from './tag';
 import { toEngineContext, upsertEntity, type EngineState } from './state';
-import { selectPoolCurrent, selectPoolAvailableMax } from './selectors';
+import {
+  selectPoolAvailable,
+  selectPoolAvailableMax,
+} from './selectors';
 import { selectActiveTags } from './slots';
 import type { SlotCatalog } from './slots';
 import type { EntityMap } from './entity';
+import { withEntityTags } from './entity';
 import { tryAdjustEntityPool } from './pools';
 import { recordActionExecution } from './metrics';
 import { TagCollection } from './tag-collection';
 import { entitiesWithUniversal } from './document';
+import { createTag } from './tag';
+import { roundPoolQuantity } from './quantity';
+import { crossLinkCoeff, crossLinkSourceValue } from './derive';
 
 import {
   continuousProgressKey,
@@ -844,8 +851,9 @@ export function advanceContinuousActions<THost>(
 }
 
 /**
- * Pulse `generate-pool` tag passives on active tags. If the pool is full, skip
- * and do not advance lastPulse.
+ * Pulse `generate-pool` and `cross-link` generators / product-tag capacity.
+ * Fullness uses raw Available vs raw Max−Reserved so micro-gains can accumulate
+ * under capacityStep. Passive creates require `createPool: true`.
  */
 export function pulseGenerators(
   state: EngineState,
@@ -868,71 +876,196 @@ export function pulseGenerators(
       universalTags,
       mergeUnslottedUniversal: entityId === next.primaryEntityId,
     };
+
+    const markPulse = (key: string) => {
+      generatorLastTick = {
+        ...generatorLastTick,
+        [key]: next.tick,
+      };
+      entity = {
+        ...entity!,
+        metrics: {
+          ...entity!.metrics,
+          generatorLastTick,
+        },
+      };
+      changed = true;
+    };
+
+    const tryPulseAvailable = (
+      pool: string,
+      amount: number,
+      key: string,
+      createPool: boolean,
+    ): boolean => {
+      const cur = selectPoolAvailable(entity!, pool);
+      const availableMax = selectPoolAvailableMax(
+        next,
+        entity!,
+        pool,
+        registry,
+        universalTags,
+      );
+      if (amount > 0 && cur >= availableMax) {
+        return false;
+      }
+      if (amount < 0 && cur <= 0) {
+        return false;
+      }
+      const adjusted = tryAdjustEntityPool(
+        next,
+        entity!,
+        pool,
+        amount,
+        registry,
+        universalTags,
+        next.tick,
+        { createPool },
+      );
+      if (!adjusted) {
+        return false;
+      }
+      entity = {
+        ...adjusted,
+        metrics: {
+          ...adjusted.metrics,
+          generatorLastTick: {
+            ...generatorLastTick,
+            [key]: next.tick,
+          },
+        },
+      };
+      generatorLastTick = entity.metrics.generatorLastTick as Record<
+        string,
+        number
+      >;
+      changed = true;
+      return true;
+    };
+
     for (const tag of selectActiveTags(entity, registry, entities, activeOpts)) {
       for (const effect of tag.effects) {
-        if (effect.type !== 'generate-pool') {
-          continue;
-        }
-        const pool = typeof effect.pool === 'string' ? effect.pool : undefined;
-        if (!pool) {
-          continue;
-        }
         const everyTicks =
           typeof effect.everyTicks === 'number' && effect.everyTicks > 0
             ? effect.everyTicks
             : 1;
-        const amount =
-          typeof effect.amount === 'number' ? effect.amount : effect.strength;
-        if (!Number.isFinite(amount) || amount === 0) {
+
+        if (effect.type === 'generate-pool') {
+          const pool = typeof effect.pool === 'string' ? effect.pool : undefined;
+          if (!pool) {
+            continue;
+          }
+          const amount =
+            typeof effect.amount === 'number' ? effect.amount : effect.strength;
+          if (!Number.isFinite(amount) || amount === 0) {
+            continue;
+          }
+          const key = `${tag.name}::${pool}`;
+          const last = generatorLastTick[key];
+          const due = last === undefined || next.tick - last >= everyTicks;
+          if (!due) {
+            continue;
+          }
+          tryPulseAvailable(
+            pool,
+            amount,
+            key,
+            effect.createPool === true,
+          );
           continue;
         }
-        const key = `${tag.name}::${pool}`;
-        const last = generatorLastTick[key];
-        const due = last === undefined || next.tick - last >= everyTicks;
-        if (!due) {
+
+        if (effect.type !== 'cross-link') {
           continue;
         }
-        const cur = selectPoolCurrent(entity, pool);
-        const availableMax = selectPoolAvailableMax(
-          next,
+
+        const source = crossLinkSourceValue(
           entity,
-          pool,
+          effect,
           registry,
-          universalTags,
+          entities,
+          activeOpts,
         );
-        if (amount > 0 && cur >= availableMax) {
-          continue;
+        const coeff = crossLinkCoeff(effect);
+        const pulseAmount = roundPoolQuantity(coeff * source);
+
+        const toGenerate =
+          typeof effect.toGeneratePool === 'string'
+            ? effect.toGeneratePool
+            : undefined;
+        if (toGenerate) {
+          const key = `${tag.name}::gen::${toGenerate}`;
+          const last = generatorLastTick[key];
+          const due = last === undefined || next.tick - last >= everyTicks;
+          if (due && pulseAmount !== 0) {
+            tryPulseAvailable(
+              toGenerate,
+              pulseAmount,
+              key,
+              effect.createPool === true,
+            );
+          }
         }
-        if (amount < 0 && cur <= 0) {
-          continue;
-        }
-        const adjusted = tryAdjustEntityPool(
-          next,
-          entity,
-          pool,
-          amount,
-          registry,
-          universalTags,
-          next.tick,
-        );
-        if (!adjusted) {
-          continue;
-        }
-        entity = {
-          ...adjusted,
-          metrics: {
-            ...adjusted.metrics,
-            generatorLastTick: {
-              ...generatorLastTick,
-              [key]: next.tick,
+
+        const productTag =
+          typeof effect.productTag === 'string' ? effect.productTag : undefined;
+        const toPoolMax =
+          typeof effect.toPoolMax === 'string' ? effect.toPoolMax : undefined;
+        if (productTag && toPoolMax) {
+          const key = `${tag.name}::product::${productTag}`;
+          const last = generatorLastTick[key];
+          const due = last === undefined || next.tick - last >= everyTicks;
+          if (!due) {
+            continue;
+          }
+          if (pulseAmount === 0) {
+            markPulse(key);
+            continue;
+          }
+          const existing = entity.tags.get(productTag);
+          let nextStrength = pulseAmount;
+          if (existing) {
+            const prior = existing.effects.find(
+              (e) => e.type === 'pool-max' && e.pool === toPoolMax,
+            );
+            nextStrength = roundPoolQuantity(
+              (prior?.strength ?? 0) + pulseAmount,
+            );
+          }
+          const product = createTag({
+            name: productTag,
+            effects: [
+              {
+                type: 'pool-max',
+                name: `${productTag}:${toPoolMax}`,
+                strength: nextStrength,
+                pool: toPoolMax,
+              },
+            ],
+          });
+          const tags = existing
+            ? entity.tags.set(product)
+            : entity.tags.add(product);
+          entity = withEntityTags(
+            { ...entity, metrics: { ...entity.metrics, generatorLastTick } },
+            tags,
+            next.tick,
+            registry,
+            entities,
+          );
+          generatorLastTick = {
+            ...entity.metrics.generatorLastTick,
+            [key]: next.tick,
+          };
+          entity = {
+            ...entity,
+            metrics: {
+              ...entity.metrics,
+              generatorLastTick,
             },
-          },
-        };
-        generatorLastTick = entity.metrics.generatorLastTick as Record<
-          string,
-          number
-        >;
-        changed = true;
+          };
+          changed = true;
+        }
       }
     }
     if (changed) {
