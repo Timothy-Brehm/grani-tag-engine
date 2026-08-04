@@ -6,6 +6,7 @@ These are **living documents**. When design debates or agent guidance conflict w
 |-----|---------|
 | [engine-composition.md](./engine-composition.md) | Game-agnostic composition of entities, tags, traits, pools, and actions |
 | [settings-and-games.md](./settings-and-games.md) | EngineDocument: Settings + Games, UniversalTags (wiki prestige) |
+| [engine-tools.md](./engine-tools.md) | Engine generation tools: pathing analyzer, debug-content sidecar (extensible) |
 
 Implementation status and package layout: [../architecture.md](../architecture.md).
 

@@ -594,7 +594,7 @@ Choice action grants **both**. Shared post-tier content requires the base tag; p
 
 Selectable `SlotDefinition`s may host tier options when loadout UI is desired; one-shot encounter forks use the same base+path shape (`Choice_Squirrels` + `Choice_Squirrels_Feed`). Theme-specific tier *lists* belong in the **host** game, not this package.
 
-Analyzer **Gate** milestones (when they exist) should align with tier boundaries.
+Analyzer **Gate** milestones (`GateDefinition` + `analyzeUpToGate`) should align with tier boundaries. See [engine-tools.md](./engine-tools.md).
 
 ### 5b. Content blocks / groups (self-contained chains)
 
@@ -613,10 +613,10 @@ Example: entry **A** unlocks **B**; **B** makes **C** and **D** available; takin
 **Debug collapse pattern:**
 1. Author the full gameplay chain (no debug requirement).
 2. Author a summary tag (e.g. `Block_BasicFireMagic`) whose effects equal the **net outcome** of completing the block.
-3. Gate granting that summary (tag or action) on a host **debug** tag requirement (`debug` / `Debug_Cheats`—host convention).
-4. Normal play never sees the shortcut; debug builds grant `debug` and take the block tag.
+3. Gate granting that summary (tag or action) on `{ type: 'tag', tagName: 'debug', exists: true }` (engine `ENGINE_DEBUG_TAG_NAME`; hosts load optional `debug-tags.json` via `createDebugContentTool`).
+4. Normal play never sees the shortcut; debug builds enable `debug` (UniversalTags or primary) and take the block summary.
 
-Blocks often sit *inside* a tier region (a path’s benefits may be a block). Analyzer **Block** metadata (when it exists) should mark these sets and validate self-sufficiency from the declared start.
+Blocks often sit *inside* a tier region (a path’s benefits may be a block). Register a `BlockDefinition` and mark members with `analyzer.blockId`; `validateBlock` / `annotateBlock` check self-sufficiency and summarize outcomes ([engine-tools.md](./engine-tools.md)).
 
 ### 6. Novelty highlight — new important content (badge ⚠)
 

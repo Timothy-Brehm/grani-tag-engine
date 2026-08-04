@@ -60,6 +60,47 @@ export {
   collectCatalogWarnings,
 } from './catalog';
 
+export type {
+  AnalyzerContentMeta,
+  GateDefinition,
+  BlockDefinition,
+  BlockEntry,
+  AnalyzerActionKey,
+  InfinitePoolRow,
+  InfinitePoolSource,
+  AccumulatingPoolRow,
+  AccumulatingPoolSource,
+  NonFarmableAction,
+  NonFarmableReason,
+  FiniteStockpileRow,
+  GraphAction,
+  ContentGraph,
+  AnalyzeOptions,
+  ReachableSlice,
+  PoolAnalysis,
+  UpToGateReport,
+  BlockValidation,
+  BlockAnnotation,
+  GameDebugContentJSON,
+  DebugContentTool,
+} from './tools';
+export {
+  analyzerActionKey,
+  parseAnalyzerActionKey,
+  buildContentGraph,
+  analyzeReachable,
+  analyzeInfinitePools,
+  analyzeUpToGate,
+  validateBlock,
+  annotateBlock,
+  ENGINE_DEBUG_TAG_NAME,
+  ENGINE_DEBUG_CONTENT_KIND,
+  createDebugCapabilityTag,
+  createDebugContentTool,
+  loadDebugTagSource,
+  mergeTagCatalogs,
+} from './tools';
+
 export type { SlotCatalog } from './slots';
 export {
   tagBestOnlyScore,

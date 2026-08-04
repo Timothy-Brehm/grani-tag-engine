@@ -9,6 +9,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 
 - [docs/design/engine-composition.md](docs/design/engine-composition.md)
 - [docs/design/settings-and-games.md](docs/design/settings-and-games.md)
+- [docs/design/engine-tools.md](docs/design/engine-tools.md) (engine generation tools)
 
 **Living rules.** If we disagree because of these principles, update the design doc and this rule—do not silently override them.
 
@@ -24,7 +25,8 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    - Capacity / constrained selection: `reserve-pool` / `reserve-stat` on active tags (optional `scope: 'primary'`) — buildings, spells, handheld devices.
    - Assignable capacities: converter entities hold `capacityAssignments` (commit source pool/stat → provide dest pool Max+generate or dest stat); commands `assign-capacity` / `clear-capacity-assignment`; clawback `available` (default) or `strict`.
    - Cross-links: independent `cross-link` effects (`fromStat`/`fromPool` → `toStat`/`toPoolMax`/`toGeneratePool`/`productTag`); bases + link bonuses summed once; pool `capacityStep` (default `0.01`) / `displayStep` (default `1`); `createPool` default false on passive generates.
-   - Soft catalog warns: missing ids, cycles, sub-`capacityStep` adds.
+   - Soft catalog warns: missing ids, cycles, sub-`capacityStep` adds, gate/block refs.
+   - Engine generation tools (`packages/engine/src/tools/`): pathing analyzer; debug-content sidecar + `debug` tag; room for more authoring helpers. See [docs/design/engine-tools.md](docs/design/engine-tools.md) and [tools/AGENTS.md](packages/engine/src/tools/AGENTS.md).
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`Event_CrateFound` → also `Event_CrateOpened`), not erasing history by default.
 5. **Track metrics for gates** — action counts, pool currents, high/low-waters, lifetime used, and tick timestamps live on `entity.metrics`. Prefer engine ticks over wall-clock for rules; hosts may display `tick / N` as time. Use `execute-action.execution` (`manual` default / `automatic`). Low-water metric requirements use `<= amount`.
 6. **Novelty is tag-based** — discoverables declare `novelty: { seenTag, scope? }`; novel while that catalog tag is absent. Ack with `grant-tag` / `add-tag`. Player copy in **`displayText`** on the `seenTag` definition. Conventions: `message_*` / `seen_*` / `milestone_*` / `badge_*` for novelty copy; `Event_*` for durable facts; `Pool_Initial_*` / `Stat_Initial_*` / `Item_*` / `Tech_*` for mechanical roles. Omit `novelty` when not highlighting.
@@ -38,6 +40,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
     - pool reservation / constrained selection
     - assignable capacities (converter commit/provide)
     - stats/pools cross-links + capacity steps
+    - engine generation tools (pathing analyzer, debug-content, …)
 
 ## Vocabulary
 

@@ -43,6 +43,8 @@ export interface ActionDefinition<
    * Ack by granting that catalog tag; display lives on the tag definition.
    */
   readonly novelty?: NoveltyAck;
+  /** Design-time Gate/Block metadata for the content analyzer. */
+  readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
   /** Optional host-code checks; omitted from serialized action definitions. */
   readonly codeRequirements?: readonly RequirementCheck<THost>[];
 }

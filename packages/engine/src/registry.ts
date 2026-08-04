@@ -41,6 +41,10 @@ import type {
   SlotDefinition,
   StatDefinition,
 } from './catalog';
+import type {
+  BlockDefinition,
+  GateDefinition,
+} from './tools/analyzer/types';
 import {
   selectActionCount,
   selectPoolHighWater,
@@ -144,6 +148,8 @@ export class EngineRegistry<THost = unknown> {
   private readonly slotDefinitions = new Map<string, SlotDefinition>();
   private readonly poolDefinitions = new Map<string, PoolDefinition>();
   private readonly statDefinitions = new Map<string, StatDefinition>();
+  private readonly gateDefinitions = new Map<string, GateDefinition>();
+  private readonly blockDefinitions = new Map<string, BlockDefinition>();
 
   registerRequirement(
     type: string,
@@ -208,6 +214,32 @@ export class EngineRegistry<THost = unknown> {
 
   listStatDefinitions(): readonly StatDefinition[] {
     return Object.freeze([...this.statDefinitions.values()]);
+  }
+
+  registerGateDefinition(definition: GateDefinition): this {
+    this.gateDefinitions.set(definition.id, definition);
+    return this;
+  }
+
+  getGateDefinition(id: string): GateDefinition | undefined {
+    return this.gateDefinitions.get(id);
+  }
+
+  listGateDefinitions(): readonly GateDefinition[] {
+    return Object.freeze([...this.gateDefinitions.values()]);
+  }
+
+  registerBlockDefinition(definition: BlockDefinition): this {
+    this.blockDefinitions.set(definition.id, definition);
+    return this;
+  }
+
+  getBlockDefinition(id: string): BlockDefinition | undefined {
+    return this.blockDefinitions.get(id);
+  }
+
+  listBlockDefinitions(): readonly BlockDefinition[] {
+    return Object.freeze([...this.blockDefinitions.values()]);
   }
 
   isRequirementMet(

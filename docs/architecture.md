@@ -6,6 +6,7 @@ Related design guidance (living):
 |-----|------|
 | [design/engine-composition.md](./design/engine-composition.md) | Entities, tags, traits, pools, actions, novelty |
 | [design/settings-and-games.md](./design/settings-and-games.md) | EngineDocument: Settings + Games, UniversalTags |
+| [design/engine-tools.md](./design/engine-tools.md) | Engine generation tools (pathing analyzer, debug-content, …) |
 
 ## Goals
 
@@ -56,8 +57,7 @@ AstrevnoState {
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Costs/results default to the **actor**; source-state requirements default to the **source**.
 - `primaryEntityId` is a **required** field on each game’s `EngineState` (not `gameMeta`): pointer to an in-play entity—the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets. `gameMeta` is optional host lifecycle/presentation (`label`, `archivedSeq`, …).
-- `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.2.3.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves.
-- React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
+- `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.2.4.0`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves.- React owns scheduling/rendering; the engine owns rules. Prefer composition over inheritance.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
 - Derived values (stats / pool maxima / pool reserved from tags) live in engine selectors; UniversalTags merge into active-game evaluation. Stored pool values are **Available** (raw). Gameplay gates use **effective** values floored by per-pool `capacityStep`; hosts should prefer `selectPoolDisplay*` for HUD.
 - Entity **metrics** track action counts (manual / automatic / total) and high/low-water marks for pool current, pool-max, and stats so requirements can hang off history.
@@ -75,6 +75,7 @@ AstrevnoState {
 - Effects: `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
 - Tag passives: `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `reserve-stat`, `cross-link`, continuous-*; cross-links name both ends (`fromStat`/`fromPool` → `toStat`/`toPoolMax`/`toGeneratePool`/`productTag`) and are summed once onto bases
 - Capacity assignments on converter entities (`assign-capacity` / `clear-capacity-assignment`): commit source pool/stat, provide dest pool Max+generate or dest stat; clawback `available` (default) or `strict`
+- Engine generation tools (`packages/engine/src/tools/`): pathing analyzer (Gate/Block, infinite pools); `createDebugContentTool` loads optional debug tag sidecar and defines capability tag `debug`
 - Games may still register namespaced custom types when needed.
 - TypeScript-defined actions may use `codeRequirements` (runtime-only, not for JSON).
 
