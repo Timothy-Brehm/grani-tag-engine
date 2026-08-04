@@ -30,6 +30,10 @@ import {
   startContinuousAction,
 } from './continuous';
 import {
+  assignCapacity,
+  clearCapacityAssignment,
+} from './capacity';
+import {
   holdingIsSelectedElsewhere,
   reconcileAllSlotSelections,
   reconcileSlotSelections,
@@ -361,6 +365,32 @@ function reduceEngineStateInner<THost = unknown>(
       });
     case 'clear-process-pool':
       return clearProcessPool(command.poolId);
+    case 'assign-capacity': {
+      const universalTags =
+        options.universalTags ?? TagCollection.create();
+      return (
+        assignCapacity(
+          state,
+          command.converterEntityId,
+          command.assignment,
+          options.registry,
+          universalTags,
+        ) ?? state
+      );
+    }
+    case 'clear-capacity-assignment': {
+      const universalTags =
+        options.universalTags ?? TagCollection.create();
+      return (
+        clearCapacityAssignment(
+          state,
+          command.converterEntityId,
+          command.assignmentId,
+          options.registry,
+          universalTags,
+        ) ?? state
+      );
+    }
     default: {
       const _exhaustive: never = command;
       return _exhaustive;

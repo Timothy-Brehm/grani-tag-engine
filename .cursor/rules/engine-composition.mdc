@@ -21,7 +21,8 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    - Slotted tags: `slot` + `dependentTags`; evaluation uses the **active** view (`tag` req / passives).
    - Held inventory: `tags.has` / `has-slot` (local∨universal) / `has-slot-local` / `has-slot-universal`. Slot selections may reference a held tag on any game entity or **UniversalTags** (`holderEntityId: 'settings'`); passives apply on the slot owner.
    - Cross-game tags: `settings.universalTags`; merge into play-time tag reads (unslotted passives on active primary).
-   - Capacity / constrained selection: `reserve-pool` on active tags (optional `scope: 'primary'`) — buildings, spells, handheld devices.
+   - Capacity / constrained selection: `reserve-pool` / `reserve-stat` on active tags (optional `scope: 'primary'`) — buildings, spells, handheld devices.
+   - Assignable capacities: converter entities hold `capacityAssignments` (commit source pool/stat → provide dest pool Max+generate or dest stat); commands `assign-capacity` / `clear-capacity-assignment`; clawback `available` (default) or `strict`.
    - Cross-links: independent `cross-link` effects (`fromStat`/`fromPool` → `toStat`/`toPoolMax`/`toGeneratePool`/`productTag`); bases + link bonuses summed once; pool `capacityStep` (default `0.01`) / `displayStep` (default `1`); `createPool` default false on passive generates.
    - Soft catalog warns: missing ids, cycles, sub-`capacityStep` adds.
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`Event_CrateFound` → also `Event_CrateOpened`), not erasing history by default.
@@ -35,6 +36,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
     - content blocks
     - Settings + Games / UniversalTags
     - pool reservation / constrained selection
+    - assignable capacities (converter commit/provide)
     - stats/pools cross-links + capacity steps
 
 ## Vocabulary

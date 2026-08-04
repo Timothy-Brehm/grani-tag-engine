@@ -2,6 +2,7 @@ import type { EntityInstance, EntityMap } from './entity';
 import type { EngineState } from './state';
 import type { Tag } from './tag';
 import type { TagCollection } from './tag-collection';
+import { TagCollection as TC } from './tag-collection';
 import type {
   ContinuousActiveJob,
   ContinuousProgressRecord,
@@ -10,8 +11,16 @@ import type { SlotCatalog } from './slots';
 import {
   selectStatValue as selectStatValueDerived,
   selectPoolMax as selectPoolMaxDerived,
+  selectPoolMaxRaw,
   selectPoolEffectiveAvailable,
+  poolCapacityStep,
 } from './derive';
+import {
+  selectAssignmentPoolMaxBonus,
+  selectAssignmentStatBonus,
+  selectStatReserved,
+} from './capacity';
+import { floorPoolQuantity, roundPoolQuantity } from './quantity';
 
 export {
   entityHasActiveTag,
@@ -88,35 +97,78 @@ export function selectEntitiesByDefinition(
   );
 }
 
+/**
+ * Effective stat for gates: base + cross-links + assignment provides − reserved
+ * (`reserve-stat` + capacity commits). Without `state`, returns gross (no reserve).
+ */
 export function selectStatValue(
   entity: EntityInstance,
   stat: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
   options?: import('./slots').ActiveTagOptions,
+  state?: EngineState,
+  universalTags: TagCollection = TC.create(),
 ): number {
-  return selectStatValueDerived(
+  let value = selectStatValueDerived(
     entity,
     stat,
     registry,
     entities,
     options,
   );
+  if (!state) {
+    return value;
+  }
+  value += selectAssignmentStatBonus(
+    state,
+    entity,
+    stat,
+    registry,
+    universalTags,
+  );
+  value -= selectStatReserved(
+    state,
+    entity.id,
+    stat,
+    registry,
+    universalTags,
+  );
+  return roundPoolQuantity(Math.max(0, value));
 }
 
+/**
+ * Effective pool Max. With `state`, includes capacity-assignment provides on
+ * this entity.
+ */
 export function selectPoolMax(
   entity: EntityInstance,
   pool: string,
   registry?: SlotCatalog,
   entities?: EntityMap,
   options?: import('./slots').ActiveTagOptions,
+  state?: EngineState,
+  universalTags: TagCollection = TC.create(),
 ): number {
-  return selectPoolMaxDerived(
-    entity,
-    pool,
-    registry,
-    entities,
-    options,
+  if (!state) {
+    return selectPoolMaxDerived(
+      entity,
+      pool,
+      registry,
+      entities,
+      options,
+    );
+  }
+  return floorPoolQuantity(
+    selectPoolMaxRaw(entity, pool, registry, entities, options) +
+      selectAssignmentPoolMaxBonus(
+        state,
+        entity,
+        pool,
+        registry,
+        universalTags,
+      ),
+    poolCapacityStep(registry, pool),
   );
 }
 

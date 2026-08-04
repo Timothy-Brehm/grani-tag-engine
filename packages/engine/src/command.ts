@@ -130,4 +130,14 @@ export type EngineCommand<THost = unknown> =
   | {
       readonly type: 'clear-process-pool';
       readonly poolId: string;
+    }
+  | {
+      readonly type: 'assign-capacity';
+      readonly converterEntityId: string;
+      readonly assignment: import('./capacity-types').CapacityAssignment;
+    }
+  | {
+      readonly type: 'clear-capacity-assignment';
+      readonly converterEntityId: string;
+      readonly assignmentId: string;
     };
