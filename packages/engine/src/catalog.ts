@@ -64,7 +64,9 @@ export type CatalogWarningKind =
   | 'tier'
   | 'share'
   | 'cycle'
-  | 'capacity-step';
+  | 'capacity-step'
+  | 'gate'
+  | 'block';
 
 export type CatalogWarning = {
   readonly kind: CatalogWarningKind;
@@ -77,6 +79,8 @@ export type CatalogRegistryView = {
   getSlotDefinition(id: string): SlotDefinition | undefined;
   getPoolDefinition(id: string): PoolDefinition | undefined;
   getStatDefinition(id: string): StatDefinition | undefined;
+  getGateDefinition?(id: string): import('./tools/analyzer/types').GateDefinition | undefined;
+  getBlockDefinition?(id: string): import('./tools/analyzer/types').BlockDefinition | undefined;
   /**
    * Optional: walk authored entity definitions (initial tags/pools) for soft
    * validation. `EngineRegistry` provides this.
@@ -85,7 +89,16 @@ export type CatalogRegistryView = {
     readonly id: string;
     readonly initialTags?: readonly Tag[];
     readonly initialPools?: Readonly<Record<string, number>>;
+    readonly actions?: readonly {
+      readonly name: string;
+      readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
+      readonly results?: readonly { readonly type: string; readonly name?: string }[];
+      readonly sideEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly requirements?: readonly { readonly type: string }[];
+    }[];
   }[];
+  listGateDefinitions?(): readonly import('./tools/analyzer/types').GateDefinition[];
+  listBlockDefinitions?(): readonly import('./tools/analyzer/types').BlockDefinition[];
 };
 
 function pushUnique(
@@ -119,6 +132,26 @@ function walkTagRefs(
       pushUnique(warnings, seen, {
         kind: 'slot',
         id: tag.slot,
+        source: `${source}#${tag.name}`,
+      });
+    }
+  }
+
+  const meta = tag.analyzer;
+  if (meta?.blockId && registry.getBlockDefinition) {
+    if (!registry.getBlockDefinition(meta.blockId)) {
+      pushUnique(warnings, seen, {
+        kind: 'block',
+        id: meta.blockId,
+        source: `${source}#${tag.name}`,
+      });
+    }
+  }
+  if (meta?.gateId && registry.getGateDefinition) {
+    if (!registry.getGateDefinition(meta.gateId)) {
+      pushUnique(warnings, seen, {
+        kind: 'gate',
+        id: meta.gateId,
         source: `${source}#${tag.name}`,
       });
     }
@@ -438,6 +471,27 @@ export function collectCatalogWarnings(
         });
       }
     }
+    for (const action of def.actions ?? []) {
+      const meta = action.analyzer;
+      if (meta?.blockId && registry.getBlockDefinition) {
+        if (!registry.getBlockDefinition(meta.blockId)) {
+          pushUnique(warnings, seen, {
+            kind: 'block',
+            id: meta.blockId,
+            source: `definition:${def.id}.action:${action.name}`,
+          });
+        }
+      }
+      if (meta?.gateId && registry.getGateDefinition) {
+        if (!registry.getGateDefinition(meta.gateId)) {
+          pushUnique(warnings, seen, {
+            kind: 'gate',
+            id: meta.gateId,
+            source: `definition:${def.id}.action:${action.name}`,
+          });
+        }
+      }
+    }
   }
 
   for (const entity of state.entities.values()) {
@@ -482,5 +536,131 @@ export function collectCatalogWarnings(
 
   walkCycleWarnings(crossEdges, warnings, seen);
 
+  for (const gate of registry.listGateDefinitions?.() ?? []) {
+    // Soft: gate tagName should appear somewhere in defs/catalog walk; warn if never seen as tag name in defs.
+    let found = false;
+    for (const def of defs) {
+      for (const tag of def.initialTags ?? []) {
+        if (tag.name === gate.tagName || tagHasName(tag, gate.tagName)) {
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+      for (const action of def.actions ?? []) {
+        for (const effect of [
+          ...(action.results ?? []),
+          ...(action.sideEffects ?? []),
+        ]) {
+          if (effect.type === 'grant-tag' && effect.name === gate.tagName) {
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (found) break;
+    }
+    if (!found) {
+      pushUnique(warnings, seen, {
+        kind: 'gate',
+        id: gate.id,
+        source: `gate.tagName:${gate.tagName}`,
+      });
+    }
+  }
+
+  for (const block of registry.listBlockDefinitions?.() ?? []) {
+    const entry = block.entry;
+    if (entry.kind === 'tag') {
+      const members = collectBlockMemberRefs(registry, block.id);
+      const entryTagged = members.tags.some(
+        (t) => t.name === entry.name && t.analyzer?.blockRole === 'entry',
+      );
+      if (!entryTagged && !members.tags.some((t) => t.name === entry.name)) {
+        pushUnique(warnings, seen, {
+          kind: 'block',
+          id: block.id,
+          source: `entry.tag:${entry.name}`,
+        });
+      }
+    } else {
+      const def = defs.find((d) => d.id === entry.entityDefinitionId);
+      const action = def?.actions?.find((a) => a.name === entry.actionName);
+      if (!action) {
+        pushUnique(warnings, seen, {
+          kind: 'block',
+          id: block.id,
+          source: `entry.action:${entry.entityDefinitionId}::${entry.actionName}`,
+        });
+      } else if (action) {
+        const meta = action.analyzer;
+        if (
+          meta?.blockId === block.id &&
+          meta.blockRole &&
+          meta.blockRole !== 'entry'
+        ) {
+          pushUnique(warnings, seen, {
+            kind: 'block',
+            id: block.id,
+            source: `entry.role-mismatch:${entry.actionName}`,
+          });
+        }
+      }
+    }
+    if (block.summaryTag) {
+      const members = collectBlockMemberRefs(registry, block.id);
+      if (!members.tags.some((t) => t.name === block.summaryTag)) {
+        pushUnique(warnings, seen, {
+          kind: 'block',
+          id: block.id,
+          source: `summaryTag:${block.summaryTag}`,
+        });
+      }
+    }
+  }
+
   return warnings;
+}
+
+function tagHasName(tag: Tag, name: string): boolean {
+  if (tag.name === name) return true;
+  for (const child of tag.dependentTags ?? []) {
+    if (tagHasName(child, name)) return true;
+  }
+  return false;
+}
+
+function collectBlockMemberRefs(
+  registry: CatalogRegistryView,
+  blockId: string,
+): {
+  tags: Tag[];
+  actions: { name: string; analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta }[];
+} {
+  const tags: Tag[] = [];
+  const actions: {
+    name: string;
+    analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
+  }[] = [];
+  for (const def of registry.listEntityDefinitions?.() ?? []) {
+    for (const tag of def.initialTags ?? []) {
+      collectTagsWithBlock(tag, blockId, tags);
+    }
+    for (const action of def.actions ?? []) {
+      if (action.analyzer?.blockId === blockId) {
+        actions.push(action);
+      }
+    }
+  }
+  return { tags, actions };
+}
+
+function collectTagsWithBlock(tag: Tag, blockId: string, out: Tag[]): void {
+  if (tag.analyzer?.blockId === blockId) {
+    out.push(tag);
+  }
+  for (const child of tag.dependentTags ?? []) {
+    collectTagsWithBlock(child, blockId, out);
+  }
 }

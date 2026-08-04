@@ -1,6 +1,6 @@
 {
   "name": "grani-tag-engine",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Framework-neutral tag, requirement, effect, and action evaluation engine",
   "license": "GPL-3.0-or-later",
   "type": "module",

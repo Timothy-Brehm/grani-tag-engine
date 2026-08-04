@@ -1,0 +1,26 @@
+---
+description: Engine generation tools (analyzer, debug-content, future helpers)
+globs: packages/engine/src/tools/**
+alwaysApply: false
+---
+
+# Engine generation tools
+
+When editing `packages/engine/src/tools/`, read [AGENTS.md](../../packages/engine/src/tools/AGENTS.md).
+
+## Library
+
+Design-time / authoring helpers under `tools/` — **not** play `reduce`.
+
+| Tool | Tag | Path |
+|------|-----|------|
+| Content pathing analyzer | `content-pathing-analyzer` | `tools/analyzer/` |
+| Debug content sidecar | `debug-content` | `tools/debug-content/` |
+
+Umbrella tag: `engine-tools`. Add new helpers as sibling folders and export from `tools/index.ts`.
+
+## Rules
+
+- Keep tools genre-neutral; no React/UI here.
+- Block summary shortcuts require `{ type: 'tag', tagName: 'debug', exists: true }`.
+- Hosts own file I/O for `debug-tags.json`; pass parsed JSON to `loadDebugTagSource` / `createDebugContentTool`.

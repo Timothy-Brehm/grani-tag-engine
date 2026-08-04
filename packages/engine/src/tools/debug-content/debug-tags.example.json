@@ -1,0 +1,27 @@
+{
+  "sourceId": "example-debug",
+  "debugTagName": "debug",
+  "tags": {
+    "tags": [
+      {
+        "name": "debug",
+        "label": "Debug",
+        "description": "Engine debug capability (optional explicit entry; always ensured by createDebugContentTool).",
+        "effects": []
+      },
+      {
+        "name": "Block_Demo_Summary",
+        "label": "Demo block (debug collapse)",
+        "description": "Example summary tag granted only when debug is enabled.",
+        "effects": [
+          {
+            "type": "stat",
+            "name": "power",
+            "strength": 2,
+            "stat": "Power"
+          }
+        ]
+      }
+    ]
+  }
+}

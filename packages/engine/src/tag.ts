@@ -98,6 +98,8 @@ export interface Tag<TEffect extends TagEffect = TagEffect> {
    * active root. Not held in TagCollection.
    */
   readonly dependentTags?: readonly Tag<TEffect>[];
+  /** Design-time Gate/Block metadata for the content analyzer. */
+  readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
   readonly effects: readonly TEffect[];
 }
 
@@ -124,6 +126,7 @@ export function createTag<TEffect extends TagEffect = TagEffect>(
           ),
         }
       : {}),
+    ...(input.analyzer !== undefined ? { analyzer: input.analyzer } : {}),
     effects: Object.freeze([...input.effects]),
   };
 }
