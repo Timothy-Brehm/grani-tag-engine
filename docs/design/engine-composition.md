@@ -147,8 +147,8 @@ A **pool** is a measured quantity of some spendable concept with a maximum and c
 
 | Term | Storage | Meaning |
 |------|---------|---------|
-| **Max** | Derived | Sum of active `pool-max` + live cross-links (then floored by `capacityStep`) |
-| **Reserved** | Derived | Sum of active `reserve-pool` targeting this entity |
+| **Max** | Derived | Sum of active `pool-max` + live cross-links + capacity-assignment provides (then floored by `capacityStep`) |
+| **Reserved** | Derived | Sum of active `reserve-pool` + capacity-assignment pool commits targeting this entity |
 | **Available** (raw) | **Stored** in `entity.pools[poolId]` | Spendable / reservable headroom (may be fractional) |
 | **Effective Available / Max** | Derived | `floor(raw / capacityStep) * capacityStep` (default step `0.01`) |
 | **Contents** | Derived | Available + Reserved |
@@ -157,9 +157,9 @@ A **pool** is a measured quantity of some spendable concept with a maximum and c
 
 - Contents ≤ Max (raw regen clamp uses raw Max − Reserved so micro-gains accumulate)
 - Spend fails if **effective** Available cannot cover the cost
-- Regen / `generate-pool` fills Available only, capped at Max − Reserved
-- When Reserved increases (new active `reserve-pool`), Available decreases by the same Δ (transition refused if Available cannot cover it)
-- When Reserved drops (remove tag / entity / unequip), Available rises
+- Regen / `generate-pool` / assignment generate fills Available only, capped at Max − Reserved
+- When Reserved increases (new active `reserve-pool` or capacity commit), Available decreases by the same Δ (transition refused if Available cannot cover it)
+- When Reserved drops (remove tag / entity / unequip / clear assignment), Available rises
 
 **Per-pool steps** (`PoolDefinition`):
 
@@ -170,11 +170,45 @@ Example: Mana `capacityStep: 1`; add `0.0001` per tick until raw crosses 1 — n
 
 `reserve-pool` passive: `{ type: 'reserve-pool', pool, strength, name, scope?: 'primary' }`. Omit scope → reserve on the entity where the tag is active; `scope: 'primary'` → reserve on the primary (buildings/devices).
 
+`reserve-stat` passive: `{ type: 'reserve-stat', stat, strength, name, scope?: 'primary' }`. Effective `selectStatValue` (with state) = base + cross-links + assignment provides − reserved (floor 0). Gross (no reserve) stays available via `selectStatValueGross`.
+
 **Host display:** prefer `selectPoolDisplayCurrent` / `selectPoolDisplayMax`; raw via `selectPoolAvailable` / `selectPoolMaxRaw`. Simple UI is often `Available/Max`; a stacked bar can show reserved, then filled Available, then empty up to Max.
 
 Pools model stamina, stockpiles, mana, building **Space**, device **Power**—anything with capacity that can be spent and/or reserved.
 
 **Storage as progression:** raising `pool-max` is a meaningful unlock when actions require stockpiles or free capacity to reserve.
+
+### Assignable capacities (converters)
+
+A **converter** is a normal entity that **commits** source capacity and **provides** destination capacity—not an action recipe and not process tick scheduling.
+
+| Direction | Commit | Provide |
+|-----------|--------|---------|
+| Pool → pool | Reserve on source | Dest **real** pool on converter: +Max + generate (default every 1 tick) |
+| Stat → pool | Reserve source stat (effective −N) | Same dest pool Max + generate |
+| Pool → stat | Reserve on source | +stat on converter while assigned |
+
+Assignments live on the **converter** (`entity.capacityAssignments`). Commands: `assign-capacity` / `clear-capacity-assignment`.
+
+```ts
+CapacityAssignment = {
+  id, sourceEntityId,
+  fromPool? | fromStat?,
+  amount | percent,      // percent of source pool Max or gross stat
+  toPool? | toStat?,
+  efficiency?,           // default 1; provide = commit × efficiency
+  everyTicks?,           // generate interval for toPool; default 1
+}
+```
+
+**Clawback** when provided pool Max shrinks (`entity.capacityClawback`, definition default at spawn):
+
+| Mode | Behavior |
+|------|----------|
+| **`available` (default)** | Claw `min(Available, ΔMax)`; always apply full Max drop; clamp Available to new Max − Reserved |
+| **`strict`** | Refuse if Available &lt; ΔMax |
+
+Examples: 3 Int → +15 Mana (`efficiency: 5`); 20 Stamina reserved → +1 Constitution (`efficiency: 0.05`).
 
 ### Stats / pools cross-links
 
@@ -345,7 +379,8 @@ Novelty/message prefixes stay `snake_case` after the role word (`message_strengt
 
 ```text
 EntityDefinition
-  ├─ initialTags  →  traits (stat/…) + pool maxima + generate-pool / reserve-pool / continuous-* passives
+  ├─ initialTags  →  traits (stat/…) + pool maxima + generate-pool / reserve-pool / reserve-stat / continuous-* passives
+  ├─ capacityAssignments → converter commit/provide (optional)
   ├─ initialPools →  starting Available amounts
   └─ actions[]    →  recipes offered when this entity is source
 
@@ -400,7 +435,9 @@ EngineRegistry (catalogs, not serialized in EngineState)
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
-**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `reserve-stat`, `cross-link`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+
+**Commands** (capacity): `assign-capacity`, `clear-capacity-assignment`
 
 Hosts may register namespaced types when a game needs a true special case—but try a recipe first.
 

@@ -18,6 +18,11 @@ import {
   type EntityMetricsJSON,
 } from './metrics';
 import type { CatalogRegistryView } from './catalog';
+import type {
+  CapacityAssignment,
+  CapacityClawback,
+} from './capacity-types';
+import { normalizeCapacityClawback } from './capacity-types';
 
 /** Who an effect or requirement resolves against. */
 export type EntityScope = 'actor' | 'source' | 'target';
@@ -83,6 +88,15 @@ export interface EntityInstance {
   readonly metrics: EntityMetrics;
   /** Selectable slot id → held-tag ref (any entity may be the holder). */
   readonly slotSelections: Readonly<Record<string, SlotSelectionRef>>;
+  /**
+   * Capacity assignments on this converter entity (commit source → provide dest).
+   */
+  readonly capacityAssignments: readonly CapacityAssignment[];
+  /**
+   * Clawback when provided pool Max shrinks. Default `available`.
+   * Definition default is applied at spawn when instance omits this.
+   */
+  readonly capacityClawback?: CapacityClawback;
 }
 
 export type EntityInstanceJSON = {
@@ -92,6 +106,8 @@ export type EntityInstanceJSON = {
   pools: Record<string, number>;
   metrics?: EntityMetricsJSON;
   slotSelections?: Record<string, SlotSelectionJSON>;
+  capacityAssignments?: import('./capacity-types').CapacityAssignmentJSON[];
+  capacityClawback?: import('./capacity-types').CapacityClawback;
   /** @deprecated Ignored; novelty is tag-based now. */
   novelty?: unknown;
 };
@@ -117,6 +133,8 @@ export interface EntityDefinition {
   readonly maxActive?: number;
   /** Max lifetime spawns of this definition. */
   readonly maxCreated?: number;
+  /** Default clawback for capacity assignments on spawned instances. */
+  readonly capacityClawback?: CapacityClawback;
 }
 
 export function createEntityInstance(input: {
@@ -126,6 +144,8 @@ export function createEntityInstance(input: {
   pools?: EntityPoolMap;
   metrics?: EntityMetrics;
   slotSelections?: Readonly<Record<string, SlotSelectionJSON>>;
+  capacityAssignments?: readonly CapacityAssignment[];
+  capacityClawback?: CapacityClawback;
   /** Engine tick used to stamp initial watermarks / tag grants. Default 0. */
   tick?: number;
 }): EntityInstance {
@@ -148,6 +168,10 @@ export function createEntityInstance(input: {
     pools,
     metrics: baseMetrics,
     slotSelections: normalizeSlotSelections(input.id, input.slotSelections),
+    capacityAssignments: Object.freeze([...(input.capacityAssignments ?? [])]),
+    ...(input.capacityClawback !== undefined
+      ? { capacityClawback: normalizeCapacityClawback(input.capacityClawback) }
+      : {}),
   };
   return refreshEntityHighWaters(recordTagGrants(base, tags, tick), tick);
 }
@@ -169,6 +193,12 @@ export function entityInstanceToJSON(
     pools: { ...entity.pools },
     metrics: entityMetricsToJSON(entity.metrics),
     ...(Object.keys(slotSelections).length > 0 ? { slotSelections } : {}),
+    ...(entity.capacityAssignments.length > 0
+      ? { capacityAssignments: [...entity.capacityAssignments] }
+      : {}),
+    ...(entity.capacityClawback !== undefined
+      ? { capacityClawback: entity.capacityClawback }
+      : {}),
   };
 }
 
@@ -182,6 +212,8 @@ export function entityInstanceFromJSON(
     pools: json.pools ?? {},
     metrics: json.metrics ? entityMetricsFromJSON(json.metrics) : undefined,
     slotSelections: json.slotSelections ?? {},
+    capacityAssignments: json.capacityAssignments ?? [],
+    capacityClawback: json.capacityClawback,
   });
 }
 
@@ -257,6 +289,7 @@ export function instantiateEntity(
     definitionId: definition.id,
     tags: definition.initialTags,
     pools: definition.initialPools,
+    capacityClawback: definition.capacityClawback,
     tick,
   });
 }

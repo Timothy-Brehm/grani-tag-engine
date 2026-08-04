@@ -7,8 +7,8 @@ export interface TagEffect {
   /** Optional payload for `pool-max` / `generate-pool` / `reserve-pool` / `cross-link.fromPool`. */
   readonly pool?: string;
   /**
-   * For `reserve-pool`: `'primary'` reserves on the primary entity;
-   * omit to reserve on the entity where the tag is active.
+   * For `reserve-pool` / `reserve-stat`: `'primary'` targets the primary entity;
+   * omit to target the entity where the tag is active.
    */
   readonly scope?: 'primary' | string;
   /**

@@ -88,6 +88,7 @@ export type {
   GrantTagEffect,
   RemoveEntityEffect,
   ReservePoolEffect,
+  ReserveStatEffect,
   SpawnEntityEffect,
 } from './effect';
 
@@ -290,6 +291,28 @@ export {
   tryAdjustEntityPool,
 } from './pools';
 export type { TryAdjustPoolOptions } from './pools';
+
+export type {
+  CapacityAssignment,
+  CapacityAssignmentJSON,
+  CapacityClawback,
+} from './capacity';
+export {
+  DEFAULT_CAPACITY_CLAWBACK,
+  normalizeCapacityClawback,
+  assignmentEfficiency,
+  assignmentEveryTicks,
+  resolveAssignmentCommit,
+  resolveAssignmentProvide,
+  selectAssignmentPoolMaxBonus,
+  selectAssignmentStatBonus,
+  selectAssignmentPoolReserved,
+  selectStatReserved,
+  selectStatValueGross,
+  canAcceptCapacityAssignment,
+  assignCapacity,
+  clearCapacityAssignment,
+} from './capacity';
 
 export type {
   ProcessPoolKind,

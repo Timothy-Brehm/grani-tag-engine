@@ -338,6 +338,8 @@ export class EngineRegistry<THost = unknown> {
           this,
           evalMap(context),
           activeOpts(context, entity),
+          context.engine,
+          context.universalTags,
         ) >= requirement.amount
       );
     });
@@ -357,6 +359,8 @@ export class EngineRegistry<THost = unknown> {
             this,
             evalMap(context),
             activeOpts(context, entity),
+            context.engine,
+            context.universalTags,
           ) > requirement.amount
         );
       },

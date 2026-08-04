@@ -21,6 +21,10 @@ import { entitiesWithUniversal } from './document';
 import { createTag } from './tag';
 import { roundPoolQuantity } from './quantity';
 import { crossLinkCoeff, crossLinkSourceValue } from './derive';
+import {
+  assignmentEveryTicks,
+  resolveAssignmentProvide,
+} from './capacity';
 
 import {
   continuousProgressKey,
@@ -851,9 +855,11 @@ export function advanceContinuousActions<THost>(
 }
 
 /**
- * Pulse `generate-pool` and `cross-link` generators / product-tag capacity.
+ * Pulse `generate-pool`, `cross-link` generators / product-tag capacity, and
+ * capacity-assignment `toPool` provides (default every 1 tick).
  * Fullness uses raw Available vs raw Max−Reserved so micro-gains can accumulate
- * under capacityStep. Passive creates require `createPool: true`.
+ * under capacityStep. Passive creates require `createPool: true`; assignments
+ * unlock the dest pool on assign and pulse with createPool.
  */
 export function pulseGenerators(
   state: EngineState,
@@ -1068,6 +1074,30 @@ export function pulseGenerators(
         }
       }
     }
+
+    for (const assignment of entity.capacityAssignments) {
+      if (!assignment.toPool) {
+        continue;
+      }
+      const amount = resolveAssignmentProvide(
+        next,
+        assignment,
+        registry,
+        universalTags,
+      );
+      if (!(amount > 0)) {
+        continue;
+      }
+      const everyTicks = assignmentEveryTicks(assignment);
+      const key = `capacity::${assignment.id}::${assignment.toPool}`;
+      const last = generatorLastTick[key];
+      const due = last === undefined || next.tick - last >= everyTicks;
+      if (!due) {
+        continue;
+      }
+      tryPulseAvailable(assignment.toPool, amount, key, true);
+    }
+
     if (changed) {
       next = upsertEntity(next, entity);
     }

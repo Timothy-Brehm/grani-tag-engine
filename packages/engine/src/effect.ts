@@ -23,6 +23,16 @@ export type ReservePoolEffect = ActiveEffect & {
   readonly scope?: 'primary';
 };
 
+/** Passive: while active, reserves `strength` of `stat` (effective value decreases). */
+export type ReserveStatEffect = ActiveEffect & {
+  readonly type: 'reserve-stat';
+  readonly stat: string;
+  /**
+   * `'primary'` → reserve on the game primary; omit → entity where the tag is active.
+   */
+  readonly scope?: 'primary';
+};
+
 export type GrantTagEffect = ActiveEffect & {
   readonly type: 'grant-tag';
   /** Defaults to actor, then source. */

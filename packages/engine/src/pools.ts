@@ -12,9 +12,12 @@ import {
   poolCapacityStep,
   selectPoolAvailableRaw,
   selectPoolEffectiveAvailable,
-  selectPoolMax,
   selectPoolMaxRaw,
 } from './derive';
+import {
+  resolveAssignmentCommit,
+  selectAssignmentPoolMaxBonus,
+} from './capacity';
 
 /** Stored pool value = Available (spendable / reservable), raw. */
 export function selectPoolAvailable(
@@ -90,12 +93,21 @@ function poolMaxRawFor(
   universalTags: TagCollection = TC.create(),
 ): number {
   const entities = entitiesWithUniversal(state, universalTags);
-  return selectPoolMaxRaw(
-    entity,
-    pool,
-    registry,
-    entities,
-    activeOptsFor(state, entity, universalTags),
+  return (
+    selectPoolMaxRaw(
+      entity,
+      pool,
+      registry,
+      entities,
+      activeOptsFor(state, entity, universalTags),
+    ) +
+    selectAssignmentPoolMaxBonus(
+      state,
+      entity,
+      pool,
+      registry,
+      universalTags,
+    )
   );
 }
 
@@ -128,13 +140,9 @@ export function selectPoolEffectiveAvailableMax(
   registry?: SlotCatalog,
   universalTags: TagCollection = TC.create(),
 ): number {
-  const entities = entitiesWithUniversal(state, universalTags);
-  const max = selectPoolMax(
-    entity,
-    pool,
-    registry,
-    entities,
-    activeOptsFor(state, entity, universalTags),
+  const max = floorPoolQuantity(
+    poolMaxRawFor(state, entity, pool, registry, universalTags),
+    poolCapacityStep(registry, pool),
   );
   const reserved = selectPoolEffectiveReserved(
     state,
@@ -195,6 +203,16 @@ export function computeReservedByEntity(
           effect.scope === 'primary' ? state.primaryEntityId : entity.id;
         add(targetId, pool, effect.strength);
       }
+    }
+    for (const a of entity.capacityAssignments) {
+      if (!a.fromPool) {
+        continue;
+      }
+      add(
+        a.sourceEntityId,
+        a.fromPool,
+        resolveAssignmentCommit(state, a, registry, universalTags),
+      );
     }
   }
 
@@ -344,7 +362,6 @@ export function tryAdjustEntityPool(
 
 export {
   selectPoolEffectiveAvailable,
-  selectPoolMax,
   selectPoolMaxRaw,
   poolCapacityStep,
 };
