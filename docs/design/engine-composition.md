@@ -431,7 +431,11 @@ EngineRegistry (catalogs, not serialized in EngineState)
 - `has-slot` — holds any tag assigned to that slot (ownership, not “equipped/selected”)
 - `stat`, `pool-max`, `entity-count`, `metric`
 
-**Effects:** `grant-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+**Effects:** `grant-tag`, `lock-tag`, `adjust-pool`, `spawn-entity`, `remove-entity`
+
+**`lock-tag` vs “Locks” (UI):** Runtime is **identical to `grant-tag`** (idempotent grant of `name`). There is no separate locking mechanic in the engine—closing off future choices is done the usual way: **grant a tag**, and gate rival / repeat recipes with `{ type: 'tag', tagName: '…', exists: false }` (or other requirements).
+
+Hosts may author that grant as **“Locks”** as a **presentation hint** (tooltip: `Locks: …` plus the tag’s catalog description). Prefer emitting engine `grant-tag` from that UI type; `lock-tag` remains an optional synonym for the same adaptor. Full recipe example: [§5 Tiers — Locking the choice](#5-tiers-content-partitions--exclusive-choice).
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
@@ -592,7 +596,35 @@ Choice action grants **both**. Shared post-tier content requires the base tag; p
 2. Each action grants base + path tags, then removes the chooser.
 3. Downstream recipes require the base tag, optionally plus a path tag.
 
-Selectable `SlotDefinition`s may host tier options when loadout UI is desired; one-shot encounter forks use the same base+path shape (`Choice_Squirrels` + `Choice_Squirrels_Feed`). Theme-specific tier *lists* belong in the **host** game, not this package.
+**Locking the choice (recipe shape):** every option shares the same closer. Engine effects are plain `grant-tag`s; hosts may label the base grant **Locks** in tooltips. Closing rivals is the `exists: false` requirement on that base tag—not a special lock runtime.
+
+```ts
+// Catalog: base tag may carry player-facing copy for the Locks tooltip
+{ name: 'Tier1Choice', description: 'You committed to a Tier 1 path.', effects: [] }
+{ name: 'Tier1Choice_WentLeft', description: '…', effects: [/* path passives */] }
+
+// One option on the chooser entity
+{
+  name: 'tier1-go-left',
+  requirements: [
+    { type: 'tag', tagName: 'Tier1Choice', exists: false },
+    // …plus whatever unlocked this option
+  ],
+  costs: [],
+  results: [
+    { type: 'grant-tag', name: 'Tier1Choice_WentLeft', strength: 1 },
+  ],
+  sideEffects: [
+    // Host UI type "Locks" → still grant-tag (or optional lock-tag synonym)
+    { type: 'grant-tag', name: 'Tier1Choice', strength: 1 },
+  ],
+  // often also: remove-entity the chooser
+}
+```
+
+**Host UI:** when an effect is authored/displayed as Locks, show something like `Locks: <label>` and surface that tag’s catalog **`description`** (or `displayText` if the host prefers modal-style copy) in the tooltip—same idea as action descriptions. The engine does not format that string.
+
+Selectable `SlotDefinition`s may host tier options when loadout UI is desired; one-shot encounter forks use the same base+path shape (`Decision_Squirrel` + `Decision_Squirrel_Feed`). Theme-specific tier *lists* belong in the **host** game, not this package.
 
 Analyzer **Gate** milestones (`GateDefinition` + `analyzeUpToGate`) should align with tier boundaries. See [engine-tools.md](./engine-tools.md).
 

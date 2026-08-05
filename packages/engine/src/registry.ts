@@ -17,6 +17,7 @@ import type {
 import type {
   AdjustPoolEffect,
   GrantTagEffect,
+  LockTagEffect,
   RemoveEntityEffect,
   SpawnEntityEffect,
 } from './effect';
@@ -278,7 +279,7 @@ export class EngineRegistry<THost = unknown> {
   /**
    * Registers builtins: free/forbidden/tag/has-slot/has-slot-local/
    * has-slot-universal/stat/pool-max/entity-count/metric requirements and
-   * grant-tag/adjust-pool/spawn-entity/remove-entity effects.
+   * grant-tag/lock-tag/adjust-pool/spawn-entity/remove-entity effects.
    * Tag passives include reserve-pool (derived reservation).
    */
   createBuiltinAdaptors(): this {
@@ -488,13 +489,13 @@ export class EngineRegistry<THost = unknown> {
       }
     });
 
-    this.registerEffect('grant-tag', {
-      canHappen: (effect: GrantTagEffect, context) => {
+    const grantTagAdaptor: EffectAdaptor<GrantTagEffect, THost> = {
+      canHappen: (effect, context) => {
         const scope = defaultEffectScope(context, effect.scope);
         const entity = getScopedEntity(context, scope);
         return Boolean(entity && !entity.tags.has(effect.name));
       },
-      apply: (effect: GrantTagEffect, context) => {
+      apply: (effect, context) => {
         const scope = defaultEffectScope(context, effect.scope);
         const entity = getScopedEntity(context, scope);
         if (!entity || entity.tags.has(effect.name)) {
@@ -523,7 +524,13 @@ export class EngineRegistry<THost = unknown> {
           upsertEntity(provisional, nextEntity),
         );
       },
-    });
+    };
+    this.registerEffect('grant-tag', grantTagAdaptor);
+    // Optional synonym — identical runtime; “Locks” is a host UI hint.
+    this.registerEffect(
+      'lock-tag',
+      grantTagAdaptor as EffectAdaptor<LockTagEffect, THost>,
+    );
 
     this.registerEffect('adjust-pool', {
       canHappen: (effect: AdjustPoolEffect, context) => {

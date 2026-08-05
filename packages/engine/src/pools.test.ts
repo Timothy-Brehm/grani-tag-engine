@@ -22,8 +22,8 @@ function registryWith(...defs: Parameters<EngineRegistry['registerEntityDefiniti
 }
 
 describe('pool reservation', () => {
-  it('exports 0.2.4.0', () => {
-    expect(ENGINE_VERSION).toBe('0.2.4.0');
+  it('exports 0.2.4.1', () => {
+    expect(ENGINE_VERSION).toBe('0.2.4.1');
   });
 
   it('refuses spend when Available is insufficient', () => {

@@ -17,8 +17,8 @@ import { createEngineState } from '../../state';
 import { instantiateEntity } from '../../entity';
 
 describe('content analyzer', () => {
-  it('exports 0.2.4.0', () => {
-    expect(ENGINE_VERSION).toBe('0.2.4.0');
+  it('exports 0.2.4.1', () => {
+    expect(ENGINE_VERSION).toBe('0.2.4.1');
   });
 
   it('analyzes up to a tier gate', () => {

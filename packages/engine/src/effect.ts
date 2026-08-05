@@ -39,6 +39,17 @@ export type GrantTagEffect = ActiveEffect & {
   readonly scope?: EntityScope;
 };
 
+/**
+ * Optional synonym of {@link GrantTagEffect}. Same runtime; no special lock
+ * semantics. Hosts may keep a “Locks” UI type that maps to `grant-tag` instead.
+ * Closing choices = grant a tag + `tag` requirements with `exists: false`.
+ */
+export type LockTagEffect = ActiveEffect & {
+  readonly type: 'lock-tag';
+  /** Defaults to actor, then source. */
+  readonly scope?: EntityScope;
+};
+
 export type SpawnEntityEffect = ActiveEffect & {
   readonly type: 'spawn-entity';
   readonly definitionId: string;

@@ -5,7 +5,7 @@
  * marks the protocol incompatible with older saves and hosts. `patch` / `build`
  * are for compatible revisions within the same epoch.
  */
-export const ENGINE_VERSION = '0.2.4.0' as const;
+export const ENGINE_VERSION = '0.2.4.1' as const;
 
 export type EngineVersionParts = {
   readonly major: number;
