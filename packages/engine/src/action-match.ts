@@ -38,6 +38,11 @@ export function normalizeTypes(
 /** @deprecated Prefer {@link normalizeTypes}. */
 export const normalizeActionTypes = normalizeTypes;
 
+/**
+ * True when the member has **every** filter Type (AND within the filter list).
+ * `undefined` filter ⇒ no Types constraint. Empty filter list ⇒ never matches.
+ * Separate tag effects still stack (OR across effects).
+ */
 export function typesIntersect(
   filterTypes: readonly string[] | undefined,
   memberTypes: readonly string[] | undefined,
@@ -50,11 +55,11 @@ export function typesIntersect(
   }
   const set = new Set(memberTypes ?? []);
   for (const t of filterTypes) {
-    if (set.has(t)) {
-      return true;
+    if (!set.has(t)) {
+      return false;
     }
   }
-  return false;
+  return true;
 }
 
 function nameMatches(

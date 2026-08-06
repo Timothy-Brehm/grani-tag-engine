@@ -40,15 +40,13 @@ Any signed `adjust-pool` may appear in any slot (symmetry). Host fiction may cal
 | Filter | Matches when |
 |--------|----------------|
 | `actionName` | Exact / `*` / omit (= any) |
-| `actionTypes` | **Any** listed Type intersects the action’s `types` (OR) |
-| `poolTypes` | **Any** listed Type intersects the pool’s catalog `types` (OR) |
-| `statTypes` | **Any** listed Type intersects the stat’s catalog `types` (OR) |
+| `actionTypes` | Member has **all** listed Types (AND within the list) |
+| `poolTypes` | Pool catalog has **all** listed Types (AND within the list) |
+| `statTypes` | Stat catalog has **all** listed Types (AND within the list) |
 
-**OR within a Types filter** (intersection nonempty). **AND across axes** (e.g. `actionName` + `actionTypes` both set). Stack every matching passive.
+**AND within** a Types filter. **AND across axes** on the same effect (e.g. `actionName` + `actionTypes`). **OR across effects/tags** — every matching passive stacks independently.
 
-Want AND across Types? Author separate tag effects (or duplicate tags), one Type each — there is no “must have all Types” filter in v1. Arrays stay plural so one effect can OR several labels.
-
-Name + Types filters on the same axis → **AND**. Example: `actionName: 'Explore'` and `actionTypes: ['Scout']` both must pass.
+Want Liquid **or** Food? Two effects (`poolTypes: ['Liquid']` and `poolTypes: ['Food']`), not one list. One list `['Liquid', 'Food']` means both (e.g. BerryJuice only).
 
 ---
 
