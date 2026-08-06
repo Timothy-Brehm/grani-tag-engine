@@ -316,8 +316,12 @@ export function applySlotMagnitudeModifiers(
       entities,
     );
 
-    let next = reduceEffect(adj.strength, red.flat, red.percent);
-    next = enhanceEffect(next, enh.flat, enh.percent);
+    let next = adj.strength;
+    // All flats first, then all percents (reduce toward 0, enhance away).
+    next = reduceEffect(next, red.flat, 0);
+    next = enhanceEffect(next, enh.flat, 0);
+    next = reduceEffect(next, 0, red.percent);
+    next = enhanceEffect(next, 0, enh.percent);
     if (next === adj.strength) {
       return effect;
     }

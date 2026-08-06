@@ -23,7 +23,7 @@ describe('reduceEffect / enhanceEffect', () => {
     expect(enhanceEffect(-10, 0, 50)).toBe(-15);
   });
 
-  it('applySlotMagnitudeModifiers reduce then enhance on immediate slot', () => {
+  it('reduceImmediateEffect shrinks matching immediate adjust', () => {
     const actor = createEntityInstance({
       id: 'a',
       definitionId: 'a',
@@ -42,21 +42,64 @@ describe('reduceEffect / enhanceEffect', () => {
         }),
       ],
     });
-    const costs: ActiveEffect[] = [
-      {
-        type: 'adjust-pool',
-        name: 'pay',
-        strength: -3,
-        pool: 'Stamina',
-      },
-    ];
     const next = applySlotMagnitudeModifiers(
-      costs,
+      [
+        {
+          type: 'adjust-pool',
+          name: 'pay',
+          strength: -3,
+          pool: 'Stamina',
+        },
+      ],
       'immediateEffects',
       actor,
       'explore',
       ['Explore'],
     );
     expect(next[0]?.strength).toBe(-2);
+  });
+
+  it('applies all flats before all percents across reduce and enhance', () => {
+    const actor = createEntityInstance({
+      id: 'a',
+      definitionId: 'a',
+      tags: [
+        createTag({
+          name: 'mods',
+          effects: [
+            {
+              type: 'reduceImmediateEffect',
+              name: 'pct',
+              strength: 0,
+              percent: 50,
+              pool: 'Stamina',
+            },
+            {
+              type: 'enhanceImmediateEffect',
+              name: 'flat',
+              strength: 2,
+              pool: 'Stamina',
+            },
+          ],
+        }),
+      ],
+    });
+    // authored −10 → flat enhance to −12 → 50% reduce magnitude → −6
+    // (not: 50% first → −5 then enhance → −7)
+    const next = applySlotMagnitudeModifiers(
+      [
+        {
+          type: 'adjust-pool',
+          name: 'pay',
+          strength: -10,
+          pool: 'Stamina',
+        },
+      ],
+      'immediateEffects',
+      actor,
+      'explore',
+      undefined,
+    );
+    expect(next[0]?.strength).toBe(-6);
   });
 });

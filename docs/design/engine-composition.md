@@ -717,7 +717,7 @@ These show composition only. Names are fictional.
 | Reagents | Pools on wizard or on a `satchel` entity (`moon-petal`, `iron-salt`) |
 | Learned spell | Tag on wizard (`spell-firebolt`) granting presence or Arcana-related effects |
 | Spellbook / altar | Source entity offering cast/craft actions |
-| Cast Firebolt | Requirements: tag `spell-firebolt`, Arcana ≥ 1, Mana ≥ 2; immediateEffects Mana; requiredEffects: grant-tag on target or spawn effect entity |
+| Cast Firebolt | Requirements: tag `spell-firebolt`, Arcana ≥ 1, Mana ≥ 2; immediateEffects −Mana; requiredEffects: grant-tag on target or spawn effect entity |
 | Brew draught | Source = cauldron; actor = primary entity; costs reagents; results grant-tag or potion pool |
 | Mastery | New reagents / schools via discoveries (tags), not only +% mana regen |
 | Familiar automation | Future process: familiar entity allocates “gather reagent” action each tick |

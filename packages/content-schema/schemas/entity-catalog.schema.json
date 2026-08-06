@@ -194,6 +194,10 @@
             "scope": { "$ref": "#/definitions/EntityScope" }
           },
           "required": ["type", "name", "strength"],
+          "anyOf": [
+            { "required": ["pool"] },
+            { "required": ["poolTypes"] }
+          ],
           "additionalProperties": false
         },
         {

@@ -30,6 +30,8 @@ Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName`
 | required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
 | optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
 
+Order: all flats (reduce, then enhance), then all percents (reduce, then enhance).
+
 Replaces draft `action-cost-bonus` / `action-result-bonus` if you used those names on this branch.
 
 ### Types (new, optional)
