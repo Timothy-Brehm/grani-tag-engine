@@ -8,9 +8,20 @@ export interface ActiveEffect {
 
 export type AdjustPoolEffect = ActiveEffect & {
   readonly type: 'adjust-pool';
-  readonly pool: string;
+  /**
+   * Target pool id. Optional when {@link poolTypes} is set (expand at apply).
+   */
+  readonly pool?: string;
+  /** Expand to catalog pools matching these Types (see action-types.md). */
+  readonly poolTypes?: readonly string[];
   /** Defaults to actor, then source. */
   readonly scope?: EntityScope;
+  /**
+   * When false, refuse to introduce a new pool key.
+   * Default **true** for single-id recipe adjusts (backward compatible).
+   * Type-expanded adjusts typically use false.
+   */
+  readonly createPool?: boolean;
 };
 
 /** Passive: while active, reserves `strength` of `pool` (Available decreases). */

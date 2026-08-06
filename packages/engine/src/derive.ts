@@ -1,7 +1,7 @@
 import type { EntityInstance, EntityMap } from './entity';
 import type { CatalogRegistryView } from './catalog';
 import type { ActiveTagOptions, SlotCatalog } from './slots';
-import { selectActiveTags, sumActiveTaggedFieldStrength } from './slots';
+import { selectActiveTags } from './slots';
 import {
   floorPoolQuantity,
   roundPoolQuantity,
@@ -9,6 +9,7 @@ import {
   DEFAULT_DISPLAY_STEP,
 } from './quantity';
 import type { TagEffect } from './tag';
+import { poolMatchesTarget, statMatchesTarget } from './action-match';
 
 /** Coeff for a `cross-link` effect: `amount` if set, else `strength`. */
 export function crossLinkCoeff(effect: {
@@ -88,8 +89,49 @@ export function selectPoolEffectiveAvailable(
   );
 }
 
+type PercentMod = {
+  readonly percent: number;
+  readonly percentBase: 'derived' | 'base';
+};
+
+function flatFromEffect(effect: {
+  readonly amount?: number;
+  readonly strength: number;
+  readonly percent?: number;
+}): number {
+  const hasPercent =
+    typeof effect.percent === 'number' && Number.isFinite(effect.percent);
+  if (typeof effect.amount === 'number' && Number.isFinite(effect.amount)) {
+    return effect.amount;
+  }
+  if (hasPercent && effect.strength === 0) {
+    return 0;
+  }
+  return effect.strength;
+}
+
+function applyPercentMods(
+  constants: number,
+  crossLinks: number,
+  mods: readonly PercentMod[],
+): number {
+  let scaleDerived = 1;
+  let scaleBase = 1;
+  for (const mod of mods) {
+    const factor = 1 + mod.percent / 100;
+    if (mod.percentBase === 'base') {
+      scaleBase *= factor;
+    } else {
+      scaleDerived *= factor;
+    }
+  }
+  const subtotal = constants + crossLinks;
+  return constants * (scaleBase - 1) + subtotal * scaleDerived;
+}
+
 /**
- * Base traits from `stat` strengths only (no cross-link contributions).
+ * Base traits from `stat` constants only (no cross-link / percent).
+ * Matches exact `stat` id and/or `statTypes`.
  */
 export function selectBaseStatValue(
   entity: EntityInstance,
@@ -98,20 +140,66 @@ export function selectBaseStatValue(
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  return sumActiveTaggedFieldStrength(
-    entity,
-    'stat',
-    'stat',
-    stat,
-    registry,
-    entities,
-    options,
-  );
+  let total = 0;
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
+    for (const effect of tag.effects) {
+      if (effect.type !== 'stat') {
+        continue;
+      }
+      if (
+        !statMatchesTarget(registry, stat, {
+          stat: typeof effect.stat === 'string' ? effect.stat : undefined,
+          statTypes: effect.statTypes,
+        })
+      ) {
+        continue;
+      }
+      total += flatFromEffect(effect);
+    }
+  }
+  return total;
+}
+
+function selectStatPercentMods(
+  entity: EntityInstance,
+  stat: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): readonly PercentMod[] {
+  const out: PercentMod[] = [];
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
+    for (const effect of tag.effects) {
+      if (effect.type !== 'stat') {
+        continue;
+      }
+      if (
+        typeof effect.percent !== 'number' ||
+        !Number.isFinite(effect.percent)
+      ) {
+        continue;
+      }
+      if (
+        !statMatchesTarget(registry, stat, {
+          stat: typeof effect.stat === 'string' ? effect.stat : undefined,
+          statTypes: effect.statTypes,
+        })
+      ) {
+        continue;
+      }
+      out.push({
+        percent: effect.percent,
+        percentBase: effect.percentBase === 'base' ? 'base' : 'derived',
+      });
+    }
+  }
+  return out;
 }
 
 /**
- * Base pool max from `pool-max` only (includes product-tag stored max;
- * excludes live cross-links).
+ * Base pool max from `pool-max` constants only (includes product-tag stored max;
+ * excludes live cross-links and percent bonuses).
+ * Matches exact `pool` id and/or `poolTypes`.
  */
 export function selectBasePoolMax(
   entity: EntityInstance,
@@ -120,15 +208,60 @@ export function selectBasePoolMax(
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  return sumActiveTaggedFieldStrength(
-    entity,
-    'pool-max',
-    'pool',
-    pool,
-    registry,
-    entities,
-    options,
-  );
+  let total = 0;
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
+    for (const effect of tag.effects) {
+      if (effect.type !== 'pool-max') {
+        continue;
+      }
+      if (
+        !poolMatchesTarget(registry, pool, {
+          pool: typeof effect.pool === 'string' ? effect.pool : undefined,
+          poolTypes: effect.poolTypes,
+        })
+      ) {
+        continue;
+      }
+      total += flatFromEffect(effect);
+    }
+  }
+  return total;
+}
+
+function selectPoolMaxPercentMods(
+  entity: EntityInstance,
+  pool: string,
+  registry?: SlotCatalog,
+  entities?: EntityMap,
+  options?: ActiveTagOptions,
+): readonly PercentMod[] {
+  const out: PercentMod[] = [];
+  for (const tag of selectActiveTags(entity, registry, entities, options)) {
+    for (const effect of tag.effects) {
+      if (effect.type !== 'pool-max') {
+        continue;
+      }
+      if (
+        typeof effect.percent !== 'number' ||
+        !Number.isFinite(effect.percent)
+      ) {
+        continue;
+      }
+      if (
+        !poolMatchesTarget(registry, pool, {
+          pool: typeof effect.pool === 'string' ? effect.pool : undefined,
+          poolTypes: effect.poolTypes,
+        })
+      ) {
+        continue;
+      }
+      out.push({
+        percent: effect.percent,
+        percentBase: effect.percentBase === 'base' ? 'base' : 'derived',
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -191,7 +324,8 @@ export function selectCrossLinkStatBonus(
 }
 
 /**
- * Raw pool max = base `pool-max` + all live cross-link max bonuses (summed once).
+ * Raw pool max = base `pool-max` + cross-links, then percent mods
+ * (`percentBase: 'derived'` default; `'base'` scales constants only).
  */
 export function selectPoolMaxRaw(
   entity: EntityInstance,
@@ -200,10 +334,28 @@ export function selectPoolMaxRaw(
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  return roundPoolQuantity(
-    selectBasePoolMax(entity, pool, registry, entities, options) +
-      selectCrossLinkPoolMaxBonus(entity, pool, registry, entities, options),
+  const constants = selectBasePoolMax(
+    entity,
+    pool,
+    registry,
+    entities,
+    options,
   );
+  const crossLinks = selectCrossLinkPoolMaxBonus(
+    entity,
+    pool,
+    registry,
+    entities,
+    options,
+  );
+  const mods = selectPoolMaxPercentMods(
+    entity,
+    pool,
+    registry,
+    entities,
+    options,
+  );
+  return roundPoolQuantity(applyPercentMods(constants, crossLinks, mods));
 }
 
 /** Effective max (capacityStep floor). */
@@ -221,7 +373,7 @@ export function selectPoolMax(
 }
 
 /**
- * Final stat = base `stat` + all cross-link stat bonuses (summed once).
+ * Final stat = base `stat` + cross-links, then percent mods.
  */
 export function selectStatValue(
   entity: EntityInstance,
@@ -230,10 +382,28 @@ export function selectStatValue(
   entities?: EntityMap,
   options?: ActiveTagOptions,
 ): number {
-  return roundPoolQuantity(
-    selectBaseStatValue(entity, stat, registry, entities, options) +
-      selectCrossLinkStatBonus(entity, stat, registry, entities, options),
+  const constants = selectBaseStatValue(
+    entity,
+    stat,
+    registry,
+    entities,
+    options,
   );
+  const crossLinks = selectCrossLinkStatBonus(
+    entity,
+    stat,
+    registry,
+    entities,
+    options,
+  );
+  const mods = selectStatPercentMods(
+    entity,
+    stat,
+    registry,
+    entities,
+    options,
+  );
+  return roundPoolQuantity(applyPercentMods(constants, crossLinks, mods));
 }
 
 export function selectPoolDisplayCurrent(

@@ -5,6 +5,8 @@ These are **living documents**. When design debates or agent guidance conflict w
 | Doc | Purpose |
 |-----|---------|
 | [engine-composition.md](./engine-composition.md) | Game-agnostic composition of entities, tags, traits, pools, and actions |
+| [action-types.md](./action-types.md) | Types + reduce/enhance magnitude modifiers; recipe `*Effects` slots |
+| [UPGRADING.md](../UPGRADING.md) | Breaking rename / upgrade hints |
 | [settings-and-games.md](./settings-and-games.md) | EngineDocument: Settings + Games, UniversalTags (wiki prestige) |
 | [engine-tools.md](./engine-tools.md) | Engine generation tools: pathing analyzer, debug-content sidecar (extensible) |
 

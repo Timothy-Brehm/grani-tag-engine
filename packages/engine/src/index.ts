@@ -136,6 +136,37 @@ export type {
 
 export type { ActionDefinition, RequirementCheck } from './action';
 
+export type { RecipeEffectSlot } from './action-improvements';
+export {
+  REDUCE_EFFECT_TYPE,
+  ENHANCE_EFFECT_TYPE,
+  reduceEffect,
+  enhanceEffect,
+  relieveFlat,
+  relievePercent,
+  resolveAdjustPoolEffect,
+  materializeAdjustPools,
+  applySlotMagnitudeModifiers,
+  materializeSlotEffects,
+  listMatchingContinuousSpeedEffects,
+  applyCostBonuses,
+  materializeActionResults,
+} from './action-improvements';
+
+export type { ActionMatchFilter, ActionMatchTarget } from './action-match';
+export {
+  normalizeTypes,
+  normalizeActionTypes,
+  typesIntersect,
+  actionMatchesFilter,
+  poolCatalogTypes,
+  statCatalogTypes,
+  poolMatchesTarget,
+  statMatchesTarget,
+  listPoolsMatchingTypes,
+  listStatsMatchingTypes,
+} from './action-match';
+
 export type {
   ContinuousActionSnapshot,
   ContinuousProgressRecord,
@@ -162,6 +193,7 @@ export {
   pulseGenerators,
   buildOverTimeSlice,
   scaleEffectStrength,
+  recipeEffectsFromSnapshotJSON,
   MAX_ACTION_DURATION_TICKS,
   CONTINUOUS_PROGRESS_DECIMALS,
   roundContinuousProgress,

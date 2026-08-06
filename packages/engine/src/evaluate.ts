@@ -3,6 +3,7 @@ import type { ActiveEffect } from './effect';
 import type { EngineContext } from './context';
 import type { EngineRegistry } from './registry';
 import type { Requirement } from './requirement';
+import { materializeSlotEffects } from './action-improvements';
 import {
   actionDurationTicks,
   buildOverTimeSlice,
@@ -28,40 +29,70 @@ export function codeRequirementsMet<THost>(
   return checks?.every((check) => check(context)) ?? true;
 }
 
-/** True when every cost canHappen (original CostsCanPay). */
+/** True when every effect canHappen. */
 export function costsPayable<THost>(
   registry: EngineRegistry<THost>,
-  costs: readonly ActiveEffect[],
+  effects: readonly ActiveEffect[],
   context: EngineContext<THost>,
 ): boolean {
-  return costs.every((cost) => registry.canApplyEffect(cost, context));
+  return effects.every((effect) => registry.canApplyEffect(effect, context));
 }
 
-/** True when at least one result canHappen (original AnyResult; empty ⇒ false). */
+/** True when at least one effect canHappen (empty ⇒ false). */
 export function anyResultPossible<THost>(
   registry: EngineRegistry<THost>,
-  results: readonly ActiveEffect[],
+  effects: readonly ActiveEffect[],
   context: EngineContext<THost>,
 ): boolean {
-  return results.some((result) => registry.canApplyEffect(result, context));
+  return effects.some((effect) => registry.canApplyEffect(effect, context));
+}
+
+function actorFromContext<THost>(context: EngineContext<THost>) {
+  const id = context.actorEntityId ?? context.engine.primaryEntityId;
+  return context.engine.entities.get(id);
+}
+
+function liveSlot<THost>(
+  effects: readonly ActiveEffect[],
+  slot: 'immediateEffects' | 'overTimeEffects' | 'requiredEffects' | 'optionalEffects',
+  action: ActionDefinition<Requirement, ActiveEffect, THost>,
+  context: EngineContext<THost>,
+  registry: EngineRegistry<THost>,
+): ActiveEffect[] {
+  return materializeSlotEffects(
+    effects,
+    slot,
+    actorFromContext(context),
+    action.name,
+    action.types,
+    registry,
+    context.engine.entities,
+  );
 }
 
 /**
- * Action is available when requirements are met, costs are payable,
- * and at least one result is possible.
+ * Action is available when requirements are met, immediate effects are payable,
+ * and at least one required effect is possible.
  *
- * Mid-cycle resume (saved progress > 0): start `costs` are not re-checked.
- * At 0%: start costs plus the first over-time slice must be payable.
+ * Mid-cycle resume (saved progress > 0): immediateEffects are not re-checked.
+ * At 0%: immediate plus the first over-time slice must be payable.
  */
 export function isActionAvailable<THost>(
   registry: EngineRegistry<THost>,
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): boolean {
+  const required = liveSlot(
+    action.requiredEffects,
+    'requiredEffects',
+    action,
+    context,
+    registry,
+  );
   if (
     !requirementsMet(registry, action.requirements, context) ||
     !codeRequirementsMet(action.codeRequirements, context) ||
-    !anyResultPossible(registry, action.results, context)
+    !anyResultPossible(registry, required, context)
   ) {
     return false;
   }
@@ -81,7 +112,14 @@ export function isActionAvailable<THost>(
     return true;
   }
 
-  if (!costsPayable(registry, action.costs, context)) {
+  const immediate = liveSlot(
+    action.immediateEffects,
+    'immediateEffects',
+    action,
+    context,
+    registry,
+  );
+  if (!costsPayable(registry, immediate, context)) {
     return false;
   }
 
@@ -90,27 +128,44 @@ export function isActionAvailable<THost>(
     return false;
   }
   const baseDuration = actionDurationTicks(action);
-  const D = selectEffectiveDurationTicks(actor, action.name, baseDuration);
+  const D = selectEffectiveDurationTicks(
+    actor,
+    action.name,
+    baseDuration,
+    registry,
+    context.engine.entities,
+    action.types,
+  );
   const deltaTicks = Math.min(
-    selectContinuousProgressDelta(actor, action.name),
+    selectContinuousProgressDelta(
+      actor,
+      action.name,
+      registry,
+      context.engine.entities,
+      action.types,
+    ),
     D,
   );
   const deltaProgress = (deltaTicks / D) * 100;
-  const slice = buildOverTimeSlice(
-    action.costsOverTime ?? [],
-    deltaProgress / 100,
-    baseDuration <= 1,
+  const slice = liveSlot(
+    buildOverTimeSlice(
+      action.overTimeEffects ?? [],
+      deltaProgress / 100,
+      baseDuration <= 1,
+    ),
+    'overTimeEffects',
+    action,
+    context,
+    registry,
   );
   return costsPayable(registry, slice, context);
 }
 
 /**
  * FireAction-style execution (immutable context):
- * 1. Apply all costs in order (caller should ensure canHappen).
- * 2. Apply all **results** in order — results **must happen** (always applied;
- *    pools clamp / idempotent grants may no-op).
- * 3. Apply **side effects** only when `canHappen` is true — useful when a
- *    stockpile is full: the result still fires, optional extras skip.
+ * 1. Apply immediateEffects (caller should ensure canHappen).
+ * 2. Apply requiredEffects — must happen (always applied; clamps may no-op).
+ * 3. Apply optionalEffects only when `canHappen` is true.
  *
  * Prefer checking `isActionAvailable` first. For fully soft application, use
  * `executeActionSafe`. Hosts should prefer the `execute-action` command
@@ -122,13 +177,31 @@ export function executeAction<THost>(
   context: EngineContext<THost>,
 ): EngineContext<THost> {
   let next = context;
-  for (const cost of action.costs) {
-    next = registry.applyEffect(cost, next);
+  for (const effect of liveSlot(
+    action.immediateEffects,
+    'immediateEffects',
+    action,
+    next,
+    registry,
+  )) {
+    next = registry.applyEffect(effect, next);
   }
-  for (const result of action.results) {
-    next = registry.applyEffect(result, next);
+  for (const effect of liveSlot(
+    action.requiredEffects,
+    'requiredEffects',
+    action,
+    next,
+    registry,
+  )) {
+    next = registry.applyEffect(effect, next);
   }
-  for (const side of action.sideEffects) {
+  for (const side of liveSlot(
+    action.optionalEffects,
+    'optionalEffects',
+    action,
+    next,
+    registry,
+  )) {
     if (registry.canApplyEffect(side, next)) {
       next = registry.applyEffect(side, next);
     }
@@ -153,13 +226,31 @@ export function executeActionSafe<THost>(
     }
   };
 
-  for (const cost of action.costs) {
-    applyIfPossible(cost);
+  for (const effect of liveSlot(
+    action.immediateEffects,
+    'immediateEffects',
+    action,
+    next,
+    registry,
+  )) {
+    applyIfPossible(effect);
   }
-  for (const result of action.results) {
-    applyIfPossible(result);
+  for (const effect of liveSlot(
+    action.requiredEffects,
+    'requiredEffects',
+    action,
+    next,
+    registry,
+  )) {
+    applyIfPossible(effect);
   }
-  for (const side of action.sideEffects) {
+  for (const side of liveSlot(
+    action.optionalEffects,
+    'optionalEffects',
+    action,
+    next,
+    registry,
+  )) {
     applyIfPossible(side);
   }
   return next;

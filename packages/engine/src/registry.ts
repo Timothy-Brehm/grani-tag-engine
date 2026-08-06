@@ -529,14 +529,21 @@ export class EngineRegistry<THost = unknown> {
     // Optional synonym — identical runtime; “Locks” is a host UI hint.
     this.registerEffect(
       'lock-tag',
-      grantTagAdaptor as EffectAdaptor<LockTagEffect, THost>,
+      grantTagAdaptor as unknown as EffectAdaptor<LockTagEffect, THost>,
     );
 
     this.registerEffect('adjust-pool', {
       canHappen: (effect: AdjustPoolEffect, context) => {
+        if (typeof effect.pool !== 'string') {
+          return false;
+        }
         const scope = defaultEffectScope(context, effect.scope);
         const entity = getScopedEntity(context, scope);
         if (!entity) {
+          return false;
+        }
+        const createPool = effect.createPool !== false;
+        if (!(effect.pool in entity.pools) && !createPool) {
           return false;
         }
         const current = selectPoolCurrent(entity, effect.pool, this);
@@ -554,6 +561,9 @@ export class EngineRegistry<THost = unknown> {
           : current >= -effect.strength;
       },
       apply: (effect: AdjustPoolEffect, context) => {
+        if (typeof effect.pool !== 'string') {
+          return context;
+        }
         const scope = defaultEffectScope(context, effect.scope);
         const entity = getScopedEntity(context, scope);
         if (!entity) {
@@ -569,6 +579,7 @@ export class EngineRegistry<THost = unknown> {
           this,
           universalTags,
           context.engine.tick,
+          { createPool: effect.createPool !== false },
         );
         if (!nextEntity) {
           return context;

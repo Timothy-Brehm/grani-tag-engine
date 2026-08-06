@@ -54,9 +54,9 @@ describe('entity catalog schema', () => {
                   amount: 10,
                 },
               ],
-              costs: [],
-              results: [{ type: 'grant-tag', name: 'unlocked', strength: 1 }],
-              sideEffects: [],
+              immediateEffects: [],
+              requiredEffects: [{ type: 'grant-tag', name: 'unlocked', strength: 1 }],
+              optionalEffects: [],
             },
           ],
         },
@@ -74,15 +74,15 @@ describe('entity catalog schema', () => {
             {
               name: 'x',
               requirements: [],
-              costs: [],
-              results: [
+              immediateEffects: [],
+              requiredEffects: [
                 {
                   type: 'Spawn Card',
                   name: 'crate',
                   strength: 1,
                 },
               ],
-              sideEffects: [],
+              optionalEffects: [],
             },
           ],
         },

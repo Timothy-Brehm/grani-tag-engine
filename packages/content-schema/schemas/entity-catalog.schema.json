@@ -17,6 +17,15 @@
       "type": "string",
       "enum": ["actor", "source", "target"]
     },
+    "NoveltyAck": {
+      "type": "object",
+      "required": ["seenTag"],
+      "additionalProperties": false,
+      "properties": {
+        "seenTag": { "type": "string" },
+        "scope": { "type": "string", "enum": ["instance", "primary"] }
+      }
+    },
     "TagEffect": {
       "type": "object",
       "required": ["type", "name", "strength"],
@@ -177,14 +186,29 @@
             "name": { "type": "string" },
             "strength": { "type": "number" },
             "pool": { "type": "string" },
+            "poolTypes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "createPool": { "type": "boolean" },
             "scope": { "$ref": "#/definitions/EntityScope" }
           },
-          "required": ["type", "name", "strength", "pool"],
+          "required": ["type", "name", "strength"],
           "additionalProperties": false
         },
         {
           "properties": {
             "type": { "const": "grant-tag" },
+            "name": { "type": "string" },
+            "strength": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "name", "strength"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "lock-tag" },
             "name": { "type": "string" },
             "strength": { "type": "number" },
             "scope": { "$ref": "#/definitions/EntityScope" }
@@ -202,31 +226,51 @@
           },
           "required": ["type", "name", "strength", "definitionId"],
           "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "remove-entity" },
+            "name": { "type": "string" },
+            "strength": { "type": "number" },
+            "scope": { "$ref": "#/definitions/EntityScope" }
+          },
+          "required": ["type", "name", "strength"],
+          "additionalProperties": false
         }
       ]
     },
     "ActionDefinition": {
       "type": "object",
-      "required": ["name", "requirements", "costs", "results", "sideEffects"],
+      "required": ["name", "requirements", "immediateEffects", "requiredEffects", "optionalEffects"],
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
         "description": { "type": "string" },
         "label": { "type": "string" },
         "sourceId": { "type": "string" },
+        "durationTicks": { "type": "number" },
+        "types": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "novelty": { "$ref": "#/definitions/NoveltyAck" },
         "requirements": {
           "type": "array",
           "items": { "$ref": "#/definitions/Requirement" }
         },
-        "costs": {
+        "immediateEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
-        "results": {
+        "overTimeEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
-        "sideEffects": {
+        "requiredEffects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        },
+        "optionalEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         }
