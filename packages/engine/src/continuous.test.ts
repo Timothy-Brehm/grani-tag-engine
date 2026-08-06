@@ -105,20 +105,20 @@ describe('generators and continuous actions', () => {
     ).toBeGreaterThan(pulsedAt!);
   });
 
-  it('treats omitted durationTicks as 1 and pays full costsOverTime on that tick', () => {
+  it('treats omitted durationTicks as 1 and pays full overTimeEffects on that tick', () => {
     const action: ActionDefinition = {
       name: 'instant-gather',
       requirements: [{ type: 'free' }],
-      costs: [
+      immediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -1, pool: 'Stamina' },
       ],
-      costsOverTime: [
+      overTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -2, pool: 'Stamina' },
       ],
-      results: [
+      requiredEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      sideEffects: [],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 5, Stick: 0 });
     state = reduceEngineState(
@@ -134,21 +134,21 @@ describe('generators and continuous actions', () => {
     ).toBe(1);
   });
 
-  it('prorates costsOverTime and pauses when the slice cannot be paid', () => {
+  it('prorates overTimeEffects and pauses when the slice cannot be paid', () => {
     const action: ActionDefinition = {
       name: 'gather-sticks',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      costs: [
+      immediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -1, pool: 'Stamina' },
       ],
-      costsOverTime: [
+      overTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -10, pool: 'Stamina' },
       ],
-      results: [
+      requiredEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      sideEffects: [],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 6, Stick: 0 });
     state = reduceEngineState(
@@ -205,11 +205,11 @@ describe('generators and continuous actions', () => {
       requirements: [
         { type: 'tag', tagName: 'allowed', exists: true },
       ],
-      costs: [],
-      results: [
+      immediateEffects: [],
+      requiredEffects: [
         { type: 'grant-tag', name: 'done', strength: 1 },
       ],
-      sideEffects: [],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 5 }, [
       createTag({ name: 'allowed', effects: [] }),
@@ -242,16 +242,16 @@ describe('generators and continuous actions', () => {
       name: 'long',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'long-done', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'long-done', strength: 1 }],
+      optionalEffects: [],
     };
     const instant: ActionDefinition = {
       name: 'quick',
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'quick-done', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'quick-done', strength: 1 }],
+      optionalEffects: [],
     };
 
     let state = withHero({ Stamina: 5 });
@@ -299,14 +299,14 @@ describe('generators and continuous actions', () => {
       name: 'chop',
       durationTicks: 100,
       requirements: [{ type: 'free' }],
-      costs: [],
-      costsOverTime: [
+      immediateEffects: [],
+      overTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -4, pool: 'Stamina' },
       ],
-      results: [
+      requiredEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      sideEffects: [],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 10 }, [
       createTag({
@@ -340,9 +340,9 @@ describe('generators and continuous actions', () => {
       name: 'slow',
       durationTicks: 5,
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'slow-done', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'slow-done', strength: 1 }],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -366,11 +366,11 @@ describe('generators and continuous actions', () => {
       name: 'work',
       durationTicks: 4,
       requirements: [{ type: 'free' }],
-      costs: [
+      immediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -2, pool: 'Stamina' },
       ],
-      results: [{ type: 'grant-tag', name: 'worked', strength: 1 }],
-      sideEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'worked', strength: 1 }],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -400,9 +400,9 @@ describe('generators and continuous actions', () => {
       name: 'too-long',
       durationTicks: 10_001,
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'nope', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'nope', strength: 1 }],
+      optionalEffects: [],
     };
     const state = reduceEngineState(
       withHero({ Stamina: 5 }),
@@ -418,9 +418,9 @@ describe('generators and continuous actions', () => {
       name: 'haul',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'hauled', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'hauled', strength: 1 }],
+      optionalEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -467,11 +467,11 @@ describe('generators and continuous actions', () => {
     const action: ActionDefinition = {
       name: 'engine-run',
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [
+      immediateEffects: [],
+      requiredEffects: [
         { type: 'adjust-pool', name: 'co2', strength: 1, pool: 'Stick' },
       ],
-      sideEffects: [
+      optionalEffects: [
         { type: 'adjust-pool', name: 'miles', strength: 1, pool: 'Stamina' },
       ],
     };

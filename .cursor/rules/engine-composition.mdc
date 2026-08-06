@@ -8,6 +8,7 @@ alwaysApply: true
 When changing engine APIs, builtins, schemas, or advising how a host should model content, follow:
 
 - [docs/design/engine-composition.md](docs/design/engine-composition.md)
+- [docs/design/action-types.md](docs/design/action-types.md)
 - [docs/design/settings-and-games.md](docs/design/settings-and-games.md)
 - [docs/design/engine-tools.md](docs/design/engine-tools.md) (engine generation tools)
 
@@ -30,7 +31,17 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
 4. **Prefer adding tags to removing them** — state transitions as successor tags (`Event_CrateFound` → also `Event_CrateOpened`), not erasing history by default.
 5. **Track metrics for gates** — action counts, pool currents, high/low-waters, lifetime used, and tick timestamps live on `entity.metrics`. Prefer engine ticks over wall-clock for rules; hosts may display `tick / N` as time. Use `execute-action.execution` (`manual` default / `automatic`). Low-water metric requirements use `<= amount`.
 6. **Novelty is tag-based** — discoverables declare `novelty: { seenTag, scope? }`; novel while that catalog tag is absent. Ack with `grant-tag` / `add-tag`. Player copy in **`displayText`** on the `seenTag` definition. Conventions: `message_*` / `seen_*` / `milestone_*` / `badge_*` for novelty copy; `Event_*` for durable facts; `Pool_Initial_*` / `Stat_Initial_*` / `Item_*` / `Tech_*` for mechanical roles. Omit `novelty` when not highlighting.
-7. **Actions are recipes** — requirements → start `costs` → optional prorated `costsOverTime` → **results must happen** on completion → **side effects if able**; `durationTicks` omitted ⇒ 1. Actor / source / target roles. Host “Locks” labels are **UI hints** over `grant-tag` (close choices via the granted tag + `exists: false` requirements)—not a separate engine lock mechanic.
+7. **Actions are recipes** — requirements + effect slots (any signed adjust allowed in any slot). Optional **`types`** for improvement matching. Actor / source / target. Host “Locks” = UI over `grant-tag`. Magnitude: `reduce*Effect` / `enhance*Effect` apply-time. See [action-types.md](docs/design/action-types.md), [UPGRADING.md](docs/UPGRADING.md).
+
+   | Slot | Field | When | Gate |
+   |------|-------|------|------|
+   | requirements | `requirements` | Offer / start | Must all pass |
+   | immediate | `immediateEffects` | Start at 0% | Must apply |
+   | over time | `overTimeEffects` | Prorated while progressing | Must apply slice or pause |
+   | required | `requiredEffects` | On complete | Always applied |
+   | optional | `optionalEffects` | On complete | Only if `canHappen` |
+
+   `durationTicks` omitted ⇒ 1. Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
 8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Resource regen uses `generate-pool` / `cross-link` `toGeneratePool` tag passives, not fake idle entities. Growing pool capacity as a repeatable action over time uses a **product tag** on a `cross-link` to track the total addition to the unbound pool. This is in addition to standard tags that increase capacity for one-off boosts.
 9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
 10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content. Specific option lists live in the host. Composition docs show **reusable patterns** (how to combine builtins), not engine-owned theme packs—for example:

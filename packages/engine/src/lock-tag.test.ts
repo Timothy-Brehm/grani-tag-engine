@@ -6,8 +6,8 @@ import { reduceEngineState } from './reduce';
 import { ENGINE_VERSION } from './version';
 
 describe('lock-tag', () => {
-  it('exports 0.2.4.1', () => {
-    expect(ENGINE_VERSION).toBe('0.2.4.1');
+  it('exports 0.3.0.1', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.1');
   });
 
   it('is a grant-tag synonym (no special lock semantics)', () => {
@@ -20,11 +20,11 @@ describe('lock-tag', () => {
           requirements: [
             { type: 'tag', tagName: 'Decision_Squirrel', exists: false },
           ],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             { type: 'grant-tag', name: 'Decision_Squirrel_Attack', strength: 1 },
           ],
-          sideEffects: [
+          optionalEffects: [
             { type: 'lock-tag', name: 'Decision_Squirrel', strength: 1 },
           ],
         },

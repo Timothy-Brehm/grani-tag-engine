@@ -96,11 +96,19 @@ export type ActiveEffectJSON =
       type: 'adjust-pool';
       name: string;
       strength: number;
-      pool: string;
+      pool?: string;
+      poolTypes?: string[];
+      createPool?: boolean;
       scope?: EntityScope;
     }
   | {
       type: 'grant-tag';
+      name: string;
+      strength: number;
+      scope?: EntityScope;
+    }
+  | {
+      type: 'lock-tag';
       name: string;
       strength: number;
       scope?: EntityScope;
@@ -124,11 +132,14 @@ export type ActionDefinitionJSON = {
   description?: string;
   label?: string;
   sourceId?: string;
+  durationTicks?: number;
+  types?: string[];
   novelty?: NoveltyAckJSON;
   requirements: RequirementJSON[];
-  costs: ActiveEffectJSON[];
-  results: ActiveEffectJSON[];
-  sideEffects: ActiveEffectJSON[];
+  immediateEffects: ActiveEffectJSON[];
+  overTimeEffects?: ActiveEffectJSON[];
+  requiredEffects: ActiveEffectJSON[];
+  optionalEffects: ActiveEffectJSON[];
 };
 
 export type EntityDefinitionJSON = {

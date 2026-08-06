@@ -17,8 +17,8 @@ import { createEngineState } from '../../state';
 import { instantiateEntity } from '../../entity';
 
 describe('content analyzer', () => {
-  it('exports 0.2.4.1', () => {
-    expect(ENGINE_VERSION).toBe('0.2.4.1');
+  it('exports 0.3.0.1', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.1');
   });
 
   it('analyzes up to a tier gate', () => {
@@ -39,21 +39,21 @@ describe('content analyzer', () => {
         {
           name: 'choose-left',
           requirements: [{ type: 'tag', tagName: 'Start', exists: true }],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             { type: 'grant-tag', name: 'Tier1Choice', strength: 1 },
             { type: 'grant-tag', name: 'Tier1Choice_WentLeft', strength: 1 },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
         {
           name: 'post-tier',
           requirements: [
             { type: 'tag', tagName: 'Tier1Choice', exists: true },
           ],
-          costs: [],
-          results: [{ type: 'grant-tag', name: 'PostTier', strength: 1 }],
-          sideEffects: [],
+          immediateEffects: [],
+          requiredEffects: [{ type: 'grant-tag', name: 'PostTier', strength: 1 }],
+          optionalEffects: [],
         },
       ],
     });
@@ -106,17 +106,17 @@ describe('content analyzer', () => {
           name: 'start-demo',
           analyzer: { blockId: 'demo', blockRole: 'entry' },
           requirements: [{ type: 'free' }],
-          costs: [],
-          results: [{ type: 'grant-tag', name: 'Demo_A', strength: 1 }],
-          sideEffects: [],
+          immediateEffects: [],
+          requiredEffects: [{ type: 'grant-tag', name: 'Demo_A', strength: 1 }],
+          optionalEffects: [],
         },
         {
           name: 'unlock-b',
           analyzer: { blockId: 'demo', blockRole: 'member' },
           requirements: [{ type: 'tag', tagName: 'Demo_A', exists: true }],
-          costs: [],
-          results: [{ type: 'grant-tag', name: 'Demo_B', strength: 1 }],
-          sideEffects: [],
+          immediateEffects: [],
+          requiredEffects: [{ type: 'grant-tag', name: 'Demo_B', strength: 1 }],
+          optionalEffects: [],
         },
       ],
     });
@@ -166,7 +166,7 @@ describe('content analyzer', () => {
         {
           name: 'pick-berries',
           requirements: [{ type: 'free' }],
-          costs: [
+          immediateEffects: [
             {
               type: 'adjust-pool',
               name: 'cost',
@@ -174,7 +174,7 @@ describe('content analyzer', () => {
               pool: 'Stamina',
             },
           ],
-          results: [
+          requiredEffects: [
             {
               type: 'adjust-pool',
               name: 'gain',
@@ -182,7 +182,7 @@ describe('content analyzer', () => {
               pool: 'Berries',
             },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
       ],
     });
@@ -222,8 +222,8 @@ describe('content analyzer', () => {
         {
           name: 'focus',
           requirements: [{ type: 'free' }],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             {
               type: 'adjust-pool',
               name: 'gain',
@@ -231,7 +231,7 @@ describe('content analyzer', () => {
               pool: 'Mana',
             },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
       ],
     });
@@ -258,19 +258,19 @@ describe('content analyzer', () => {
           requirements: [
             { type: 'tag', tagName: 'Event_CrateOpened', exists: false },
           ],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             { type: 'grant-tag', name: 'Event_CrateOpened', strength: 1 },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
         {
           name: 'gather-tutorial',
           requirements: [
             { type: 'tag', tagName: 'Skill_Gathering', exists: false },
           ],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             {
               type: 'adjust-pool',
               name: 'stick',
@@ -278,16 +278,16 @@ describe('content analyzer', () => {
               pool: 'Sticks',
             },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
         {
           name: 'learn-gather',
           requirements: [{ type: 'free' }],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             { type: 'grant-tag', name: 'Skill_Gathering', strength: 1 },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
       ],
     });
@@ -373,8 +373,8 @@ describe('content analyzer', () => {
         {
           name: 'vent-pollution',
           requirements: [{ type: 'free' }],
-          costs: [],
-          results: [
+          immediateEffects: [],
+          requiredEffects: [
             {
               type: 'adjust-pool',
               name: 'vent',
@@ -382,7 +382,7 @@ describe('content analyzer', () => {
               pool: 'Pollution',
             },
           ],
-          sideEffects: [],
+          optionalEffects: [],
         },
       ],
     });
@@ -408,9 +408,9 @@ describe('content analyzer', () => {
           requirements: [
             { type: 'stat', stat: 'Strength', amount: 5 },
           ],
-          costs: [],
-          results: [{ type: 'grant-tag', name: 'Strong', strength: 1 }],
-          sideEffects: [],
+          immediateEffects: [],
+          requiredEffects: [{ type: 'grant-tag', name: 'Strong', strength: 1 }],
+          optionalEffects: [],
         },
       ],
     });

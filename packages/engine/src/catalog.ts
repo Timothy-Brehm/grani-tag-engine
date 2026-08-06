@@ -43,12 +43,20 @@ export type PoolDefinition = CatalogMeta & {
    * Default when omitted: {@link DEFAULT_DISPLAY_STEP} (`1`).
    */
   readonly displayStep?: number;
+  /**
+   * Arbitrary Types for improvement matching (e.g. `Liquid`, `Food`).
+   * See docs/design/action-types.md.
+   */
+  readonly types?: readonly string[];
 };
 
 /**
  * Stat catalog entry. Same `label` / `description` UI pattern as pools.
  */
-export type StatDefinition = CatalogMeta;
+export type StatDefinition = CatalogMeta & {
+  /** Arbitrary Types (e.g. `Physical`). See docs/design/action-types.md. */
+  readonly types?: readonly string[];
+};
 
 export type SlotMode = 'best-only' | 'selectable';
 
@@ -79,6 +87,8 @@ export type CatalogRegistryView = {
   getSlotDefinition(id: string): SlotDefinition | undefined;
   getPoolDefinition(id: string): PoolDefinition | undefined;
   getStatDefinition(id: string): StatDefinition | undefined;
+  listPoolDefinitions?(): readonly PoolDefinition[];
+  listStatDefinitions?(): readonly StatDefinition[];
   getGateDefinition?(id: string): import('./tools/analyzer/types').GateDefinition | undefined;
   getBlockDefinition?(id: string): import('./tools/analyzer/types').BlockDefinition | undefined;
   /**
@@ -92,8 +102,8 @@ export type CatalogRegistryView = {
     readonly actions?: readonly {
       readonly name: string;
       readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
-      readonly results?: readonly { readonly type: string; readonly name?: string }[];
-      readonly sideEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly requiredEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly optionalEffects?: readonly { readonly type: string; readonly name?: string }[];
       readonly requirements?: readonly { readonly type: string }[];
     }[];
   }[];
@@ -549,8 +559,8 @@ export function collectCatalogWarnings(
       if (found) break;
       for (const action of def.actions ?? []) {
         for (const effect of [
-          ...(action.results ?? []),
-          ...(action.sideEffects ?? []),
+          ...(action.requiredEffects ?? []),
+          ...(action.optionalEffects ?? []),
         ]) {
           if (effect.type === 'grant-tag' && effect.name === gate.tagName) {
             found = true;

@@ -37,9 +37,9 @@ state = reduceEngineState(
 const action = {
   name: 'unlock',
   requirements: [{ type: 'tag', tagName: 'ready', exists: true }],
-  costs: [],
-  results: [{ type: 'grant-tag', name: 'unlocked', strength: 1 }],
-  sideEffects: [],
+  immediateEffects: [],
+  requiredEffects: [{ type: 'grant-tag', name: 'unlocked', strength: 1 }],
+  optionalEffects: [],
 };
 
 if (

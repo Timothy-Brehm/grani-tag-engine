@@ -232,14 +232,20 @@ Cross bonuses are **independent** `cross-link` effects (their own tags), not fie
 An **action** is one atomic recipe:
 
 1. **Requirements** — may it be offered / started?
-2. **Costs** (`costs`) — cost to **start** a cycle at 0% progress
-3. **Costs over time** (`costsOverTime`, optional) — total for one full cycle; **prorated** as progress advances; inability to pay pauses and keeps progress
-4. **Results** — what **must** be produced on **completion** (always applied; pools clamp / grants may no-op)
-5. **Side effects** — optional extras after results; applied **only if able** (`canHappen`)
+2. **Immediate effects** (`immediateEffects`) — applied when starting a cycle at 0% progress
+3. **Over-time effects** (`overTimeEffects`, optional) — total for one full cycle; **prorated** as progress advances; inability to apply a slice pauses and keeps progress
+4. **Required effects** (`requiredEffects`) — what **must** apply on **completion** (always applied; pools clamp / grants may no-op)
+5. **Optional effects** (`optionalEffects`) — extras after required; applied **only if able** (`canHappen`)
 
-**Results vs side effects:** use results for the unavoidable outcome of finishing the recipe; use side effects for “nice to have” changes that should not block completion when a pool is full or a tag already exists. Example: an engine’s result is `+CO2` (always emitted); a side effect is `+Miles` (skipped when you are already at max distance / up against a wall).
+Any signed adjust may appear in any slot (symmetry). Hosts may still call them costs/benefits in fiction.
 
-**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; `costsOverTime` uses the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
+**Required vs optional:** use required for the unavoidable outcome of finishing; use optional for “nice to have” changes that should not block completion when a pool is full or a tag already exists. Example: required `+CO2`; optional `+Miles` (skipped at max).
+
+**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; `overTimeEffects` uses the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
+
+Magnitude mods (`reduce*Effect` / `enhance*Effect`) and Types: [action-types.md](./action-types.md). Field rename: [UPGRADING.md](../UPGRADING.md).
+
+**Types:** optional `types?: string[]` — arbitrary content labels for improvement matching. See [action-types.md](./action-types.md).
 
 Actions are data (`ActionDefinition`). Execution is `execute-action` with roles:
 
@@ -387,10 +393,10 @@ EntityDefinition
 Action
   ├─ durationTicks → omitted = 1 (instant); >1 = multi-tick continuous
   ├─ requirements →  read traits/tags/pools/metrics/entity counts (scoped)
-  ├─ costs        →  cost to start (actor by default)
-  ├─ costsOverTime→  prorated while progressing (pause if unpaid)
-  ├─ results      →  grant-tag / adjust-pool / spawn-entity / … (on complete)
-  └─ sideEffects  →  same toolbox, applied after results
+  ├─ immediateEffects → start-of-cycle (actor by default)
+  ├─ overTimeEffects → prorated while progressing (pause if unpaid)
+  ├─ requiredEffects → grant-tag / adjust-pool / spawn-entity / … (on complete)
+  └─ optionalEffects → same toolbox, applied after required if able
 
 EntityInstance
   ├─ tags (held roots)
@@ -439,7 +445,9 @@ Hosts may author that grant as **“Locks”** as a **presentation hint** (toolt
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
-**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `reserve-stat`, `cross-link`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed`
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `reserve-stat`, `cross-link`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed` (optional `actionTypes`), `reduce*Effect` / `enhance*Effect` (per recipe slot; see [action-types.md](./action-types.md))
+
+See [action-types.md](./action-types.md) for Types + apply-time improvements (speed / yield / cost relief).
 
 **Commands** (capacity): `assign-capacity`, `clear-capacity-assignment`
 
@@ -458,15 +466,16 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 ### Continuous actions
 
 - Progress key: `actorEntityId::actionName::sourceEntityId??''`
-- Progress: percent **0..100** (two decimals); over-time costs use the same percent delta
+- Progress: percent **0..100** (two decimals); over-time effects use the same percent delta
 - Effective `durationTicks` recomputed each tick (mid-action speed changes do not rewrite stored %)
 - Max start duration: **10 000** ticks (base or effective)
-- **Start** (`execute-action`): pay `costs` only at 0%; resume mid-cycle keeps progress and does not re-pay start costs
-- **Pause** / auto-stop (requirements fail or cannot pay `costsOverTime` slice): free slot, **keep** progress
-- **Complete**: results must apply; side effects only if able; clear progress; free slot
+- **Start** (`execute-action`): pay `immediateEffects` only at 0%; resume mid-cycle keeps progress and does not re-pay start effects
+- **Pause** / auto-stop (requirements fail or cannot pay `overTimeEffects` slice): free slot, **keep** progress
+- **Complete**: required effects must apply; optional only if able; clear progress; free slot
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
-- Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; effective duration min 1
+- Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; filter by `actionName` and/or `actionTypes`; effective duration min 1
+- Magnitude mods: `reduce*Effect` / `enhance*Effect` per recipe slot — apply-time only (see [action-types.md](./action-types.md); [UPGRADING.md](../UPGRADING.md))
 - **Known limitation (TODO):** `continuous-slots` max is enforced at **start** only. If max drops mid-run (unequip / slot swap / losing the passive), already-active jobs are **not** paused or culled. Fix later: pause or refuse advance when `activeCount > newMax`.
 
 ---
@@ -510,7 +519,7 @@ Same pattern as Life/Stamina: **max from tags, Available stored, change via adju
 - Primary pool `Space` with `pool-max` tags (e.g. `Camp_Space_Base` +8). Start Available = Max.
 - Sawmill entity initial tag `Building_Sawmill`: `{ type: 'reserve-pool', pool: 'Space', strength: 2, scope: 'primary', name: '…' }`.
 - Place = `spawn-entity` Sawmill (build action may also cost sticks). Destroy = `remove-entity` → Reserved drops → Available returns.
-- Continuous mill recipe on Sawmill, `durationTicks: 30`: `costsOverTime` adjust Logs −N on primary; `results` Boards +M. Ongoing run = continuous job (not process API).
+- Continuous mill recipe on Sawmill, `durationTicks: 30`: `overTimeEffects` adjust Logs −N on primary; `requiredEffects` Boards +M. Ongoing run = continuous job (not process API).
 
 ### 2c. Reserved mana — Strength spell
 
@@ -610,11 +619,11 @@ Choice action grants **both**. Shared post-tier content requires the base tag; p
     { type: 'tag', tagName: 'Tier1Choice', exists: false },
     // …plus whatever unlocked this option
   ],
-  costs: [],
-  results: [
+  immediateEffects: [],
+  requiredEffects: [
     { type: 'grant-tag', name: 'Tier1Choice_WentLeft', strength: 1 },
   ],
-  sideEffects: [
+  optionalEffects: [
     // Host UI type "Locks" → still grant-tag (or optional lock-tag synonym)
     { type: 'grant-tag', name: 'Tier1Choice', strength: 1 },
   ],
@@ -708,7 +717,7 @@ These show composition only. Names are fictional.
 | Reagents | Pools on wizard or on a `satchel` entity (`moon-petal`, `iron-salt`) |
 | Learned spell | Tag on wizard (`spell-firebolt`) granting presence or Arcana-related effects |
 | Spellbook / altar | Source entity offering cast/craft actions |
-| Cast Firebolt | Requirements: tag `spell-firebolt`, Arcana ≥ 1, Mana ≥ 2; costs Mana; results: grant-tag on target or spawn effect entity |
+| Cast Firebolt | Requirements: tag `spell-firebolt`, Arcana ≥ 1, Mana ≥ 2; immediateEffects −Mana; requiredEffects: grant-tag on target or spawn effect entity |
 | Brew draught | Source = cauldron; actor = primary entity; costs reagents; results grant-tag or potion pool |
 | Mastery | New reagents / schools via discoveries (tags), not only +% mana regen |
 | Familiar automation | Future process: familiar entity allocates “gather reagent” action each tick |
@@ -753,7 +762,7 @@ Both games use the **same** engine nouns: entities, tags→traits, pools, action
 ## Agent / PR checklist
 
 - [ ] Named using engine vocabulary (entity / tag / trait / pool / action / process / metric)
-- [ ] Recipe-shaped when possible (requirements → costs → results)
+- [ ] Recipe-shaped when possible (requirements → immediateEffects → requiredEffects / optionalEffects)
 - [ ] Prefer grant successor tags over removing tags for state transitions
 - [ ] Metrics considered if counts / high-waters could gate future content
 - [ ] Actor / source / target roles explicit when more than one entity is involved

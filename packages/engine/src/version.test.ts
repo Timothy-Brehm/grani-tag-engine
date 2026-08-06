@@ -9,11 +9,11 @@ import {
 
 describe('engine version', () => {
   it('exports a four-part ENGINE_VERSION', () => {
-    expect(ENGINE_VERSION).toBe('0.2.4.1');
+    expect(ENGINE_VERSION).toBe('0.3.0.1');
     expect(parseEngineVersion(ENGINE_VERSION)).toEqual({
       major: 0,
-      minor: 2,
-      patch: 4,
+      minor: 3,
+      patch: 0,
       build: 1,
     });
   });
@@ -29,9 +29,9 @@ describe('engine version', () => {
     expect(() => assertCompatibleEngineVersion(undefined)).toThrow(
       /Missing engineVersion/,
     );
-    expect(() => assertCompatibleEngineVersion('0.1.0.0')).toThrow(
+    expect(() => assertCompatibleEngineVersion('0.2.0.0')).toThrow(
       /Incompatible engineVersion/,
     );
-    expect(() => assertCompatibleEngineVersion('0.2.9.9')).not.toThrow();
+    expect(() => assertCompatibleEngineVersion('0.3.9.9')).not.toThrow();
   });
 });

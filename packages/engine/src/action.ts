@@ -25,19 +25,29 @@ export interface ActionDefinition<
   /** Generic stand-in for a former card/source identifier. */
   readonly sourceId?: string;
   readonly requirements: readonly TReq[];
-  /** Cost to start a cycle at 0% progress (unchanged vs legacy instant costs). */
-  readonly costs: readonly TEffect[];
   /**
-   * Total cost for one full cycle, prorated as progress advances.
-   * Inability to pay a slice pauses the job and keeps progress.
+   * Effects applied when starting a cycle at 0% progress.
+   * Often costs; any adjust sign is allowed in any slot.
    */
-  readonly costsOverTime?: readonly TEffect[];
-  readonly results: readonly TEffect[];
-  readonly sideEffects: readonly TEffect[];
+  readonly immediateEffects: readonly TEffect[];
+  /**
+   * Total effects for one full cycle, prorated as progress advances.
+   * Inability to apply a required slice pauses the job and keeps progress.
+   */
+  readonly overTimeEffects?: readonly TEffect[];
+  /** Effects that must apply on completion (always applied; clamps may no-op). */
+  readonly requiredEffects: readonly TEffect[];
+  /** Effects applied on completion only when `canHappen` is true. */
+  readonly optionalEffects: readonly TEffect[];
   /**
    * Engine ticks to complete one cycle. Omitted ⇒ 1 (one-tick / “instant”).
    */
   readonly durationTicks?: number;
+  /**
+   * Arbitrary content Types for improvement matching (e.g. `Explore`).
+   * Each applies independently; see docs/design/action-types.md.
+   */
+  readonly types?: readonly string[];
   /**
    * When set, this action is novel while `seenTag` is absent on the ack scope.
    * Ack by granting that catalog tag; display lives on the tag definition.

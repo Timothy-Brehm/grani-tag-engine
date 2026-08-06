@@ -37,12 +37,28 @@ export interface TagEffect {
    */
   readonly productTag?: string;
   /**
-   * On `generate-pool` / `cross-link` `toGeneratePool`: when true, may introduce
-   * the pool key. Default false for passive pulses.
+   * On `generate-pool` / `cross-link` `toGeneratePool` / Type-expanded
+   * `adjust-pool`: when true, may introduce the pool key.
+   * Default false for passives.
    */
   readonly createPool?: boolean;
-  /** Optional action filter for `continuous-speed` (`*` or omit = all). */
+  /** Optional action name filter (`*` or omit = all names). */
   readonly actionName?: string;
+  /** Optional action Types filter (intersection). */
+  readonly actionTypes?: readonly string[];
+  /** Optional pool Types filter (intersection with catalog). */
+  readonly poolTypes?: readonly string[];
+  /** Optional stat Types filter (intersection with catalog). */
+  readonly statTypes?: readonly string[];
+  /**
+   * Percent points for Type/id improvements (20 = +20%).
+   * On reduce* / enhance* mods: magnitude % after flats. See action-types.md.
+   */
+  readonly percent?: number;
+  /**
+   * For pool-max / stat percents: `'derived'` (default) vs `'base'` only.
+   */
+  readonly percentBase?: 'derived' | 'base';
   /** Additive duration modifier for `continuous-speed` (applied first). */
   readonly addTicks?: number;
   /** Multiplicative duration modifier for `continuous-speed`. */

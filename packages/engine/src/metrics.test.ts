@@ -262,9 +262,9 @@ describe('entity metrics', () => {
     const action: ActionDefinition = {
       name: 'craft',
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'crafted', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'crafted', strength: 1 }],
+      optionalEffects: [],
     };
     let state = withPlayer();
     state = reduceEngineState(
@@ -283,7 +283,7 @@ describe('entity metrics', () => {
         type: 'execute-action',
         action: {
           ...action,
-          results: [{ type: 'grant-tag', name: 'crafted-2', strength: 1 }],
+          requiredEffects: [{ type: 'grant-tag', name: 'crafted-2', strength: 1 }],
         },
         actorEntityId: 'player',
         execution: 'automatic',
@@ -300,9 +300,9 @@ describe('entity metrics', () => {
     const action: ActionDefinition = {
       name: 'scout',
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'scouted', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'scouted', strength: 1 }],
+      optionalEffects: [],
     };
     let state = createPrimaryEngineState(
       createEntityInstance({
@@ -405,9 +405,9 @@ describe('entity metrics', () => {
     const action: ActionDefinition = {
       name: 'scout',
       requirements: [{ type: 'free' }],
-      costs: [],
-      results: [{ type: 'grant-tag', name: 'scouted', strength: 1 }],
-      sideEffects: [],
+      immediateEffects: [],
+      requiredEffects: [{ type: 'grant-tag', name: 'scouted', strength: 1 }],
+      optionalEffects: [],
     };
     state = reduceEngineState(
       state,
