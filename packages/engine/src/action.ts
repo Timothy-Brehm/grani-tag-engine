@@ -26,10 +26,15 @@ export interface ActionDefinition<
   readonly sourceId?: string;
   readonly requirements: readonly TReq[];
   /**
-   * Effects applied when starting a cycle at 0% progress.
-   * Often costs; any adjust sign is allowed in any slot.
+   * Required effects applied when starting a cycle at 0% progress.
+   * Must apply or the start fails / is unavailable.
    */
-  readonly immediateEffects: readonly TEffect[];
+  readonly requiredImmediateEffects: readonly TEffect[];
+  /**
+   * Optional effects applied when starting a cycle at 0% progress.
+   * Each applies only when `canHappen`; never blocks start.
+   */
+  readonly optionalImmediateEffects?: readonly TEffect[];
   /**
    * Total **required** effects for one full cycle, prorated as progress advances.
    * Inability to apply a slice pauses the job and keeps progress.
@@ -40,10 +45,14 @@ export interface ActionDefinition<
    * Each effect applies only when `canHappen` (e.g. pool not full); never pauses.
    */
   readonly optionalOverTimeEffects?: readonly TEffect[];
-  /** Effects that must apply on completion (always applied; clamps may no-op). */
-  readonly requiredEffects: readonly TEffect[];
-  /** Effects applied on completion only when `canHappen` is true. */
-  readonly optionalEffects: readonly TEffect[];
+  /**
+   * Effects that must apply on **completion** (always applied; clamps may no-op).
+   */
+  readonly requiredFinishedEffects: readonly TEffect[];
+  /**
+   * Effects applied on **completion** only when `canHappen` is true.
+   */
+  readonly optionalFinishedEffects: readonly TEffect[];
   /**
    * Engine ticks to complete one cycle. Omitted ⇒ 1 (one-tick / “instant”).
    */

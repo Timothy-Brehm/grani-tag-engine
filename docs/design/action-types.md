@@ -26,11 +26,12 @@ Effects may target **ids** (`pool: 'Water'`) and/or **Types** (`poolTypes: ['Liq
 
 | Field | When | Gate |
 |-------|------|------|
-| `immediateEffects` | Start at 0% | Must apply |
+| `requiredImmediateEffects` | Start at 0% | Must apply |
+| `optionalImmediateEffects` | Start at 0% | Only if `canHappen`; never blocks |
 | `requiredOverTimeEffects` | Prorated while progressing | Must apply slice or pause |
 | `optionalOverTimeEffects` | Prorated while progressing | Only if `canHappen`; never pause |
-| `requiredEffects` | On complete | Always applied |
-| `optionalEffects` | On complete | Only if `canHappen` |
+| `requiredFinishedEffects` | On complete | Always applied |
+| `optionalFinishedEffects` | On complete | Only if `canHappen` |
 
 Any signed `adjust-pool` may appear in any slot (symmetry). Host fiction may call them costs/benefits.
 
@@ -57,10 +58,10 @@ Core: `reduceEffect` (toward 0) and `enhanceEffect` (away from 0). Sign-preservi
 
 | Slot | Toward 0 | Away from 0 |
 |------|----------|-------------|
-| immediate | `reduceImmediateEffect` | `enhanceImmediateEffect` |
+| immediate (`requiredImmediateEffects` + `optionalImmediateEffects`) | `reduceImmediateEffect` | `enhanceImmediateEffect` |
 | overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
-| required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
-| optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
+| finished required (`requiredFinishedEffects`) | `reduceRequiredEffect` | `enhanceRequiredEffect` |
+| finished optional (`optionalFinishedEffects`) | `reduceOptionalEffect` | `enhanceOptionalEffect` |
 
 **Order (per authored adjust):** all **flats** first (reduce flats, then enhance flats), then all **percents** (reduce %, then enhance %). Same idea as pool-max/stat: constants before percents. Live at check/pay. Filters: `actionName` / `actionTypes` and optional `pool` / `poolTypes`.
 
@@ -98,13 +99,13 @@ Catalog scraps used below:
   types: ['Explore'],
   durationTicks: 5,
   requirements: [],
-  immediateEffects: [
+  requiredImmediateEffects: [
     { type: 'adjust-pool', name: 'stamina', strength: -2, pool: 'Stamina' },
   ],
-  requiredEffects: [
+  requiredFinishedEffects: [
     { type: 'adjust-pool', name: 'find-water', strength: 1, pool: 'Water' },
   ],
-  optionalEffects: [],
+  optionalFinishedEffects: [],
 }
 ```
 
@@ -116,8 +117,8 @@ Catalog scraps used below:
   name: 'Focus',
   types: ['Focus'],
   requirements: [],
-  immediateEffects: [],
-  requiredEffects: [
+  requiredImmediateEffects: [],
+  requiredFinishedEffects: [
     {
       type: 'adjust-pool',
       name: 'focus-liquids',
@@ -126,7 +127,7 @@ Catalog scraps used below:
       createPool: false, // Water + BerryJuice if held; not Rations
     },
   ],
-  optionalEffects: [],
+  optionalFinishedEffects: [],
 }
 ```
 

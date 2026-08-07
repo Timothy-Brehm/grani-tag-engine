@@ -36,11 +36,12 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    | Slot | Field | When | Gate |
    |------|-------|------|------|
    | requirements | `requirements` | Offer / start | Must all pass |
-   | immediate | `immediateEffects` | Start at 0% | Must apply |
+   | required immediate | `requiredImmediateEffects` | Start at 0% | Must apply |
+   | optional immediate | `optionalImmediateEffects` | Start at 0% | Only if `canHappen`; never blocks |
    | over time (required) | `requiredOverTimeEffects` | Prorated while progressing | Must apply slice or pause |
    | over time (optional) | `optionalOverTimeEffects` | Prorated while progressing | Only if `canHappen`; never pause |
-   | required | `requiredEffects` | On complete | Always applied |
-   | optional | `optionalEffects` | On complete | Only if `canHappen` |
+   | required finished | `requiredFinishedEffects` | On complete | Always applied |
+   | optional finished | `optionalFinishedEffects` | On complete | Only if `canHappen` |
 
    `durationTicks` omitted ⇒ 1. `repeatWhileAvailable` re-arms at 0% after complete while still available (one cycle per later tick). Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
 8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Resource regen uses `generate-pool` / `cross-link` `toGeneratePool` tag passives, not fake idle entities. Growing pool capacity as a repeatable action over time uses a **product tag** on a `cross-link` to track the total addition to the unbound pool. This is in addition to standard tags that increase capacity for one-off boosts.

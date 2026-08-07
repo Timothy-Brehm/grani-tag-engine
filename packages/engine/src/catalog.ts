@@ -102,8 +102,10 @@ export type CatalogRegistryView = {
     readonly actions?: readonly {
       readonly name: string;
       readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
-      readonly requiredEffects?: readonly { readonly type: string; readonly name?: string }[];
-      readonly optionalEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly requiredFinishedEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly optionalFinishedEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly requiredImmediateEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly optionalImmediateEffects?: readonly { readonly type: string; readonly name?: string }[];
       readonly requirements?: readonly { readonly type: string }[];
     }[];
   }[];
@@ -559,8 +561,10 @@ export function collectCatalogWarnings(
       if (found) break;
       for (const action of def.actions ?? []) {
         for (const effect of [
-          ...(action.requiredEffects ?? []),
-          ...(action.optionalEffects ?? []),
+          ...(action.requiredFinishedEffects ?? []),
+          ...(action.optionalFinishedEffects ?? []),
+          ...(action.requiredImmediateEffects ?? []),
+          ...(action.optionalImmediateEffects ?? []),
         ]) {
           if (effect.type === 'grant-tag' && effect.name === gate.tagName) {
             found = true;

@@ -17,27 +17,29 @@ import {
 } from './action-match';
 
 export type RecipeEffectSlot =
-  | 'immediateEffects'
+  | 'requiredImmediateEffects'
+  | 'optionalImmediateEffects'
   | 'requiredOverTimeEffects'
   | 'optionalOverTimeEffects'
-  | 'requiredEffects'
-  | 'optionalEffects';
+  | 'requiredFinishedEffects'
+  | 'optionalFinishedEffects';
 
 export const REDUCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
-  immediateEffects: 'reduceImmediateEffect',
+  requiredImmediateEffects: 'reduceImmediateEffect',
+  optionalImmediateEffects: 'reduceImmediateEffect',
   requiredOverTimeEffects: 'reduceOverTimeEffect',
-  // Same tag types as required over-time; slot is distinct for apply-time lists.
   optionalOverTimeEffects: 'reduceOverTimeEffect',
-  requiredEffects: 'reduceRequiredEffect',
-  optionalEffects: 'reduceOptionalEffect',
+  requiredFinishedEffects: 'reduceRequiredEffect',
+  optionalFinishedEffects: 'reduceOptionalEffect',
 };
 
 export const ENHANCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
-  immediateEffects: 'enhanceImmediateEffect',
+  requiredImmediateEffects: 'enhanceImmediateEffect',
+  optionalImmediateEffects: 'enhanceImmediateEffect',
   requiredOverTimeEffects: 'enhanceOverTimeEffect',
   optionalOverTimeEffects: 'enhanceOverTimeEffect',
-  requiredEffects: 'enhanceRequiredEffect',
-  optionalEffects: 'enhanceOptionalEffect',
+  requiredFinishedEffects: 'enhanceRequiredEffect',
+  optionalFinishedEffects: 'enhanceOptionalEffect',
 };
 
 function listTagEffects(
@@ -382,7 +384,7 @@ export function applyCostBonuses(
 ): ActiveEffect[] {
   return applySlotMagnitudeModifiers(
     costs,
-    'immediateEffects',
+    'requiredImmediateEffects',
     actor,
     actionName,
     actionTypes,
@@ -402,7 +404,7 @@ export function materializeActionResults(
 ): ActiveEffect[] {
   return materializeSlotEffects(
     results,
-    'requiredEffects',
+    'requiredFinishedEffects',
     actor,
     actionName,
     actionTypes,

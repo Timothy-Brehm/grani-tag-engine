@@ -57,7 +57,7 @@ AstrevnoState {
 - Action execution carries `actorEntityId`, `sourceEntityId`, and optional `targetEntityId`.
 - Immediate / required / optional recipe effects default to the **actor**; source-state requirements default to the **source**.
 - `primaryEntityId` is a **required** field on each game’s `EngineState` (not `gameMeta`): pointer to an in-play entity—the default entity for general use (PC character sheet, camp stockpile, or other property store—not necessarily a character). Hosts may use it as the default actor; run-wide tags often live there. Presentation still lives in the host. Removing the primary entity is forbidden until `set-primary-entity` retargets. `gameMeta` is optional host lifecycle/presentation (`label`, `archivedSeq`, …).
-- `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.3.0.5`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves. See [UPGRADING.md](./UPGRADING.md) for the 0.3 recipe-field rename.
+- `engineVersion` is stamped on every `EngineDocument` (`ENGINE_VERSION`, currently `0.3.0.6`). Format is `major.minor.patch.build`. **Compatibility epoch is `major.minor`**. `engineDocumentFromJSON` rejects missing or foreign epochs. Use `migrateEngineStateToDocument` for 0.1 bare-state saves. See [UPGRADING.md](./UPGRADING.md) for the 0.3 recipe-field rename.
 - Do not store React setters inside engine or game state. Dispatch lives outside persisted state.
 - Derived values (stats / pool maxima / pool reserved from tags) live in engine selectors; UniversalTags merge into active-game evaluation. Stored pool values are **Available** (raw). Gameplay gates use **effective** values floored by per-pool `capacityStep`; hosts should prefer `selectPoolDisplay*` for HUD.
 - Entity **metrics** track action counts (manual / automatic / total) and high/low-water marks for pool current, pool-max, and stats so requirements can hang off history.
@@ -94,7 +94,7 @@ AstrevnoState {
 - Entity definitions are registered on `EngineRegistry`.
 - `EngineContext` carries full `EngineState` plus actor/source/target roles.
 - Context updates are immutable.
-- `executeAction` ordering: `immediateEffects`, then `requiredEffects`, then `optionalEffects` (only if `canHappen`). `executeActionSafe` re-checks `canHappen` per effect.
+- `executeAction` ordering: `requiredImmediateEffects`, then `optionalImmediateEffects` (only if `canHappen`), then `requiredFinishedEffects`, then `optionalFinishedEffects` (only if `canHappen`). `executeActionSafe` re-checks `canHappen` per effect.
 
 ## Extraction status
 

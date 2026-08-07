@@ -55,10 +55,12 @@ function actorFromContext<THost>(context: EngineContext<THost>) {
 function liveSlot<THost>(
   effects: readonly ActiveEffect[],
   slot:
-    | 'immediateEffects'
+    | 'requiredImmediateEffects'
+    | 'optionalImmediateEffects'
     | 'requiredOverTimeEffects'
-    | 'requiredEffects'
-    | 'optionalEffects',
+    | 'optionalOverTimeEffects'
+    | 'requiredFinishedEffects'
+    | 'optionalFinishedEffects',
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
   registry: EngineRegistry<THost>,
@@ -75,20 +77,22 @@ function liveSlot<THost>(
 }
 
 /**
- * Action is available when requirements are met, immediate effects are payable,
- * and at least one required effect is possible.
+ * Action is available when requirements are met, required immediate effects
+ * are payable, and at least one required finished effect is possible.
+ * Optional immediate effects never block availability.
  *
- * Mid-cycle resume (saved progress > 0): immediateEffects are not re-checked.
- * At 0%: immediate plus the first over-time slice must be payable.
+ * Mid-cycle resume (saved progress > 0): requiredImmediateEffects are not
+ * re-checked. At 0%: required immediate plus the first over-time slice must
+ * be payable.
  */
 export function isActionAvailable<THost>(
   registry: EngineRegistry<THost>,
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): boolean {
-  const required = liveSlot(
-    action.requiredEffects,
-    'requiredEffects',
+  const requiredFinished = liveSlot(
+    action.requiredFinishedEffects,
+    'requiredFinishedEffects',
     action,
     context,
     registry,
@@ -96,7 +100,7 @@ export function isActionAvailable<THost>(
   if (
     !requirementsMet(registry, action.requirements, context) ||
     !codeRequirementsMet(action.codeRequirements, context) ||
-    !anyResultPossible(registry, required, context)
+    !anyResultPossible(registry, requiredFinished, context)
   ) {
     return false;
   }
@@ -116,14 +120,14 @@ export function isActionAvailable<THost>(
     return true;
   }
 
-  const immediate = liveSlot(
-    action.immediateEffects,
-    'immediateEffects',
+  const requiredImmediate = liveSlot(
+    action.requiredImmediateEffects,
+    'requiredImmediateEffects',
     action,
     context,
     registry,
   );
-  if (!costsPayable(registry, immediate, context)) {
+  if (!costsPayable(registry, requiredImmediate, context)) {
     return false;
   }
 
@@ -162,9 +166,10 @@ export function isActionAvailable<THost>(
 
 /**
  * FireAction-style execution (immutable context):
- * 1. Apply immediateEffects (caller should ensure canHappen).
- * 2. Apply requiredEffects — must happen (always applied; clamps may no-op).
- * 3. Apply optionalEffects only when `canHappen` is true.
+ * 1. Apply requiredImmediateEffects (caller should ensure canHappen).
+ * 2. Apply optionalImmediateEffects only when `canHappen`.
+ * 3. Apply requiredFinishedEffects — must happen (always applied; clamps may no-op).
+ * 4. Apply optionalFinishedEffects only when `canHappen` is true.
  *
  * Prefer checking `isActionAvailable` first. For fully soft application, use
  * `executeActionSafe`. Hosts should prefer the `execute-action` command
@@ -177,8 +182,8 @@ export function executeAction<THost>(
 ): EngineContext<THost> {
   let next = context;
   for (const effect of liveSlot(
-    action.immediateEffects,
-    'immediateEffects',
+    action.requiredImmediateEffects,
+    'requiredImmediateEffects',
     action,
     next,
     registry,
@@ -186,8 +191,19 @@ export function executeAction<THost>(
     next = registry.applyEffect(effect, next);
   }
   for (const effect of liveSlot(
-    action.requiredEffects,
-    'requiredEffects',
+    action.optionalImmediateEffects ?? [],
+    'optionalImmediateEffects',
+    action,
+    next,
+    registry,
+  )) {
+    if (registry.canApplyEffect(effect, next)) {
+      next = registry.applyEffect(effect, next);
+    }
+  }
+  for (const effect of liveSlot(
+    action.requiredFinishedEffects,
+    'requiredFinishedEffects',
     action,
     next,
     registry,
@@ -195,8 +211,8 @@ export function executeAction<THost>(
     next = registry.applyEffect(effect, next);
   }
   for (const side of liveSlot(
-    action.optionalEffects,
-    'optionalEffects',
+    action.optionalFinishedEffects,
+    'optionalFinishedEffects',
     action,
     next,
     registry,
@@ -226,8 +242,8 @@ export function executeActionSafe<THost>(
   };
 
   for (const effect of liveSlot(
-    action.immediateEffects,
-    'immediateEffects',
+    action.requiredImmediateEffects,
+    'requiredImmediateEffects',
     action,
     next,
     registry,
@@ -235,8 +251,17 @@ export function executeActionSafe<THost>(
     applyIfPossible(effect);
   }
   for (const effect of liveSlot(
-    action.requiredEffects,
-    'requiredEffects',
+    action.optionalImmediateEffects ?? [],
+    'optionalImmediateEffects',
+    action,
+    next,
+    registry,
+  )) {
+    applyIfPossible(effect);
+  }
+  for (const effect of liveSlot(
+    action.requiredFinishedEffects,
+    'requiredFinishedEffects',
     action,
     next,
     registry,
@@ -244,8 +269,8 @@ export function executeActionSafe<THost>(
     applyIfPossible(effect);
   }
   for (const side of liveSlot(
-    action.optionalEffects,
-    'optionalEffects',
+    action.optionalFinishedEffects,
+    'optionalFinishedEffects',
     action,
     next,
     registry,

@@ -24,8 +24,8 @@ function registryWith(
 }
 
 describe('assignable capacities', () => {
-  it('exports 0.3.0.5', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.5');
+  it('exports 0.3.0.6', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.6');
   });
 
   it('reserve-stat lowers effective selectStatValue', () => {

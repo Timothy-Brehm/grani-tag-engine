@@ -10,10 +10,15 @@ Breaking changes and major additions by version. No auto-migration yet — updat
 
 | Old | New |
 |-----|-----|
-| `costs` | `immediateEffects` |
+| `costs` | `requiredImmediateEffects` |
+| `immediateEffects` | `requiredImmediateEffects` |
 | `costsOverTime` / `overTimeEffects` | `requiredOverTimeEffects` |
-| `results` | `requiredEffects` |
-| `sideEffects` | `optionalEffects` |
+| `results` | `requiredFinishedEffects` |
+| `requiredEffects` | `requiredFinishedEffects` |
+| `sideEffects` | `optionalFinishedEffects` |
+| `optionalEffects` | `optionalFinishedEffects` |
+
+New optional soft-at-start slot: `optionalImmediateEffects` (never blocks availability).
 
 Continuous job JSON: loader still accepts the old keys; new writes use the new names only.
 
@@ -34,16 +39,29 @@ Symmetric with completion slots:
 
 `overTimeEffects` (and older `costsOverTime`) still load as `requiredOverTimeEffects`. Soft regen/fills belong in `optionalOverTimeEffects`. Magnitude mods reuse `reduceOverTimeEffect` / `enhanceOverTimeEffect` for both. Replaces short-lived soft-pay on required over-time (`0.3.0.3`).
 
+### Recipe slot rename + optional immediate (new, `0.3.0.6`)
+
+Clarifies start vs finish naming and adds soft start:
+
+| Slot | Gate |
+|------|------|
+| `requiredImmediateEffects` | Must apply at start (0%) |
+| `optionalImmediateEffects` | Only if `canHappen`; never blocks start |
+| `requiredFinishedEffects` | Always applied on complete |
+| `optionalFinishedEffects` | Only if `canHappen` on complete |
+
+Magnitude tag type strings stay: `reduceImmediateEffect`, `reduceOverTimeEffect`, `reduceRequiredEffect`, `reduceOptionalEffect` (and `enhance*`).
+
 ### Tag magnitude modifiers (new)
 
 Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
 
 | Slot | Toward 0 | Away from 0 |
 |------|----------|-------------|
-| immediate | `reduceImmediateEffect` | `enhanceImmediateEffect` |
+| immediate (`requiredImmediateEffects` + `optionalImmediateEffects`) | `reduceImmediateEffect` | `enhanceImmediateEffect` |
 | overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
-| required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
-| optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
+| finished required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
+| finished optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
 
 Order: all flats (reduce, then enhance), then all percents (reduce, then enhance).
 

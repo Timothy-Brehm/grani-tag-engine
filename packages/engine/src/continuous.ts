@@ -150,15 +150,24 @@ export function snapshotAction<THost = unknown>(
     ...(action.label !== undefined ? { label: action.label } : {}),
     ...(action.sourceId !== undefined ? { sourceId: action.sourceId } : {}),
     requirements: Object.freeze([...action.requirements]),
-    immediateEffects: Object.freeze([...action.immediateEffects]),
+    requiredImmediateEffects: Object.freeze([
+      ...action.requiredImmediateEffects,
+    ]),
+    optionalImmediateEffects: Object.freeze([
+      ...(action.optionalImmediateEffects ?? []),
+    ]),
     requiredOverTimeEffects: Object.freeze([
       ...(action.requiredOverTimeEffects ?? []),
     ]),
     optionalOverTimeEffects: Object.freeze([
       ...(action.optionalOverTimeEffects ?? []),
     ]),
-    requiredEffects: Object.freeze([...action.requiredEffects]),
-    optionalEffects: Object.freeze([...action.optionalEffects]),
+    requiredFinishedEffects: Object.freeze([
+      ...action.requiredFinishedEffects,
+    ]),
+    optionalFinishedEffects: Object.freeze([
+      ...action.optionalFinishedEffects,
+    ]),
     durationTicks: actionDurationTicks(action),
     types: Object.freeze([...(action.types ?? [])]),
     ...(action.repeatWhileAvailable === true
@@ -178,11 +187,12 @@ export function actionFromSnapshot(
     ...(snapshot.label !== undefined ? { label: snapshot.label } : {}),
     ...(snapshot.sourceId !== undefined ? { sourceId: snapshot.sourceId } : {}),
     requirements: snapshot.requirements,
-    immediateEffects: snapshot.immediateEffects,
+    requiredImmediateEffects: snapshot.requiredImmediateEffects,
+    optionalImmediateEffects: snapshot.optionalImmediateEffects,
     requiredOverTimeEffects: snapshot.requiredOverTimeEffects,
     optionalOverTimeEffects: snapshot.optionalOverTimeEffects,
-    requiredEffects: snapshot.requiredEffects,
-    optionalEffects: snapshot.optionalEffects,
+    requiredFinishedEffects: snapshot.requiredFinishedEffects,
+    optionalFinishedEffects: snapshot.optionalFinishedEffects,
     durationTicks: snapshot.durationTicks,
     types: snapshot.types ?? [],
     ...(snapshot.repeatWhileAvailable === true
@@ -578,8 +588,8 @@ export function startContinuousAction<THost>(
     !anyResultPossible(
       options.registry,
       liveSlotEffects(
-        options.action.requiredEffects,
-        'requiredEffects',
+        options.action.requiredFinishedEffects,
+        'requiredFinishedEffects',
         options.action,
         ctx,
         options.registry,
@@ -609,14 +619,14 @@ export function startContinuousAction<THost>(
   }
 
   if (!midCycle) {
-    const startImmediate = liveSlotEffects(
-      options.action.immediateEffects,
-      'immediateEffects',
+    const startRequiredImmediate = liveSlotEffects(
+      options.action.requiredImmediateEffects,
+      'requiredImmediateEffects',
       options.action,
       ctx,
       options.registry,
     );
-    if (!costsPayable(options.registry, startImmediate, ctx)) {
+    if (!costsPayable(options.registry, startRequiredImmediate, ctx)) {
       return state;
     }
     const firstDeltaTicks = Math.min(
@@ -643,7 +653,18 @@ export function startContinuousAction<THost>(
     ) {
       return state;
     }
-    ctx = applyEffectList(options.registry, startImmediate, ctx);
+    ctx = applyEffectList(options.registry, startRequiredImmediate, ctx);
+    ctx = applyOptionalEffectList(
+      options.registry,
+      liveSlotEffects(
+        options.action.optionalImmediateEffects ?? [],
+        'optionalImmediateEffects',
+        options.action,
+        ctx,
+        options.registry,
+      ),
+      ctx,
+    );
   }
 
   const snapshot = snapshotAction(options.action);
@@ -833,14 +854,14 @@ function advanceOneJob<THost>(
   }
 
   if (record.payImmediateOnNextAdvance === true) {
-    const startImmediate = liveSlotEffects(
-      action.immediateEffects,
-      'immediateEffects',
+    const startRequiredImmediate = liveSlotEffects(
+      action.requiredImmediateEffects,
+      'requiredImmediateEffects',
       action,
       ctx,
       options.registry,
     );
-    if (!costsPayable(options.registry, startImmediate, ctx)) {
+    if (!costsPayable(options.registry, startRequiredImmediate, ctx)) {
       return pauseContinuousAction(state, progressKey);
     }
     const previewDuration = selectEffectiveDurationTicks(
@@ -875,7 +896,18 @@ function advanceOneJob<THost>(
     ) {
       return pauseContinuousAction(state, progressKey);
     }
-    ctx = applyEffectList(options.registry, startImmediate, ctx);
+    ctx = applyEffectList(options.registry, startRequiredImmediate, ctx);
+    ctx = applyOptionalEffectList(
+      options.registry,
+      liveSlotEffects(
+        action.optionalImmediateEffects ?? [],
+        'optionalImmediateEffects',
+        action,
+        ctx,
+        options.registry,
+      ),
+      ctx,
+    );
     const clearedPayFlag: ContinuousProgressRecord = {
       ...record,
       payImmediateOnNextAdvance: undefined,
@@ -964,26 +996,26 @@ function advanceOneJob<THost>(
 
 function applyRequiredAndOptionalEffects<THost>(
   registry: EngineRegistry<THost>,
-  requiredEffects: readonly ActiveEffect[],
-  optionalEffects: readonly ActiveEffect[],
+  requiredFinishedEffects: readonly ActiveEffect[],
+  optionalFinishedEffects: readonly ActiveEffect[],
   context: EngineContext<THost>,
   mode: 'strict' | 'safe',
 ): EngineContext<THost> {
   let next = context;
   if (mode === 'safe') {
-    for (const effect of requiredEffects) {
+    for (const effect of requiredFinishedEffects) {
       if (registry.canApplyEffect(effect, next)) {
         next = registry.applyEffect(effect, next);
       }
     }
   } else {
-    // Required effects must happen (apply always; pool clamps / no-ops are fine).
-    for (const effect of requiredEffects) {
+    // Required finished effects must happen (apply always; pool clamps / no-ops are fine).
+    for (const effect of requiredFinishedEffects) {
       next = registry.applyEffect(effect, next);
     }
   }
-  // Optional effects happen only if able.
-  for (const effect of optionalEffects) {
+  // Optional finished effects happen only if able.
+  for (const effect of optionalFinishedEffects) {
     if (registry.canApplyEffect(effect, next)) {
       next = registry.applyEffect(effect, next);
     }
@@ -1032,15 +1064,15 @@ function completeContinuousJob<THost>(
   ctx = applyRequiredAndOptionalEffects(
     options.registry,
     liveSlotEffects(
-      action.requiredEffects,
-      'requiredEffects',
+      action.requiredFinishedEffects,
+      'requiredFinishedEffects',
       action,
       ctx,
       options.registry,
     ),
     liveSlotEffects(
-      action.optionalEffects,
-      'optionalEffects',
+      action.optionalFinishedEffects,
+      'optionalFinishedEffects',
       action,
       ctx,
       options.registry,
@@ -1083,8 +1115,8 @@ function completeContinuousJob<THost>(
       anyResultPossible(
         options.registry,
         liveSlotEffects(
-          action.requiredEffects,
-          'requiredEffects',
+          action.requiredFinishedEffects,
+          'requiredFinishedEffects',
           action,
           restartCtx,
           options.registry,
@@ -1092,9 +1124,9 @@ function completeContinuousJob<THost>(
         restartCtx,
       )
     ) {
-      const startImmediate = liveSlotEffects(
-        action.immediateEffects,
-        'immediateEffects',
+      const startRequiredImmediate = liveSlotEffects(
+        action.requiredImmediateEffects,
+        'requiredImmediateEffects',
         action,
         restartCtx,
         options.registry,
@@ -1121,7 +1153,7 @@ function completeContinuousJob<THost>(
         (firstDeltaTicks / previewDuration) * 100,
       );
       if (
-        costsPayable(options.registry, startImmediate, restartCtx) &&
+        costsPayable(options.registry, startRequiredImmediate, restartCtx) &&
         canPayRequiredOverTimeSlice(
           options.registry,
           action,

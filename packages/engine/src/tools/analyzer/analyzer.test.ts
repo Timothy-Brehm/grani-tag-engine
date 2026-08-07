@@ -17,8 +17,8 @@ import { createEngineState } from '../../state';
 import { instantiateEntity } from '../../entity';
 
 describe('content analyzer', () => {
-  it('exports 0.3.0.5', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.5');
+  it('exports 0.3.0.6', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.6');
   });
 
   it('analyzes up to a tier gate', () => {
@@ -39,21 +39,21 @@ describe('content analyzer', () => {
         {
           name: 'choose-left',
           requirements: [{ type: 'tag', tagName: 'Start', exists: true }],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             { type: 'grant-tag', name: 'Tier1Choice', strength: 1 },
             { type: 'grant-tag', name: 'Tier1Choice_WentLeft', strength: 1 },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
         {
           name: 'post-tier',
           requirements: [
             { type: 'tag', tagName: 'Tier1Choice', exists: true },
           ],
-          immediateEffects: [],
-          requiredEffects: [{ type: 'grant-tag', name: 'PostTier', strength: 1 }],
-          optionalEffects: [],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [{ type: 'grant-tag', name: 'PostTier', strength: 1 }],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -106,17 +106,17 @@ describe('content analyzer', () => {
           name: 'start-demo',
           analyzer: { blockId: 'demo', blockRole: 'entry' },
           requirements: [{ type: 'free' }],
-          immediateEffects: [],
-          requiredEffects: [{ type: 'grant-tag', name: 'Demo_A', strength: 1 }],
-          optionalEffects: [],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [{ type: 'grant-tag', name: 'Demo_A', strength: 1 }],
+          optionalFinishedEffects: [],
         },
         {
           name: 'unlock-b',
           analyzer: { blockId: 'demo', blockRole: 'member' },
           requirements: [{ type: 'tag', tagName: 'Demo_A', exists: true }],
-          immediateEffects: [],
-          requiredEffects: [{ type: 'grant-tag', name: 'Demo_B', strength: 1 }],
-          optionalEffects: [],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [{ type: 'grant-tag', name: 'Demo_B', strength: 1 }],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -166,7 +166,7 @@ describe('content analyzer', () => {
         {
           name: 'pick-berries',
           requirements: [{ type: 'free' }],
-          immediateEffects: [
+          requiredImmediateEffects: [
             {
               type: 'adjust-pool',
               name: 'cost',
@@ -174,7 +174,7 @@ describe('content analyzer', () => {
               pool: 'Stamina',
             },
           ],
-          requiredEffects: [
+          requiredFinishedEffects: [
             {
               type: 'adjust-pool',
               name: 'gain',
@@ -182,7 +182,7 @@ describe('content analyzer', () => {
               pool: 'Berries',
             },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -222,8 +222,8 @@ describe('content analyzer', () => {
         {
           name: 'focus',
           requirements: [{ type: 'free' }],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             {
               type: 'adjust-pool',
               name: 'gain',
@@ -231,7 +231,7 @@ describe('content analyzer', () => {
               pool: 'Mana',
             },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -258,19 +258,19 @@ describe('content analyzer', () => {
           requirements: [
             { type: 'tag', tagName: 'Event_CrateOpened', exists: false },
           ],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             { type: 'grant-tag', name: 'Event_CrateOpened', strength: 1 },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
         {
           name: 'gather-tutorial',
           requirements: [
             { type: 'tag', tagName: 'Skill_Gathering', exists: false },
           ],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             {
               type: 'adjust-pool',
               name: 'stick',
@@ -278,16 +278,16 @@ describe('content analyzer', () => {
               pool: 'Sticks',
             },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
         {
           name: 'learn-gather',
           requirements: [{ type: 'free' }],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             { type: 'grant-tag', name: 'Skill_Gathering', strength: 1 },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -373,8 +373,8 @@ describe('content analyzer', () => {
         {
           name: 'vent-pollution',
           requirements: [{ type: 'free' }],
-          immediateEffects: [],
-          requiredEffects: [
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
             {
               type: 'adjust-pool',
               name: 'vent',
@@ -382,7 +382,7 @@ describe('content analyzer', () => {
               pool: 'Pollution',
             },
           ],
-          optionalEffects: [],
+          optionalFinishedEffects: [],
         },
       ],
     });
@@ -408,9 +408,9 @@ describe('content analyzer', () => {
           requirements: [
             { type: 'stat', stat: 'Strength', amount: 5 },
           ],
-          immediateEffects: [],
-          requiredEffects: [{ type: 'grant-tag', name: 'Strong', strength: 1 }],
-          optionalEffects: [],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [{ type: 'grant-tag', name: 'Strong', strength: 1 }],
+          optionalFinishedEffects: [],
         },
       ],
     });

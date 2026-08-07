@@ -245,7 +245,7 @@
     },
     "ActionDefinition": {
       "type": "object",
-      "required": ["name", "requirements", "immediateEffects", "requiredEffects", "optionalEffects"],
+      "required": ["name", "requirements", "requiredImmediateEffects", "requiredFinishedEffects", "optionalFinishedEffects"],
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
@@ -263,7 +263,11 @@
           "type": "array",
           "items": { "$ref": "#/definitions/Requirement" }
         },
-        "immediateEffects": {
+        "requiredImmediateEffects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        },
+        "optionalImmediateEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
@@ -275,11 +279,11 @@
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
-        "requiredEffects": {
+        "requiredFinishedEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
-        "optionalEffects": {
+        "optionalFinishedEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         }
