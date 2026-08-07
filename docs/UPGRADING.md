@@ -19,6 +19,10 @@ Continuous job JSON: loader still accepts the old keys; new writes use the new n
 
 Package.json `"sideEffects": false` is unrelated (bundler tree-shake flag).
 
+### Continuous `repeatWhileAvailable` (new, `0.3.0.2` / package `0.3.1`)
+
+Optional `repeatWhileAvailable?: boolean` on actions. After a continuous cycle completes, if the recipe is still available, re-arm at 0% and keep the slot; the next cycle advances on a later tick (no multi-cycle spin in one `execute-action`). Caps are normal availability — no max-rep field. See `docs/design/engine-composition.md`.
+
 ### Tag magnitude modifiers (new)
 
 Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.

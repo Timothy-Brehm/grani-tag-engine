@@ -44,6 +44,13 @@ export interface ActionDefinition<
    */
   readonly durationTicks?: number;
   /**
+   * When true, after a continuous cycle completes, if the action is still
+   * available, re-arm at 0% and keep the slot. The next advance happens on a
+   * later tick (duration-1 does not spin multiple cycles in one command).
+   * Caps are normal availability (requirements / results), not a max-rep field.
+   */
+  readonly repeatWhileAvailable?: boolean;
+  /**
    * Arbitrary content Types for improvement matching (e.g. `Explore`).
    * Each applies independently; see docs/design/action-types.md.
    */

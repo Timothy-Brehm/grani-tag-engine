@@ -9,12 +9,12 @@ import {
 
 describe('engine version', () => {
   it('exports a four-part ENGINE_VERSION', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.1');
+    expect(ENGINE_VERSION).toBe('0.3.0.2');
     expect(parseEngineVersion(ENGINE_VERSION)).toEqual({
       major: 0,
       minor: 3,
       patch: 0,
-      build: 1,
+      build: 2,
     });
   });
 

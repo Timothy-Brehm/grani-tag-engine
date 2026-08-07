@@ -156,6 +156,9 @@ export function snapshotAction<THost = unknown>(
     optionalEffects: Object.freeze([...action.optionalEffects]),
     durationTicks: actionDurationTicks(action),
     types: Object.freeze([...(action.types ?? [])]),
+    ...(action.repeatWhileAvailable === true
+      ? { repeatWhileAvailable: true }
+      : {}),
   };
 }
 
@@ -176,6 +179,9 @@ export function actionFromSnapshot(
     optionalEffects: snapshot.optionalEffects,
     durationTicks: snapshot.durationTicks,
     types: snapshot.types ?? [],
+    ...(snapshot.repeatWhileAvailable === true
+      ? { repeatWhileAvailable: true }
+      : {}),
   };
 }
 
@@ -541,10 +547,12 @@ export function startContinuousAction<THost>(
   }
 
   const snapshot = snapshotAction(options.action);
+  const execution = options.execution ?? 'manual';
   const progress: ContinuousProgressRecord = midCycle
     ? {
         ...existing,
         action: snapshot,
+        execution: existing.execution ?? execution,
         actorEntityId: options.actorEntityId,
         ...(options.sourceEntityId !== undefined
           ? { sourceEntityId: options.sourceEntityId }
@@ -568,6 +576,7 @@ export function startContinuousAction<THost>(
           : {}),
         action: snapshot,
         progress: 0,
+        execution,
       };
 
   let nextState = withContinuousState(ctx.engine, {
@@ -689,7 +698,7 @@ function advanceOneJob<THost>(
   options: AdvanceOptions<THost>,
 ): EngineState {
   const job = state.continuousActions.get(progressKey);
-  const record = state.continuousProgress.get(progressKey);
+  let record = state.continuousProgress.get(progressKey);
   if (!job || !record) {
     return state;
   }
@@ -721,6 +730,76 @@ function advanceOneJob<THost>(
 
   if (record.progress >= 100) {
     return completeContinuousJob(state, progressKey, options);
+  }
+
+  if (record.payImmediateOnNextAdvance === true) {
+    const startImmediate = liveSlotEffects(
+      action.immediateEffects,
+      'immediateEffects',
+      action,
+      ctx,
+      options.registry,
+    );
+    if (!costsPayable(options.registry, startImmediate, ctx)) {
+      return pauseContinuousAction(state, progressKey);
+    }
+    const previewDuration = selectEffectiveDurationTicks(
+      actor,
+      action.name,
+      actionDurationTicks(action),
+      options.registry,
+      state.entities,
+      action.types,
+    );
+    const firstDeltaTicks = Math.min(
+      selectContinuousProgressDelta(
+        actor,
+        action.name,
+        options.registry,
+        state.entities,
+        action.types,
+      ),
+      previewDuration,
+    );
+    const firstDeltaProgress = roundContinuousProgress(
+      (firstDeltaTicks / previewDuration) * 100,
+    );
+    const firstSlice = liveSlotEffects(
+      buildOverTimeSlice(
+        action.overTimeEffects ?? [],
+        firstDeltaProgress / 100,
+        false,
+      ),
+      'overTimeEffects',
+      action,
+      ctx,
+      options.registry,
+    );
+    if (!canPayEffectList(options.registry, firstSlice, ctx)) {
+      return pauseContinuousAction(state, progressKey);
+    }
+    ctx = applyEffectList(options.registry, startImmediate, ctx);
+    const clearedPayFlag: ContinuousProgressRecord = {
+      ...record,
+      payImmediateOnNextAdvance: undefined,
+    };
+    state = withContinuousState(ctx.engine, {
+      continuousProgress: upsertProgress(
+        ctx.engine.continuousProgress,
+        clearedPayFlag,
+      ),
+    });
+    record = clearedPayFlag;
+    ctx = toEngineContext(
+      state,
+      options.host,
+      {
+        actorEntityId: record.actorEntityId,
+        sourceEntityId: record.sourceEntityId,
+        targetEntityId: record.targetEntityId,
+      },
+      options.universalTags ?? TagCollection.create(),
+    );
   }
 
   // Recompute duration each tick so mid-action speed changes affect rate only.
@@ -887,16 +966,116 @@ function completeContinuousJob<THost>(
 
   let nextState = ctx.engine;
   const actorEntity = nextState.entities.get(record.actorEntityId);
+  const execution = record.execution ?? options.execution;
   if (actorEntity) {
     nextState = upsertEntity(
       nextState,
       recordActionExecution(
         actorEntity,
         action.name,
-        options.execution,
+        execution,
         nextState.tick,
       ),
     );
+  }
+
+  if (action.repeatWhileAvailable === true) {
+    const restartCtx = toEngineContext(
+      nextState,
+      options.host,
+      {
+        actorEntityId: record.actorEntityId,
+        sourceEntityId: record.sourceEntityId,
+        targetEntityId: record.targetEntityId,
+      },
+      options.universalTags ?? TagCollection.create(),
+    );
+    const actor = restartCtx.engine.entities.get(record.actorEntityId);
+    if (
+      actor &&
+      requirementsMet(options.registry, action.requirements, restartCtx) &&
+      codeRequirementsMet(action.codeRequirements, restartCtx) &&
+      anyResultPossible(
+        options.registry,
+        liveSlotEffects(
+          action.requiredEffects,
+          'requiredEffects',
+          action,
+          restartCtx,
+          options.registry,
+        ),
+        restartCtx,
+      )
+    ) {
+      const startImmediate = liveSlotEffects(
+        action.immediateEffects,
+        'immediateEffects',
+        action,
+        restartCtx,
+        options.registry,
+      );
+      const previewDuration = selectEffectiveDurationTicks(
+        actor,
+        action.name,
+        actionDurationTicks(action),
+        options.registry,
+        restartCtx.engine.entities,
+        action.types,
+      );
+      const firstDeltaTicks = Math.min(
+        selectContinuousProgressDelta(
+          actor,
+          action.name,
+          options.registry,
+          restartCtx.engine.entities,
+          action.types,
+        ),
+        previewDuration,
+      );
+      const firstDeltaProgress = roundContinuousProgress(
+        (firstDeltaTicks / previewDuration) * 100,
+      );
+      const firstSlice = liveSlotEffects(
+        buildOverTimeSlice(
+          action.overTimeEffects ?? [],
+          firstDeltaProgress / 100,
+          false,
+        ),
+        'overTimeEffects',
+        action,
+        restartCtx,
+        options.registry,
+      );
+      if (
+        costsPayable(options.registry, startImmediate, restartCtx) &&
+        canPayEffectList(options.registry, firstSlice, restartCtx)
+      ) {
+        // Re-arm at 0%; next tick advances (no second cycle in this call).
+        return withContinuousState(restartCtx.engine, {
+          continuousActions: upsertActive(restartCtx.engine.continuousActions, {
+            progressKey,
+            actorEntityId: record.actorEntityId,
+          }),
+          continuousProgress: upsertProgress(
+            restartCtx.engine.continuousProgress,
+            {
+              progressKey,
+              actorEntityId: record.actorEntityId,
+              ...(record.sourceEntityId !== undefined
+                ? { sourceEntityId: record.sourceEntityId }
+                : {}),
+              ...(record.targetEntityId !== undefined
+                ? { targetEntityId: record.targetEntityId }
+                : {}),
+              action: record.action,
+              progress: 0,
+              execution,
+              payImmediateOnNextAdvance: true,
+            },
+          ),
+        });
+      }
+    }
   }
 
   // Complete → progress 0% (absent record) and free slot.

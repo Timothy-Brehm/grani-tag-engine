@@ -26,6 +26,8 @@ export type ContinuousActionSnapshot = {
   readonly durationTicks: number;
   /** Authored Types (empty if omitted on the recipe). */
   readonly types: readonly string[];
+  /** See {@link import('./action').ActionDefinition.repeatWhileAvailable}. */
+  readonly repeatWhileAvailable?: boolean;
 };
 
 /**
@@ -84,6 +86,17 @@ export type ContinuousProgressRecord = {
   readonly action: ContinuousActionSnapshot;
   /** Percent complete for this cycle (0..100), two decimal places. */
   readonly progress: number;
+  /**
+   * Execution kind stamped when the job was started; used for every cycle’s
+   * action-count metrics (including `repeatWhileAvailable` re-arms).
+   */
+  readonly execution: 'manual' | 'automatic';
+  /**
+   * When true, the next `advanceOneJob` must pay `immediateEffects` before
+   * progressing (set on `repeatWhileAvailable` re-arm; unset after first start
+   * pay in `startContinuousAction`).
+   */
+  readonly payImmediateOnNextAdvance?: boolean;
 };
 
 export type ContinuousActiveJob = {
@@ -111,6 +124,8 @@ export type ContinuousProgressRecordJSON = {
   };
   /** Percent 0..100. Legacy saves may send progressTicks + effectiveDurationTicks. */
   progress?: number;
+  execution?: 'manual' | 'automatic';
+  payImmediateOnNextAdvance?: boolean;
   /** @deprecated Prefer `progress` (percent). */
   progressTicks?: number;
   /** @deprecated Prefer `progress` (percent). */
@@ -187,8 +202,15 @@ export function continuousProgressToJSON(
       requiredEffects: [...record.action.requiredEffects],
       optionalEffects: [...record.action.optionalEffects],
       types: [...record.action.types],
+      ...(record.action.repeatWhileAvailable === true
+        ? { repeatWhileAvailable: true }
+        : {}),
     },
     progress: record.progress,
+    execution: record.execution,
+    ...(record.payImmediateOnNextAdvance === true
+      ? { payImmediateOnNextAdvance: true }
+      : {}),
   }));
 }
 
@@ -225,8 +247,15 @@ export function continuousProgressFromJSON(
         optionalEffects: recipe.optionalEffects,
         durationTicks: entry.action.durationTicks ?? 1,
         types: recipe.types,
+        ...(entry.action.repeatWhileAvailable === true
+          ? { repeatWhileAvailable: true }
+          : {}),
       },
       progress: progressFromLegacyJSON(entry),
+      execution: entry.execution === 'automatic' ? 'automatic' : 'manual',
+      ...(entry.payImmediateOnNextAdvance === true
+        ? { payImmediateOnNextAdvance: true }
+        : {}),
     });
   }
   return map;

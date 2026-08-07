@@ -4,7 +4,7 @@
 
 **Agent entry:** [tools/AGENTS.md](../../packages/engine/src/tools/AGENTS.md) · tag `engine-tools`
 
-Protocol: **`0.3.0.1`**.
+Protocol: **`0.3.0.2`**.
 
 ---
 

@@ -6,8 +6,8 @@ import { reduceEngineState } from './reduce';
 import { ENGINE_VERSION } from './version';
 
 describe('lock-tag', () => {
-  it('exports 0.3.0.1', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.1');
+  it('exports 0.3.0.2', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.2');
   });
 
   it('is a grant-tag synonym (no special lock semantics)', () => {

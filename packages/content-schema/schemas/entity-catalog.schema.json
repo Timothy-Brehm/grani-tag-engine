@@ -253,6 +253,7 @@
         "label": { "type": "string" },
         "sourceId": { "type": "string" },
         "durationTicks": { "type": "number" },
+        "repeatWhileAvailable": { "type": "boolean" },
         "types": {
           "type": "array",
           "items": { "type": "string" }
