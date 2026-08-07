@@ -31,10 +31,15 @@ export interface ActionDefinition<
    */
   readonly immediateEffects: readonly TEffect[];
   /**
-   * Total effects for one full cycle, prorated as progress advances.
-   * Inability to apply a required slice pauses the job and keeps progress.
+   * Total **required** effects for one full cycle, prorated as progress advances.
+   * Inability to apply a slice pauses the job and keeps progress.
    */
-  readonly overTimeEffects?: readonly TEffect[];
+  readonly requiredOverTimeEffects?: readonly TEffect[];
+  /**
+   * Total **optional** effects for one full cycle, prorated as progress advances.
+   * Each effect applies only when `canHappen` (e.g. pool not full); never pauses.
+   */
+  readonly optionalOverTimeEffects?: readonly TEffect[];
   /** Effects that must apply on completion (always applied; clamps may no-op). */
   readonly requiredEffects: readonly TEffect[];
   /** Effects applied on completion only when `canHappen` is true. */

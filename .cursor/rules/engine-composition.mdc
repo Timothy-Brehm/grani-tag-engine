@@ -37,7 +37,8 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    |------|-------|------|------|
    | requirements | `requirements` | Offer / start | Must all pass |
    | immediate | `immediateEffects` | Start at 0% | Must apply |
-   | over time | `overTimeEffects` | Prorated while progressing | Must apply slice or pause |
+   | over time (required) | `requiredOverTimeEffects` | Prorated while progressing | Must apply slice or pause |
+   | over time (optional) | `optionalOverTimeEffects` | Prorated while progressing | Only if `canHappen`; never pause |
    | required | `requiredEffects` | On complete | Always applied |
    | optional | `optionalEffects` | On complete | Only if `canHappen` |
 

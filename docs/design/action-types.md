@@ -27,7 +27,8 @@ Effects may target **ids** (`pool: 'Water'`) and/or **Types** (`poolTypes: ['Liq
 | Field | When | Gate |
 |-------|------|------|
 | `immediateEffects` | Start at 0% | Must apply |
-| `overTimeEffects` | Prorated while progressing | Must apply slice or pause |
+| `requiredOverTimeEffects` | Prorated while progressing | Must apply slice or pause |
+| `optionalOverTimeEffects` | Prorated while progressing | Only if `canHappen`; never pause |
 | `requiredEffects` | On complete | Always applied |
 | `optionalEffects` | On complete | Only if `canHappen` |
 
@@ -57,7 +58,7 @@ Core: `reduceEffect` (toward 0) and `enhanceEffect` (away from 0). Sign-preservi
 | Slot | Toward 0 | Away from 0 |
 |------|----------|-------------|
 | immediate | `reduceImmediateEffect` | `enhanceImmediateEffect` |
-| overTime | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
+| overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
 | required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
 | optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
 

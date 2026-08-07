@@ -18,20 +18,24 @@ import {
 
 export type RecipeEffectSlot =
   | 'immediateEffects'
-  | 'overTimeEffects'
+  | 'requiredOverTimeEffects'
+  | 'optionalOverTimeEffects'
   | 'requiredEffects'
   | 'optionalEffects';
 
 export const REDUCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
   immediateEffects: 'reduceImmediateEffect',
-  overTimeEffects: 'reduceOverTimeEffect',
+  requiredOverTimeEffects: 'reduceOverTimeEffect',
+  // Same tag types as required over-time; slot is distinct for apply-time lists.
+  optionalOverTimeEffects: 'reduceOverTimeEffect',
   requiredEffects: 'reduceRequiredEffect',
   optionalEffects: 'reduceOptionalEffect',
 };
 
 export const ENHANCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
   immediateEffects: 'enhanceImmediateEffect',
-  overTimeEffects: 'enhanceOverTimeEffect',
+  requiredOverTimeEffects: 'enhanceOverTimeEffect',
+  optionalOverTimeEffects: 'enhanceOverTimeEffect',
   requiredEffects: 'enhanceRequiredEffect',
   optionalEffects: 'enhanceOptionalEffect',
 };

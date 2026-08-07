@@ -139,7 +139,9 @@ export type ActionDefinitionJSON = {
   novelty?: NoveltyAckJSON;
   requirements: RequirementJSON[];
   immediateEffects: ActiveEffectJSON[];
-  overTimeEffects?: ActiveEffectJSON[];
+  requiredOverTimeEffects?: ActiveEffectJSON[];
+  /** Soft over-time; never pauses. */
+  optionalOverTimeEffects?: ActiveEffectJSON[];
   requiredEffects: ActiveEffectJSON[];
   optionalEffects: ActiveEffectJSON[];
 };

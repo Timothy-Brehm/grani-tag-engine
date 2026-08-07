@@ -233,15 +233,16 @@ An **action** is one atomic recipe:
 
 1. **Requirements** — may it be offered / started?
 2. **Immediate effects** (`immediateEffects`) — applied when starting a cycle at 0% progress
-3. **Over-time effects** (`overTimeEffects`, optional) — total for one full cycle; **prorated** as progress advances; inability to apply a slice pauses and keeps progress
-4. **Required effects** (`requiredEffects`) — what **must** apply on **completion** (always applied; pools clamp / grants may no-op)
-5. **Optional effects** (`optionalEffects`) — extras after required; applied **only if able** (`canHappen`)
+3. **Required over-time** (`requiredOverTimeEffects`, optional) — total for one full cycle; **prorated** as progress advances; inability to apply a slice pauses and keeps progress
+4. **Optional over-time** (`optionalOverTimeEffects`, optional) — same prorating; each effect applies only when `canHappen`; **never** pauses
+5. **Required effects** (`requiredEffects`) — what **must** apply on **completion** (always applied; pools clamp / grants may no-op)
+6. **Optional effects** (`optionalEffects`) — extras after required; applied **only if able** (`canHappen`)
 
 Any signed adjust may appear in any slot (symmetry). Hosts may still call them costs/benefits in fiction.
 
-**Required vs optional:** use required for the unavoidable outcome of finishing; use optional for “nice to have” changes that should not block completion when a pool is full or a tag already exists. Example: required `+CO2`; optional `+Miles` (skipped at max).
+**Required vs optional:** use required for the unavoidable outcome of finishing; use optional for “nice to have” changes that should not block when a pool is full or a tag already exists. Example: completion required `+CO2`, optional `+Miles` (skipped at max). Over-time: put spends / hard drains in `requiredOverTimeEffects`; put regen / soft fills in `optionalOverTimeEffects` (e.g. Rest Life+Stamina while one pool is already full).
 
-**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; `overTimeEffects` uses the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
+**Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; both over-time slots use the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
 
 **`repeatWhileAvailable`:** when true, after a cycle completes, if the action is still available (requirements + at least one required effect possible + next cycle’s immediate / first over-time slice payable), re-arm at **0%** and keep the continuous slot. Do **not** advance again in the same command — the next cycle runs on a later `tick` (so duration-1 + repeat = one cycle per tick). Each completed cycle still records action metrics. There is no max-rep field; stop via normal availability (pools full, requirements, tags) or pause/cancel.
 
@@ -397,7 +398,8 @@ Action
   ├─ repeatWhileAvailable → re-arm at 0% after complete while still available
   ├─ requirements →  read traits/tags/pools/metrics/entity counts (scoped)
   ├─ immediateEffects → start-of-cycle (actor by default)
-  ├─ overTimeEffects → prorated while progressing (pause if unpaid)
+  ├─ requiredOverTimeEffects → required over-time (pause if unpaid)
+  ├─ optionalOverTimeEffects → optional over-time (skip if unable; never pause)
   ├─ requiredEffects → grant-tag / adjust-pool / spawn-entity / … (on complete)
   └─ optionalEffects → same toolbox, applied after required if able
 
@@ -473,7 +475,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - Effective `durationTicks` recomputed each tick (mid-action speed changes do not rewrite stored %)
 - Max start duration: **10 000** ticks (base or effective)
 - **Start** (`execute-action`): pay `immediateEffects` only at 0%; resume mid-cycle keeps progress and does not re-pay start effects
-- **Pause** / auto-stop (requirements fail or cannot pay `overTimeEffects` slice): free slot, **keep** progress. Positive pool adjusts in an over-time slice are **soft** (skip when full; continue while any gain can still apply); spends and non-pool effects remain hard.
+- **Pause** / auto-stop (requirements fail or cannot pay **required** `requiredOverTimeEffects` slice): free slot, **keep** progress. `optionalOverTimeEffects` never pause (each effect soft-applies when `canHappen`).
 - **Complete**: required effects must apply; optional only if able; clear progress; free slot — unless `repeatWhileAvailable` and still available, then re-arm at 0% (next cycle on a later tick; pay `immediateEffects` again on that advance)
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
@@ -522,7 +524,7 @@ Same pattern as Life/Stamina: **max from tags, Available stored, change via adju
 - Primary pool `Space` with `pool-max` tags (e.g. `Camp_Space_Base` +8). Start Available = Max.
 - Sawmill entity initial tag `Building_Sawmill`: `{ type: 'reserve-pool', pool: 'Space', strength: 2, scope: 'primary', name: '…' }`.
 - Place = `spawn-entity` Sawmill (build action may also cost sticks). Destroy = `remove-entity` → Reserved drops → Available returns.
-- Continuous mill recipe on Sawmill, `durationTicks: 30`: `overTimeEffects` adjust Logs −N on primary; `requiredEffects` Boards +M. Ongoing run = continuous job (not process API).
+- Continuous mill recipe on Sawmill, `durationTicks: 30`: `requiredOverTimeEffects` adjust Logs −N on primary; `requiredEffects` Boards +M. Ongoing run = continuous job (not process API).
 
 ### 2c. Reserved mana — Strength spell
 

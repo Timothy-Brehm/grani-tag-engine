@@ -11,7 +11,7 @@ Breaking changes and major additions by version. No auto-migration yet — updat
 | Old | New |
 |-----|-----|
 | `costs` | `immediateEffects` |
-| `costsOverTime` | `overTimeEffects` |
+| `costsOverTime` / `overTimeEffects` | `requiredOverTimeEffects` |
 | `results` | `requiredEffects` |
 | `sideEffects` | `optionalEffects` |
 
@@ -23,6 +23,17 @@ Package.json `"sideEffects": false` is unrelated (bundler tree-shake flag).
 
 Optional `repeatWhileAvailable?: boolean` on actions. After a continuous cycle completes, if the recipe is still available, re-arm at 0% and keep the slot; the next cycle advances on a later tick (no multi-cycle spin in one `execute-action`). Caps are normal availability — no max-rep field. See `docs/design/engine-composition.md`.
 
+### Required / optional over-time (new, `0.3.0.5` / package `0.3.2`)
+
+Symmetric with completion slots:
+
+| Slot | Gate |
+|------|------|
+| `requiredOverTimeEffects` | Must apply slice or pause |
+| `optionalOverTimeEffects` | Only if `canHappen`; never pause |
+
+`overTimeEffects` (and older `costsOverTime`) still load as `requiredOverTimeEffects`. Soft regen/fills belong in `optionalOverTimeEffects`. Magnitude mods reuse `reduceOverTimeEffect` / `enhanceOverTimeEffect` for both. Replaces short-lived soft-pay on required over-time (`0.3.0.3`).
+
 ### Tag magnitude modifiers (new)
 
 Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
@@ -30,7 +41,7 @@ Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName`
 | Slot | Toward 0 | Away from 0 |
 |------|----------|-------------|
 | immediate | `reduceImmediateEffect` | `enhanceImmediateEffect` |
-| overTime | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
+| overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
 | required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
 | optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
 

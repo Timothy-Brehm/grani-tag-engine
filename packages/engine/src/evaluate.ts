@@ -6,8 +6,7 @@ import type { Requirement } from './requirement';
 import { materializeSlotEffects } from './action-improvements';
 import {
   actionDurationTicks,
-  buildOverTimeSlice,
-  canPayOverTimeSlice,
+  canPayRequiredOverTimeSlice,
   continuousProgressKey,
   selectContinuousProgressDelta,
   selectEffectiveDurationTicks,
@@ -55,7 +54,11 @@ function actorFromContext<THost>(context: EngineContext<THost>) {
 
 function liveSlot<THost>(
   effects: readonly ActiveEffect[],
-  slot: 'immediateEffects' | 'overTimeEffects' | 'requiredEffects' | 'optionalEffects',
+  slot:
+    | 'immediateEffects'
+    | 'requiredOverTimeEffects'
+    | 'requiredEffects'
+    | 'optionalEffects',
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
   registry: EngineRegistry<THost>,
@@ -148,18 +151,13 @@ export function isActionAvailable<THost>(
     D,
   );
   const deltaProgress = (deltaTicks / D) * 100;
-  const slice = liveSlot(
-    buildOverTimeSlice(
-      action.overTimeEffects ?? [],
-      deltaProgress / 100,
-      baseDuration <= 1,
-    ),
-    'overTimeEffects',
-    action,
-    context,
+  return canPayRequiredOverTimeSlice(
     registry,
+    action,
+    deltaProgress / 100,
+    baseDuration <= 1,
+    context,
   );
-  return canPayOverTimeSlice(registry, slice, context);
 }
 
 /**

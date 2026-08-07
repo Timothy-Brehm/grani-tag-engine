@@ -20,7 +20,10 @@ export type ContinuousActionSnapshot = {
   readonly sourceId?: string;
   readonly requirements: readonly Requirement[];
   readonly immediateEffects: readonly ActiveEffect[];
-  readonly overTimeEffects: readonly ActiveEffect[];
+  /** Required over-time (hard). */
+  readonly requiredOverTimeEffects: readonly ActiveEffect[];
+  /** Optional over-time (soft / if able). */
+  readonly optionalOverTimeEffects: readonly ActiveEffect[];
   readonly requiredEffects: readonly ActiveEffect[];
   readonly optionalEffects: readonly ActiveEffect[];
   readonly durationTicks: number;
@@ -32,16 +35,20 @@ export type ContinuousActionSnapshot = {
 
 /**
  * Dual-read recipe effect slots from continuous JSON (new keys or legacy
- * `costs` / `costsOverTime` / `results` / `sideEffects`). See docs/UPGRADING.md.
+ * `costs` / `costsOverTime` / `overTimeEffects` / `results` / `sideEffects`).
+ * See docs/UPGRADING.md.
  */
 export function recipeEffectsFromSnapshotJSON(action: {
   readonly immediateEffects?: readonly ActiveEffect[];
+  readonly requiredOverTimeEffects?: readonly ActiveEffect[];
+  /** @deprecated Prefer `requiredOverTimeEffects`. */
   readonly overTimeEffects?: readonly ActiveEffect[];
+  readonly optionalOverTimeEffects?: readonly ActiveEffect[];
   readonly requiredEffects?: readonly ActiveEffect[];
   readonly optionalEffects?: readonly ActiveEffect[];
   /** @deprecated Prefer `immediateEffects`. */
   readonly costs?: readonly ActiveEffect[];
-  /** @deprecated Prefer `overTimeEffects`. */
+  /** @deprecated Prefer `requiredOverTimeEffects`. */
   readonly costsOverTime?: readonly ActiveEffect[];
   /** @deprecated Prefer `requiredEffects`. */
   readonly results?: readonly ActiveEffect[];
@@ -50,7 +57,8 @@ export function recipeEffectsFromSnapshotJSON(action: {
   readonly types?: readonly string[];
 }): {
   readonly immediateEffects: readonly ActiveEffect[];
-  readonly overTimeEffects: readonly ActiveEffect[];
+  readonly requiredOverTimeEffects: readonly ActiveEffect[];
+  readonly optionalOverTimeEffects: readonly ActiveEffect[];
   readonly requiredEffects: readonly ActiveEffect[];
   readonly optionalEffects: readonly ActiveEffect[];
   readonly types: readonly string[];
@@ -59,8 +67,14 @@ export function recipeEffectsFromSnapshotJSON(action: {
     immediateEffects: Object.freeze([
       ...(action.immediateEffects ?? action.costs ?? []),
     ]),
-    overTimeEffects: Object.freeze([
-      ...(action.overTimeEffects ?? action.costsOverTime ?? []),
+    requiredOverTimeEffects: Object.freeze([
+      ...(action.requiredOverTimeEffects ??
+        action.overTimeEffects ??
+        action.costsOverTime ??
+        []),
+    ]),
+    optionalOverTimeEffects: Object.freeze([
+      ...(action.optionalOverTimeEffects ?? []),
     ]),
     requiredEffects: Object.freeze([
       ...(action.requiredEffects ?? action.results ?? []),
@@ -74,9 +88,9 @@ export function recipeEffectsFromSnapshotJSON(action: {
 
 /**
  * Persisted continuous progress. `progress` is percent complete (0..100),
- * rounded to two decimals — same basis used to prorate `overTimeEffects`
- * (`payFraction = deltaProgress / 100`). Effective duration is recomputed
- * each tick so mid-action speed changes affect remaining work only.
+ * rounded to two decimals — same basis used to prorate required/optional
+ * over-time (`payFraction = deltaProgress / 100`). Effective duration is
+ * recomputed each tick so mid-action speed changes affect remaining work only.
  */
 export type ContinuousProgressRecord = {
   readonly progressKey: string;
@@ -115,7 +129,7 @@ export type ContinuousProgressRecordJSON = {
   action: ContinuousActionSnapshot & {
     /** @deprecated Prefer `immediateEffects`. */
     costs?: readonly ActiveEffect[];
-    /** @deprecated Prefer `overTimeEffects`. */
+    /** @deprecated Prefer `requiredOverTimeEffects`. */
     costsOverTime?: readonly ActiveEffect[];
     /** @deprecated Prefer `requiredEffects`. */
     results?: readonly ActiveEffect[];
@@ -198,7 +212,8 @@ export function continuousProgressToJSON(
       ...record.action,
       requirements: [...record.action.requirements],
       immediateEffects: [...record.action.immediateEffects],
-      overTimeEffects: [...record.action.overTimeEffects],
+      requiredOverTimeEffects: [...record.action.requiredOverTimeEffects],
+      optionalOverTimeEffects: [...record.action.optionalOverTimeEffects],
       requiredEffects: [...record.action.requiredEffects],
       optionalEffects: [...record.action.optionalEffects],
       types: [...record.action.types],
@@ -242,7 +257,8 @@ export function continuousProgressFromJSON(
           : {}),
         requirements: Object.freeze([...(entry.action.requirements ?? [])]),
         immediateEffects: recipe.immediateEffects,
-        overTimeEffects: recipe.overTimeEffects,
+        requiredOverTimeEffects: recipe.requiredOverTimeEffects,
+        optionalOverTimeEffects: recipe.optionalOverTimeEffects,
         requiredEffects: recipe.requiredEffects,
         optionalEffects: recipe.optionalEffects,
         durationTicks: entry.action.durationTicks ?? 1,

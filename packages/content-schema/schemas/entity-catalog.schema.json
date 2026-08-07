@@ -267,7 +267,11 @@
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },
-        "overTimeEffects": {
+        "requiredOverTimeEffects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ActiveEffect" }
+        },
+        "optionalOverTimeEffects": {
           "type": "array",
           "items": { "$ref": "#/definitions/ActiveEffect" }
         },

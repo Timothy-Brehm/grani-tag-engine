@@ -264,7 +264,10 @@ export function buildContentGraph(
       const key = analyzerActionKey(def.id, action.name);
       const classified = classifyRequirements(action);
       const results = effectList(action.requiredEffects, action.optionalEffects);
-      const costs = effectList(action.immediateEffects, action.overTimeEffects);
+      const costs = effectList(
+        action.immediateEffects,
+        action.requiredOverTimeEffects,
+      );
       const granted = grantsFromEffects(results);
       actions.set(key, {
         key,

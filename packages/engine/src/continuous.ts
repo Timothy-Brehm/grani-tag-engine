@@ -151,7 +151,12 @@ export function snapshotAction<THost = unknown>(
     ...(action.sourceId !== undefined ? { sourceId: action.sourceId } : {}),
     requirements: Object.freeze([...action.requirements]),
     immediateEffects: Object.freeze([...action.immediateEffects]),
-    overTimeEffects: Object.freeze([...(action.overTimeEffects ?? [])]),
+    requiredOverTimeEffects: Object.freeze([
+      ...(action.requiredOverTimeEffects ?? []),
+    ]),
+    optionalOverTimeEffects: Object.freeze([
+      ...(action.optionalOverTimeEffects ?? []),
+    ]),
     requiredEffects: Object.freeze([...action.requiredEffects]),
     optionalEffects: Object.freeze([...action.optionalEffects]),
     durationTicks: actionDurationTicks(action),
@@ -174,7 +179,8 @@ export function actionFromSnapshot(
     ...(snapshot.sourceId !== undefined ? { sourceId: snapshot.sourceId } : {}),
     requirements: snapshot.requirements,
     immediateEffects: snapshot.immediateEffects,
-    overTimeEffects: snapshot.overTimeEffects,
+    requiredOverTimeEffects: snapshot.requiredOverTimeEffects,
+    optionalOverTimeEffects: snapshot.optionalOverTimeEffects,
     requiredEffects: snapshot.requiredEffects,
     optionalEffects: snapshot.optionalEffects,
     durationTicks: snapshot.durationTicks,
@@ -356,51 +362,25 @@ function applyEffectList<THost>(
   return next;
 }
 
-function isPositivePoolAdjust(effect: ActiveEffect): boolean {
-  return effect.type === 'adjust-pool' && effect.strength > 0;
-}
-
-/**
- * Over-time slices: spend/costs must all be payable; positive pool adjusts are
- * soft (continue while any gain can apply; skip full pools).
- */
-export function canPayOverTimeSlice<THost>(
+function canPayEffectList<THost>(
   registry: EngineRegistry<THost>,
   effects: readonly ActiveEffect[],
   context: EngineContext<THost>,
 ): boolean {
-  const hard: ActiveEffect[] = [];
-  const softGains: ActiveEffect[] = [];
-  for (const effect of effects) {
-    if (isPositivePoolAdjust(effect)) {
-      softGains.push(effect);
-    } else {
-      hard.push(effect);
-    }
-  }
-  if (!hard.every((effect) => registry.canApplyEffect(effect, context))) {
-    return false;
-  }
-  if (softGains.length === 0) {
-    return true;
-  }
-  return softGains.some((effect) => registry.canApplyEffect(effect, context));
+  return effects.every((effect) => registry.canApplyEffect(effect, context));
 }
 
-function applyOverTimeSlice<THost>(
+/** Optional effects: apply only when canHappen. */
+function applyOptionalEffectList<THost>(
   registry: EngineRegistry<THost>,
   effects: readonly ActiveEffect[],
   context: EngineContext<THost>,
 ): EngineContext<THost> {
   let next = context;
   for (const effect of effects) {
-    if (
-      isPositivePoolAdjust(effect) &&
-      !registry.canApplyEffect(effect, next)
-    ) {
-      continue;
+    if (registry.canApplyEffect(effect, next)) {
+      next = registry.applyEffect(effect, next);
     }
-    next = registry.applyEffect(effect, next);
   }
   return next;
 }
@@ -411,7 +391,7 @@ function applyOverTimeSlice<THost>(
  * (used on cycle completion settle).
  */
 export function buildOverTimeSlice(
-  overTimeEffects: readonly ActiveEffect[],
+  effects: readonly ActiveEffect[],
   fraction: number,
   includeNonPool: boolean,
 ): ActiveEffect[] {
@@ -419,7 +399,7 @@ export function buildOverTimeSlice(
     return [];
   }
   const out: ActiveEffect[] = [];
-  for (const effect of overTimeEffects) {
+  for (const effect of effects) {
     if (effect.type === 'adjust-pool') {
       const scaled = scaleEffectStrength(effect, fraction);
       if (scaled.strength !== 0) {
@@ -430,6 +410,88 @@ export function buildOverTimeSlice(
     }
   }
   return out;
+}
+
+/**
+ * Required over-time slice must be fully payable (optional over-time never blocks).
+ */
+export function canPayRequiredOverTimeSlice<THost>(
+  registry: EngineRegistry<THost>,
+  action: {
+    readonly name: string;
+    readonly types?: readonly string[];
+    readonly requiredOverTimeEffects?: readonly ActiveEffect[];
+  },
+  fraction: number,
+  includeNonPool: boolean,
+  context: EngineContext<THost>,
+): boolean {
+  const requiredSlice = liveSlotEffects(
+    buildOverTimeSlice(
+      action.requiredOverTimeEffects ?? [],
+      fraction,
+      includeNonPool,
+    ),
+    'requiredOverTimeEffects',
+    action,
+    context,
+    registry,
+  );
+  return canPayEffectList(registry, requiredSlice, context);
+}
+
+/**
+ * Apply required over-time (hard) then optional over-time (soft).
+ * Returns null when the required slice cannot be paid.
+ */
+function tryApplyOverTimeProgress<THost>(
+  registry: EngineRegistry<THost>,
+  action: ActionDefinition<Requirement, ActiveEffect, unknown>,
+  fraction: number,
+  includeNonPool: boolean,
+  context: EngineContext<THost>,
+): EngineContext<THost> | null {
+  if (
+    !canPayRequiredOverTimeSlice(
+      registry,
+      action,
+      fraction,
+      includeNonPool,
+      context,
+    )
+  ) {
+    return null;
+  }
+  const requiredSlice = liveSlotEffects(
+    buildOverTimeSlice(
+      action.requiredOverTimeEffects ?? [],
+      fraction,
+      includeNonPool,
+    ),
+    'requiredOverTimeEffects',
+    action,
+    context,
+    registry,
+  );
+  let next = context;
+  if (requiredSlice.length > 0) {
+    next = applyEffectList(registry, requiredSlice, next);
+  }
+  const optionalSlice = liveSlotEffects(
+    buildOverTimeSlice(
+      action.optionalOverTimeEffects ?? [],
+      fraction,
+      includeNonPool,
+    ),
+    'optionalOverTimeEffects',
+    action,
+    next,
+    registry,
+  );
+  if (optionalSlice.length > 0) {
+    next = applyOptionalEffectList(registry, optionalSlice, next);
+  }
+  return next;
 }
 
 export type StartContinuousOptions<THost = unknown> = {
@@ -570,18 +632,15 @@ export function startContinuousAction<THost>(
     const firstDeltaProgress = roundContinuousProgress(
       (firstDeltaTicks / effectiveDuration) * 100,
     );
-    const firstSlice = liveSlotEffects(
-      buildOverTimeSlice(
-        options.action.overTimeEffects ?? [],
+    if (
+      !canPayRequiredOverTimeSlice(
+        options.registry,
+        options.action,
         firstDeltaProgress / 100,
         false,
-      ),
-      'overTimeEffects',
-      options.action,
-      ctx,
-      options.registry,
-    );
-    if (!canPayOverTimeSlice(options.registry, firstSlice, ctx)) {
+        ctx,
+      )
+    ) {
       return state;
     }
     ctx = applyEffectList(options.registry, startImmediate, ctx);
@@ -805,18 +864,15 @@ function advanceOneJob<THost>(
     const firstDeltaProgress = roundContinuousProgress(
       (firstDeltaTicks / previewDuration) * 100,
     );
-    const firstSlice = liveSlotEffects(
-      buildOverTimeSlice(
-        action.overTimeEffects ?? [],
+    if (
+      !canPayRequiredOverTimeSlice(
+        options.registry,
+        action,
         firstDeltaProgress / 100,
         false,
-      ),
-      'overTimeEffects',
-      action,
-      ctx,
-      options.registry,
-    );
-    if (!canPayOverTimeSlice(options.registry, firstSlice, ctx)) {
+        ctx,
+      )
+    ) {
       return pauseContinuousAction(state, progressKey);
     }
     ctx = applyEffectList(options.registry, startImmediate, ctx);
@@ -876,25 +932,17 @@ function advanceOneJob<THost>(
   const payFraction = willComplete
     ? roundContinuousProgress(100 - record.progress) / 100
     : deltaProgress / 100;
-  const slice = liveSlotEffects(
-    buildOverTimeSlice(
-      action.overTimeEffects ?? [],
-      payFraction,
-      willComplete,
-    ),
-    'overTimeEffects',
-    action,
-    ctx,
+  const applied = tryApplyOverTimeProgress(
     options.registry,
+    action,
+    payFraction,
+    willComplete,
+    ctx,
   );
-
-  if (!canPayOverTimeSlice(options.registry, slice, ctx)) {
+  if (!applied) {
     return pauseContinuousAction(state, progressKey);
   }
-
-  if (slice.length > 0) {
-    ctx = applyOverTimeSlice(options.registry, slice, ctx);
-  }
+  ctx = applied;
 
   const nextProgress = willComplete
     ? 100
@@ -969,19 +1017,15 @@ function completeContinuousJob<THost>(
   const action = actionFromSnapshot(record.action);
   const settleFraction = Math.max(0, (100 - record.progress) / 100);
   if (settleFraction > 1e-9) {
-    const settle = liveSlotEffects(
-      buildOverTimeSlice(
-        action.overTimeEffects ?? [],
-        settleFraction,
-        true,
-      ),
-      'overTimeEffects',
-      action,
-      ctx,
+    const settled = tryApplyOverTimeProgress(
       options.registry,
+      action,
+      settleFraction,
+      true,
+      ctx,
     );
-    if (canPayOverTimeSlice(options.registry, settle, ctx)) {
-      ctx = applyOverTimeSlice(options.registry, settle, ctx);
+    if (settled) {
+      ctx = settled;
     }
   }
 
@@ -1076,20 +1120,15 @@ function completeContinuousJob<THost>(
       const firstDeltaProgress = roundContinuousProgress(
         (firstDeltaTicks / previewDuration) * 100,
       );
-      const firstSlice = liveSlotEffects(
-        buildOverTimeSlice(
-          action.overTimeEffects ?? [],
-          firstDeltaProgress / 100,
-          false,
-        ),
-        'overTimeEffects',
-        action,
-        restartCtx,
-        options.registry,
-      );
       if (
         costsPayable(options.registry, startImmediate, restartCtx) &&
-        canPayOverTimeSlice(options.registry, firstSlice, restartCtx)
+        canPayRequiredOverTimeSlice(
+          options.registry,
+          action,
+          firstDeltaProgress / 100,
+          false,
+          restartCtx,
+        )
       ) {
         // Re-arm at 0%; next tick advances (no second cycle in this call).
         return withContinuousState(restartCtx.engine, {

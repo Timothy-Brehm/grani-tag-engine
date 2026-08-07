@@ -22,8 +22,8 @@ function registryWith(...defs: Parameters<EngineRegistry['registerEntityDefiniti
 }
 
 describe('pool reservation', () => {
-  it('exports 0.3.0.2', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.2');
+  it('exports 0.3.0.5', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.5');
   });
 
   it('refuses spend when Available is insufficient', () => {
@@ -135,7 +135,7 @@ describe('pool reservation', () => {
       durationTicks: 2,
       requirements: [],
       immediateEffects: [],
-      overTimeEffects: [
+      requiredOverTimeEffects: [
         {
           type: 'adjust-pool',
           name: 'logs',
