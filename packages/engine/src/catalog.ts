@@ -74,7 +74,8 @@ export type CatalogWarningKind =
   | 'cycle'
   | 'capacity-step'
   | 'gate'
-  | 'block';
+  | 'block'
+  | 'finished-required-cost';
 
 export type CatalogWarning = {
   readonly kind: CatalogWarningKind;
@@ -102,7 +103,12 @@ export type CatalogRegistryView = {
     readonly actions?: readonly {
       readonly name: string;
       readonly analyzer?: import('./tools/analyzer/types').AnalyzerContentMeta;
-      readonly requiredFinishedEffects?: readonly { readonly type: string; readonly name?: string }[];
+      readonly requiredFinishedEffects?: readonly {
+        readonly type: string;
+        readonly name?: string;
+        readonly strength?: number;
+        readonly pool?: string;
+      }[];
       readonly optionalFinishedEffects?: readonly { readonly type: string; readonly name?: string }[];
       readonly requiredImmediateEffects?: readonly { readonly type: string; readonly name?: string }[];
       readonly optionalImmediateEffects?: readonly { readonly type: string; readonly name?: string }[];
@@ -501,6 +507,20 @@ export function collectCatalogWarnings(
             id: meta.gateId,
             source: `definition:${def.id}.action:${action.name}`,
           });
+        }
+      }
+      for (const effect of action.requiredFinishedEffects ?? []) {
+        if (
+          effect.type === 'adjust-pool' &&
+          typeof effect.strength === 'number' &&
+          effect.strength < 0
+        ) {
+          pushUnique(warnings, seen, {
+            kind: 'finished-required-cost',
+            id: action.name,
+            source: `definition:${def.id}.action:${action.name}`,
+          });
+          break;
         }
       }
     }

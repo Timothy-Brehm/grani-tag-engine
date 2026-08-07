@@ -60,8 +60,9 @@ Core: `reduceEffect` (toward 0) and `enhanceEffect` (away from 0). Sign-preservi
 |------|----------|-------------|
 | immediate (`requiredImmediateEffects` + `optionalImmediateEffects`) | `reduceImmediateEffect` | `enhanceImmediateEffect` |
 | overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
-| finished required (`requiredFinishedEffects`) | `reduceRequiredEffect` | `enhanceRequiredEffect` |
-| finished optional (`optionalFinishedEffects`) | `reduceOptionalEffect` | `enhanceOptionalEffect` |
+| finished (`requiredFinishedEffects` + `optionalFinishedEffects`) | `reduceFinishedEffect` | `enhanceFinishedEffect` |
+
+Legacy Finished names `reduceRequiredEffect` / `reduceOptionalEffect` / `enhanceRequiredEffect` / `enhanceOptionalEffect` are still dual-read.
 
 **Order (per authored adjust):** all **flats** first (reduce flats, then enhance flats), then all **percents** (reduce %, then enhance %). Same idea as pool-max/stat: constants before percents. Live at check/pay. Filters: `actionName` / `actionTypes` and optional `pool` / `poolTypes`.
 

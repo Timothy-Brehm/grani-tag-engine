@@ -473,10 +473,8 @@ describe('generators and continuous actions', () => {
         { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
         { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
       ],
-      requiredFinishedEffects: [
-        { type: 'adjust-pool', name: 'life', strength: 0.01, pool: 'Stick' },
-        { type: 'adjust-pool', name: 'stamina', strength: 0.01, pool: 'Stamina' },
-      ],
+      // Empty finished: productive-effect comes from optional OT (no dummy crumbs).
+      requiredFinishedEffects: [],
       optionalFinishedEffects: [],
       durationTicks: 5,
       repeatWhileAvailable: true,
@@ -499,11 +497,8 @@ describe('generators and continuous actions', () => {
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
 
     state = reduceEngineState(state, { type: 'tick', steps: 4 }, options);
-    // 5 ticks of +1, then cycle complete applies required +0.01.
-    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBeCloseTo(
-      5.01,
-      5,
-    );
+    // 5 ticks of +1 Stamina; empty requiredFinished is finishable.
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(5);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(5);
   });
 
@@ -517,10 +512,7 @@ describe('generators and continuous actions', () => {
         { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
         { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
       ],
-      requiredFinishedEffects: [
-        { type: 'adjust-pool', name: 'life', strength: 0.01, pool: 'Stick' },
-        { type: 'adjust-pool', name: 'stamina', strength: 0.01, pool: 'Stamina' },
-      ],
+      requiredFinishedEffects: [],
       optionalFinishedEffects: [],
       durationTicks: 5,
     };

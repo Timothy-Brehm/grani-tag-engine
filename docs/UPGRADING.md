@@ -50,20 +50,27 @@ Clarifies start vs finish naming and adds soft start:
 | `requiredFinishedEffects` | Always applied on complete |
 | `optionalFinishedEffects` | Only if `canHappen` on complete |
 
-Magnitude tag type strings stay: `reduceImmediateEffect`, `reduceOverTimeEffect`, `reduceRequiredEffect`, `reduceOptionalEffect` (and `enhance*`).
+Magnitude tag type strings: `reduceImmediateEffect`, `reduceOverTimeEffect`, `reduceFinishedEffect` (and `enhance*`). Legacy Finished names `reduceRequiredEffect` / `reduceOptionalEffect` (and enhance twins) dual-read.
 
 ### Tag magnitude modifiers (new)
 
-Toward 0 / away from 0 on a recipe slot (sign-preserving). Filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
+Toward 0 / away from 0 on a recipe **phase** (sign-preserving). Filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
 
 | Slot | Toward 0 | Away from 0 |
 |------|----------|-------------|
 | immediate (`requiredImmediateEffects` + `optionalImmediateEffects`) | `reduceImmediateEffect` | `enhanceImmediateEffect` |
 | overTime (`requiredOverTimeEffects` + `optionalOverTimeEffects`) | `reduceOverTimeEffect` | `enhanceOverTimeEffect` |
-| finished required | `reduceRequiredEffect` | `enhanceRequiredEffect` |
-| finished optional | `reduceOptionalEffect` | `enhanceOptionalEffect` |
+| finished (`requiredFinishedEffects` + `optionalFinishedEffects`) | `reduceFinishedEffect` | `enhanceFinishedEffect` |
 
 Order: all flats (reduce, then enhance), then all percents (reduce, then enhance).
+
+### Finished magnitude rename (new, `0.3.0.7`)
+
+`reduceFinishedEffect` / `enhanceFinishedEffect` replace per-slot Finished names. Loaders dual-read `reduceRequiredEffect`, `reduceOptionalEffect`, `enhanceRequiredEffect`, `enhanceOptionalEffect`.
+
+### Availability gates (new, `0.3.0.7`)
+
+Startable / continuable / finishable with **empty-or-payable** leftover hard effects and **productive-effect** at start/re-arm only. Prefer required costs in Immediate/OT; catalog soft-warns `finished-required-cost` for negative `adjust-pool` in `requiredFinishedEffects`. See [engine-composition.md](./design/engine-composition.md).
 
 Replaces draft `action-cost-bonus` / `action-result-bonus` if you used those names on this branch.
 

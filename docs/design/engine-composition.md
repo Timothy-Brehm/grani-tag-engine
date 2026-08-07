@@ -241,11 +241,23 @@ An **action** is one atomic recipe:
 
 Any signed adjust may appear in any slot (symmetry). Hosts may still call them costs/benefits in fiction.
 
+**Required costs prefer Immediate / OverTime:** put hard spends in `requiredImmediateEffects` or `requiredOverTimeEffects`. Use `requiredFinishedEffects` for **completion outcomes** (grants, spawns, clamps-OK fills), not as the primary place to charge costs. Negative `adjust-pool` in required Finished is allowed but catalog soft-warns `finished-required-cost` (can interact oddly with finishable / empty-or-payable).
+
 **Required vs optional:** use required for the unavoidable outcome of finishing; use optional for “nice to have” changes that should not block when a pool is full or a tag already exists. Example: completion required `+CO2`, optional `+Miles` (skipped at max). Start: put hard pays in `requiredImmediateEffects`; soft start side-effects in `optionalImmediateEffects`. Over-time: put spends / hard drains in `requiredOverTimeEffects`; put regen / soft fills in `optionalOverTimeEffects` (e.g. Rest Life+Stamina while one pool is already full).
+
+**Availability gates (empty-or-payable):** you can’t continue or finish if hard effects **left** can’t happen; empty leftover lists are fine.
+
+| Gate | When | Checks |
+|------|------|--------|
+| **Startable** | progress 0 / re-arm | requirements + **productive-effect** + required Immediate payable + first required OT slice empty-or-payable |
+| **Continuable** | mid-cycle | requirements + this tick’s required OT slice empty-or-payable |
+| **Finishable** | completing / progress ≥ 100 | requirements + remaining required OT settle empty-or-payable + required Finished empty-or-payable (**all** payable when non-empty) |
+
+**Productive-effect** (start / re-arm only): if required Finished authored → at least one canHappen; else if any Immediate authored → at least one Immediate canHappen; else if OT authored → required OT non-empty **or** some optional OT canHappen; else time-only OK. Host `isActionAvailable` = startable at 0%, else continuable, or finishable when the next delta would complete.
 
 **Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; both over-time slots use the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
 
-**`repeatWhileAvailable`:** when true, after a cycle completes, if the action is still available (requirements + at least one required finished effect possible + next cycle’s required immediate / first required over-time slice payable), re-arm at **0%** and keep the continuous slot. Do **not** advance again in the same command — the next cycle runs on a later `tick` (so duration-1 + repeat = one cycle per tick). Each completed cycle still records action metrics. There is no max-rep field; stop via normal availability (pools full, requirements, tags) or pause/cancel.
+**`repeatWhileAvailable`:** when true, after a cycle completes, if still **startable**, re-arm at **0%** and keep the continuous slot. Do **not** advance again in the same command — the next cycle runs on a later `tick` (so duration-1 + repeat = one cycle per tick). Each completed cycle still records action metrics. There is no max-rep field; stop via normal availability (pools full, requirements, tags) or pause/cancel.
 
 Magnitude mods (`reduce*Effect` / `enhance*Effect`) and Types: [action-types.md](./action-types.md). Field rename: [UPGRADING.md](../UPGRADING.md).
 
@@ -476,13 +488,14 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - Progress: percent **0..100** (two decimals); over-time effects use the same percent delta
 - Effective `durationTicks` recomputed each tick (mid-action speed changes do not rewrite stored %)
 - Max start duration: **10 000** ticks (base or effective)
+- **Startable / continuable / finishable:** see Action (recipe) availability gates. Start and re-arm use **startable** (productive-effect + required Immediate + first OT empty-or-payable). Mid-cycle advance uses **continuable**, or **finishable** when the tick would reach 100%.
 - **Start** (`execute-action`): pay `requiredImmediateEffects` (hard) then `optionalImmediateEffects` (soft) only at 0%; resume mid-cycle keeps progress and does not re-pay start effects
-- **Pause** / auto-stop (requirements fail or cannot pay **required** `requiredOverTimeEffects` slice): free slot, **keep** progress. `optionalOverTimeEffects` never pause (each effect soft-applies when `canHappen`).
-- **Complete**: required finished effects must apply; optional finished only if able; clear progress; free slot — unless `repeatWhileAvailable` and still available, then re-arm at 0% (next cycle on a later tick; pay required/optional immediate again on that advance)
+- **Pause** / auto-stop (requirements fail, cannot pay **required** OT slice, or strict finish when required Finished / settle not empty-or-payable): free slot, **keep** progress. `optionalOverTimeEffects` never pause (each effect soft-applies when `canHappen`).
+- **Complete**: required finished empty-or-payable (strict pauses if not); then apply required finished / soft optional; clear progress; free slot — unless `repeatWhileAvailable` and still **startable**, then re-arm at 0% (next cycle on a later tick; pay required/optional immediate again on that advance)
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; filter by `actionName` and/or `actionTypes`; effective duration min 1
-- Magnitude mods: `reduce*Effect` / `enhance*Effect` per recipe slot — apply-time only (see [action-types.md](./action-types.md); [UPGRADING.md](../UPGRADING.md))
+- Magnitude mods: `reduce*Effect` / `enhance*Effect` per recipe **phase** — apply-time only (see [action-types.md](./action-types.md); [UPGRADING.md](../UPGRADING.md))
 - **Known limitation (TODO):** `continuous-slots` max is enforced at **start** only. If max drops mid-run (unequip / slot swap / losing the passive), already-active jobs are **not** paused or culled. Fix later: pause or refuse advance when `activeCount > newMax`.
 
 ---

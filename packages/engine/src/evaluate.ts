@@ -1,16 +1,18 @@
-import type { ActionDefinition, RequirementCheck } from './action';
+import type { ActionDefinition } from './action';
 import type { ActiveEffect } from './effect';
 import type { EngineContext } from './context';
 import type { EngineRegistry } from './registry';
 import type { Requirement } from './requirement';
 import { materializeSlotEffects } from './action-improvements';
-import {
-  actionDurationTicks,
-  canPayRequiredOverTimeSlice,
-  continuousProgressKey,
-  selectContinuousProgressDelta,
-  selectEffectiveDurationTicks,
-} from './continuous';
+
+export {
+  emptyOrPayable,
+  hasProductiveEffect,
+  isActionStartable,
+  isActionContinuable,
+  isActionFinishable,
+  isActionAvailable,
+} from './action-availability';
 
 /** True when every requirement is met (original RequirementsMet). */
 export function requirementsMet<THost>(
@@ -23,7 +25,7 @@ export function requirementsMet<THost>(
 
 /** Evaluate host-code predicates attached to a TypeScript-defined action. */
 export function codeRequirementsMet<THost>(
-  checks: readonly RequirementCheck<THost>[] | undefined,
+  checks: readonly ((context: EngineContext<THost>) => boolean)[] | undefined,
   context: EngineContext<THost>,
 ): boolean {
   return checks?.every((check) => check(context)) ?? true;
@@ -73,94 +75,6 @@ function liveSlot<THost>(
     action.types,
     registry,
     context.engine.entities,
-  );
-}
-
-/**
- * Action is available when requirements are met, required immediate effects
- * are payable, and at least one required finished effect is possible.
- * Optional immediate effects never block availability.
- *
- * Mid-cycle resume (saved progress > 0): requiredImmediateEffects are not
- * re-checked. At 0%: required immediate plus the first over-time slice must
- * be payable.
- */
-export function isActionAvailable<THost>(
-  registry: EngineRegistry<THost>,
-  action: ActionDefinition<Requirement, ActiveEffect, THost>,
-  context: EngineContext<THost>,
-): boolean {
-  const requiredFinished = liveSlot(
-    action.requiredFinishedEffects,
-    'requiredFinishedEffects',
-    action,
-    context,
-    registry,
-  );
-  if (
-    !requirementsMet(registry, action.requirements, context) ||
-    !codeRequirementsMet(action.codeRequirements, context) ||
-    !anyResultPossible(registry, requiredFinished, context)
-  ) {
-    return false;
-  }
-
-  const actorEntityId =
-    context.actorEntityId ?? context.engine.primaryEntityId;
-  const key = continuousProgressKey({
-    actorEntityId,
-    actionName: action.name,
-    sourceEntityId: context.sourceEntityId,
-  });
-  const existing = context.engine.continuousProgress.get(key);
-  const midCycle =
-    existing !== undefined && existing.progress > 0 && existing.progress < 100;
-
-  if (midCycle) {
-    return true;
-  }
-
-  const requiredImmediate = liveSlot(
-    action.requiredImmediateEffects,
-    'requiredImmediateEffects',
-    action,
-    context,
-    registry,
-  );
-  if (!costsPayable(registry, requiredImmediate, context)) {
-    return false;
-  }
-
-  const actor = context.engine.entities.get(actorEntityId);
-  if (!actor) {
-    return false;
-  }
-  const baseDuration = actionDurationTicks(action);
-  const D = selectEffectiveDurationTicks(
-    actor,
-    action.name,
-    baseDuration,
-    registry,
-    context.engine.entities,
-    action.types,
-  );
-  const deltaTicks = Math.min(
-    selectContinuousProgressDelta(
-      actor,
-      action.name,
-      registry,
-      context.engine.entities,
-      action.types,
-    ),
-    D,
-  );
-  const deltaProgress = (deltaTicks / D) * 100;
-  return canPayRequiredOverTimeSlice(
-    registry,
-    action,
-    deltaProgress / 100,
-    baseDuration <= 1,
-    context,
   );
 }
 
