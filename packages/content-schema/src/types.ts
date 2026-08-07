@@ -134,6 +134,8 @@ export type ActionDefinitionJSON = {
   sourceId?: string;
   durationTicks?: number;
   types?: string[];
+  /** Re-arm at 0% after each cycle while the action remains available. */
+  repeatWhileAvailable?: boolean;
   novelty?: NoveltyAckJSON;
   requirements: RequirementJSON[];
   immediateEffects: ActiveEffectJSON[];

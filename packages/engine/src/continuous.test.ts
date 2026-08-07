@@ -485,4 +485,110 @@ describe('generators and continuous actions', () => {
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
     expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
   });
+
+  it('repeatWhileAvailable: duration-1 re-arms at 0% and runs one cycle per tick', () => {
+    const action: ActionDefinition = {
+      name: 'rest',
+      requirements: [{ type: 'free' }],
+      immediateEffects: [],
+      requiredEffects: [
+        { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
+      ],
+      optionalEffects: [],
+      repeatWhileAvailable: true,
+    };
+    let state = withHero({ Stamina: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'rest',
+    });
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
+    expect(selectActionCount(state.entities.get('hero')!, 'rest', 'manual')).toBe(
+      1,
+    );
+    expect(state.continuousActions.has(key)).toBe(true);
+    expect(state.continuousProgress.get(key)?.progress).toBe(0);
+    expect(state.continuousProgress.get(key)?.payImmediateOnNextAdvance).toBe(
+      true,
+    );
+
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(2);
+    expect(selectActionCount(state.entities.get('hero')!, 'rest', 'manual')).toBe(
+      2,
+    );
+    expect(state.continuousActions.has(key)).toBe(true);
+
+    state = reduceEngineState(state, { type: 'tick', steps: 8 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
+    expect(selectActionCount(state.entities.get('hero')!, 'rest', 'manual')).toBe(
+      10,
+    );
+    // Full → cannot re-arm
+    expect(state.continuousActions.has(key)).toBe(false);
+    expect(state.continuousProgress.has(key)).toBe(false);
+  });
+
+  it('repeatWhileAvailable: does not spin multiple duration-1 cycles in one execute', () => {
+    const action: ActionDefinition = {
+      name: 'sip',
+      requirements: [{ type: 'free' }],
+      immediateEffects: [],
+      requiredEffects: [
+        { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
+      ],
+      optionalEffects: [],
+      repeatWhileAvailable: true,
+    };
+    let state = withHero({ Stamina: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
+    expect(selectActionCount(state.entities.get('hero')!, 'sip', 'manual')).toBe(
+      1,
+    );
+  });
+
+  it('repeatWhileAvailable: pause clears the active slot', () => {
+    const action: ActionDefinition = {
+      name: 'idle',
+      requirements: [{ type: 'free' }],
+      immediateEffects: [],
+      requiredEffects: [
+        { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
+      ],
+      optionalEffects: [],
+      repeatWhileAvailable: true,
+    };
+    let state = withHero({ Stamina: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'idle',
+    });
+    expect(state.continuousActions.has(key)).toBe(true);
+    state = reduceEngineState(
+      state,
+      {
+        type: 'pause-continuous-action',
+        actorEntityId: 'hero',
+        actionName: 'idle',
+      },
+      options,
+    );
+    expect(state.continuousActions.has(key)).toBe(false);
+    expect(state.continuousProgress.has(key)).toBe(true);
+  });
 });

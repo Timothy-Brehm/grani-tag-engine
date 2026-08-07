@@ -243,6 +243,8 @@ Any signed adjust may appear in any slot (symmetry). Hosts may still call them c
 
 **Duration:** `durationTicks` on the action; **omitted ⇒ 1** (one-tick / “instant”). Multi-tick actions occupy continuous slots; duration-1 completes in the same `execute-action` when possible. Starting rejects durations (base or effective) above **10 000** ticks. Progress is stored as a **percent (0..100)** rounded to two decimals; `overTimeEffects` uses the same percent delta. Effective duration is recomputed each tick so mid-action speed changes only affect remaining work.
 
+**`repeatWhileAvailable`:** when true, after a cycle completes, if the action is still available (requirements + at least one required effect possible + next cycle’s immediate / first over-time slice payable), re-arm at **0%** and keep the continuous slot. Do **not** advance again in the same command — the next cycle runs on a later `tick` (so duration-1 + repeat = one cycle per tick). Each completed cycle still records action metrics. There is no max-rep field; stop via normal availability (pools full, requirements, tags) or pause/cancel.
+
 Magnitude mods (`reduce*Effect` / `enhance*Effect`) and Types: [action-types.md](./action-types.md). Field rename: [UPGRADING.md](../UPGRADING.md).
 
 **Types:** optional `types?: string[]` — arbitrary content labels for improvement matching. See [action-types.md](./action-types.md).
@@ -392,6 +394,7 @@ EntityDefinition
 
 Action
   ├─ durationTicks → omitted = 1 (instant); >1 = multi-tick continuous
+  ├─ repeatWhileAvailable → re-arm at 0% after complete while still available
   ├─ requirements →  read traits/tags/pools/metrics/entity counts (scoped)
   ├─ immediateEffects → start-of-cycle (actor by default)
   ├─ overTimeEffects → prorated while progressing (pause if unpaid)
@@ -471,7 +474,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - Max start duration: **10 000** ticks (base or effective)
 - **Start** (`execute-action`): pay `immediateEffects` only at 0%; resume mid-cycle keeps progress and does not re-pay start effects
 - **Pause** / auto-stop (requirements fail or cannot pay `overTimeEffects` slice): free slot, **keep** progress
-- **Complete**: required effects must apply; optional only if able; clear progress; free slot
+- **Complete**: required effects must apply; optional only if able; clear progress; free slot — unless `repeatWhileAvailable` and still available, then re-arm at 0% (next cycle on a later tick; pay `immediateEffects` again on that advance)
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; filter by `actionName` and/or `actionTypes`; effective duration min 1

@@ -41,7 +41,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    | required | `requiredEffects` | On complete | Always applied |
    | optional | `optionalEffects` | On complete | Only if `canHappen` |
 
-   `durationTicks` omitted ⇒ 1. Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
+   `durationTicks` omitted ⇒ 1. `repeatWhileAvailable` re-arms at 0% after complete while still available (one cycle per later tick). Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
 8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Resource regen uses `generate-pool` / `cross-link` `toGeneratePool` tag passives, not fake idle entities. Growing pool capacity as a repeatable action over time uses a **product tag** on a `cross-link` to track the total addition to the unbound pool. This is in addition to standard tags that increase capacity for one-off boosts.
 9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
 10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content. Specific option lists live in the host. Composition docs show **reusable patterns** (how to combine builtins), not engine-owned theme packs—for example:
