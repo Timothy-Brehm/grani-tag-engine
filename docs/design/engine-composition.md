@@ -473,7 +473,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - Effective `durationTicks` recomputed each tick (mid-action speed changes do not rewrite stored %)
 - Max start duration: **10 000** ticks (base or effective)
 - **Start** (`execute-action`): pay `immediateEffects` only at 0%; resume mid-cycle keeps progress and does not re-pay start effects
-- **Pause** / auto-stop (requirements fail or cannot pay `overTimeEffects` slice): free slot, **keep** progress
+- **Pause** / auto-stop (requirements fail or cannot pay `overTimeEffects` slice): free slot, **keep** progress. Positive pool adjusts in an over-time slice are **soft** (skip when full; continue while any gain can still apply); spends and non-pool effects remain hard.
 - **Complete**: required effects must apply; optional only if able; clear progress; free slot — unless `repeatWhileAvailable` and still available, then re-arm at 0% (next cycle on a later tick; pay `immediateEffects` again on that advance)
 - **Cancel**: clear progress; no refund
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`

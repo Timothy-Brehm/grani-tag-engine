@@ -356,12 +356,53 @@ function applyEffectList<THost>(
   return next;
 }
 
-function canPayEffectList<THost>(
+function isPositivePoolAdjust(effect: ActiveEffect): boolean {
+  return effect.type === 'adjust-pool' && effect.strength > 0;
+}
+
+/**
+ * Over-time slices: spend/costs must all be payable; positive pool adjusts are
+ * soft (continue while any gain can apply; skip full pools).
+ */
+export function canPayOverTimeSlice<THost>(
   registry: EngineRegistry<THost>,
   effects: readonly ActiveEffect[],
   context: EngineContext<THost>,
 ): boolean {
-  return effects.every((effect) => registry.canApplyEffect(effect, context));
+  const hard: ActiveEffect[] = [];
+  const softGains: ActiveEffect[] = [];
+  for (const effect of effects) {
+    if (isPositivePoolAdjust(effect)) {
+      softGains.push(effect);
+    } else {
+      hard.push(effect);
+    }
+  }
+  if (!hard.every((effect) => registry.canApplyEffect(effect, context))) {
+    return false;
+  }
+  if (softGains.length === 0) {
+    return true;
+  }
+  return softGains.some((effect) => registry.canApplyEffect(effect, context));
+}
+
+function applyOverTimeSlice<THost>(
+  registry: EngineRegistry<THost>,
+  effects: readonly ActiveEffect[],
+  context: EngineContext<THost>,
+): EngineContext<THost> {
+  let next = context;
+  for (const effect of effects) {
+    if (
+      isPositivePoolAdjust(effect) &&
+      !registry.canApplyEffect(effect, next)
+    ) {
+      continue;
+    }
+    next = registry.applyEffect(effect, next);
+  }
+  return next;
 }
 
 /**
@@ -540,7 +581,7 @@ export function startContinuousAction<THost>(
       ctx,
       options.registry,
     );
-    if (!canPayEffectList(options.registry, firstSlice, ctx)) {
+    if (!canPayOverTimeSlice(options.registry, firstSlice, ctx)) {
       return state;
     }
     ctx = applyEffectList(options.registry, startImmediate, ctx);
@@ -775,7 +816,7 @@ function advanceOneJob<THost>(
       ctx,
       options.registry,
     );
-    if (!canPayEffectList(options.registry, firstSlice, ctx)) {
+    if (!canPayOverTimeSlice(options.registry, firstSlice, ctx)) {
       return pauseContinuousAction(state, progressKey);
     }
     ctx = applyEffectList(options.registry, startImmediate, ctx);
@@ -847,12 +888,12 @@ function advanceOneJob<THost>(
     options.registry,
   );
 
-  if (!canPayEffectList(options.registry, slice, ctx)) {
+  if (!canPayOverTimeSlice(options.registry, slice, ctx)) {
     return pauseContinuousAction(state, progressKey);
   }
 
   if (slice.length > 0) {
-    ctx = applyEffectList(options.registry, slice, ctx);
+    ctx = applyOverTimeSlice(options.registry, slice, ctx);
   }
 
   const nextProgress = willComplete
@@ -939,8 +980,8 @@ function completeContinuousJob<THost>(
       ctx,
       options.registry,
     );
-    if (canPayEffectList(options.registry, settle, ctx)) {
-      ctx = applyEffectList(options.registry, settle, ctx);
+    if (canPayOverTimeSlice(options.registry, settle, ctx)) {
+      ctx = applyOverTimeSlice(options.registry, settle, ctx);
     }
   }
 
@@ -1048,7 +1089,7 @@ function completeContinuousJob<THost>(
       );
       if (
         costsPayable(options.registry, startImmediate, restartCtx) &&
-        canPayEffectList(options.registry, firstSlice, restartCtx)
+        canPayOverTimeSlice(options.registry, firstSlice, restartCtx)
       ) {
         // Re-arm at 0%; next tick advances (no second cycle in this call).
         return withContinuousState(restartCtx.engine, {

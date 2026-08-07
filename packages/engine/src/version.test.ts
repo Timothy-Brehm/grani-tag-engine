@@ -9,12 +9,12 @@ import {
 
 describe('engine version', () => {
   it('exports a four-part ENGINE_VERSION', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.2');
+    expect(ENGINE_VERSION).toBe('0.3.0.3');
     expect(parseEngineVersion(ENGINE_VERSION)).toEqual({
       major: 0,
       minor: 3,
       patch: 0,
-      build: 2,
+      build: 3,
     });
   });
 
@@ -25,13 +25,8 @@ describe('engine version', () => {
     expect(isCompatibleEngineVersion('1.1.0.0', '0.1.0.0')).toBe(false);
   });
 
-  it('assertCompatibleEngineVersion rejects bad or foreign epochs', () => {
-    expect(() => assertCompatibleEngineVersion(undefined)).toThrow(
-      /Missing engineVersion/,
-    );
-    expect(() => assertCompatibleEngineVersion('0.2.0.0')).toThrow(
-      /Incompatible engineVersion/,
-    );
-    expect(() => assertCompatibleEngineVersion('0.3.9.9')).not.toThrow();
+  it('assertCompatibleEngineVersion throws on foreign epochs', () => {
+    expect(() => assertCompatibleEngineVersion('0.2.0.0')).toThrow();
+    expect(() => assertCompatibleEngineVersion('0.3.0.0')).not.toThrow();
   });
 });

@@ -192,6 +192,7 @@ export {
   advanceContinuousActions,
   pulseGenerators,
   buildOverTimeSlice,
+  canPayOverTimeSlice,
   scaleEffectStrength,
   recipeEffectsFromSnapshotJSON,
   MAX_ACTION_DURATION_TICKS,

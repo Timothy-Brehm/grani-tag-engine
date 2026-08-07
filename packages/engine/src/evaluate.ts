@@ -7,6 +7,7 @@ import { materializeSlotEffects } from './action-improvements';
 import {
   actionDurationTicks,
   buildOverTimeSlice,
+  canPayOverTimeSlice,
   continuousProgressKey,
   selectContinuousProgressDelta,
   selectEffectiveDurationTicks,
@@ -158,7 +159,7 @@ export function isActionAvailable<THost>(
     context,
     registry,
   );
-  return costsPayable(registry, slice, context);
+  return canPayOverTimeSlice(registry, slice, context);
 }
 
 /**

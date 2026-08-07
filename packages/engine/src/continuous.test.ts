@@ -463,6 +463,77 @@ describe('generators and continuous actions', () => {
     expect(state.continuousProgress.has(key)).toBe(false);
   });
 
+  it('overTime soft gains: runs when Life full but Stamina needs repair', () => {
+    const action: ActionDefinition = {
+      name: 'rest-soft',
+      requirements: [{ type: 'free' }],
+      immediateEffects: [],
+      overTimeEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
+      ],
+      requiredEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 0.01, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 0.01, pool: 'Stamina' },
+      ],
+      optionalEffects: [],
+      durationTicks: 5,
+      repeatWhileAvailable: true,
+    };
+    // Stick at max (stand-in for full Life), Stamina empty.
+    let state = withHero({ Stick: 5, Stamina: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'rest-soft',
+    });
+    expect(state.continuousActions.has(key)).toBe(true);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(5);
+    // Duration > 1: first over-time slice applies on the next tick.
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
+
+    state = reduceEngineState(state, { type: 'tick', steps: 4 }, options);
+    // 5 ticks of +1, then cycle complete applies required +0.01.
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBeCloseTo(
+      5.01,
+      5,
+    );
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(5);
+  });
+
+  it('overTime soft gains: runs when Stamina full but Stick needs repair', () => {
+    const action: ActionDefinition = {
+      name: 'rest-life',
+      requirements: [{ type: 'free' }],
+      immediateEffects: [],
+      overTimeEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
+      ],
+      requiredEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 0.01, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 0.01, pool: 'Stamina' },
+      ],
+      optionalEffects: [],
+      durationTicks: 5,
+    };
+    let state = withHero({ Stick: 0, Stamina: 10 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    expect(state.continuousActions.size).toBe(1);
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
+  });
+
   it('applies results even when a side effect cannot happen', () => {
     const action: ActionDefinition = {
       name: 'engine-run',
