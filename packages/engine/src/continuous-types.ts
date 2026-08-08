@@ -19,10 +19,14 @@ export type ContinuousActionSnapshot = {
   readonly label?: string;
   readonly sourceId?: string;
   readonly requirements: readonly Requirement[];
-  readonly immediateEffects: readonly ActiveEffect[];
-  readonly overTimeEffects: readonly ActiveEffect[];
-  readonly requiredEffects: readonly ActiveEffect[];
-  readonly optionalEffects: readonly ActiveEffect[];
+  readonly requiredImmediateEffects: readonly ActiveEffect[];
+  readonly optionalImmediateEffects: readonly ActiveEffect[];
+  /** Required over-time (hard). */
+  readonly requiredOverTimeEffects: readonly ActiveEffect[];
+  /** Optional over-time (soft / if able). */
+  readonly optionalOverTimeEffects: readonly ActiveEffect[];
+  readonly requiredFinishedEffects: readonly ActiveEffect[];
+  readonly optionalFinishedEffects: readonly ActiveEffect[];
   readonly durationTicks: number;
   /** Authored Types (empty if omitted on the recipe). */
   readonly types: readonly string[];
@@ -32,41 +36,73 @@ export type ContinuousActionSnapshot = {
 
 /**
  * Dual-read recipe effect slots from continuous JSON (new keys or legacy
- * `costs` / `costsOverTime` / `results` / `sideEffects`). See docs/UPGRADING.md.
+ * `immediateEffects` / `costs` / `costsOverTime` / `overTimeEffects` /
+ * `requiredEffects` / `results` / `optionalEffects` / `sideEffects`).
+ * See docs/UPGRADING.md.
  */
 export function recipeEffectsFromSnapshotJSON(action: {
+  readonly requiredImmediateEffects?: readonly ActiveEffect[];
+  /** @deprecated Prefer `requiredImmediateEffects`. */
   readonly immediateEffects?: readonly ActiveEffect[];
+  readonly optionalImmediateEffects?: readonly ActiveEffect[];
+  readonly requiredOverTimeEffects?: readonly ActiveEffect[];
+  /** @deprecated Prefer `requiredOverTimeEffects`. */
   readonly overTimeEffects?: readonly ActiveEffect[];
+  readonly optionalOverTimeEffects?: readonly ActiveEffect[];
+  readonly requiredFinishedEffects?: readonly ActiveEffect[];
+  /** @deprecated Prefer `requiredFinishedEffects`. */
   readonly requiredEffects?: readonly ActiveEffect[];
+  readonly optionalFinishedEffects?: readonly ActiveEffect[];
+  /** @deprecated Prefer `optionalFinishedEffects`. */
   readonly optionalEffects?: readonly ActiveEffect[];
-  /** @deprecated Prefer `immediateEffects`. */
+  /** @deprecated Prefer `requiredImmediateEffects`. */
   readonly costs?: readonly ActiveEffect[];
-  /** @deprecated Prefer `overTimeEffects`. */
+  /** @deprecated Prefer `requiredOverTimeEffects`. */
   readonly costsOverTime?: readonly ActiveEffect[];
-  /** @deprecated Prefer `requiredEffects`. */
+  /** @deprecated Prefer `requiredFinishedEffects`. */
   readonly results?: readonly ActiveEffect[];
-  /** @deprecated Prefer `optionalEffects`. */
+  /** @deprecated Prefer `optionalFinishedEffects`. */
   readonly sideEffects?: readonly ActiveEffect[];
   readonly types?: readonly string[];
 }): {
-  readonly immediateEffects: readonly ActiveEffect[];
-  readonly overTimeEffects: readonly ActiveEffect[];
-  readonly requiredEffects: readonly ActiveEffect[];
-  readonly optionalEffects: readonly ActiveEffect[];
+  readonly requiredImmediateEffects: readonly ActiveEffect[];
+  readonly optionalImmediateEffects: readonly ActiveEffect[];
+  readonly requiredOverTimeEffects: readonly ActiveEffect[];
+  readonly optionalOverTimeEffects: readonly ActiveEffect[];
+  readonly requiredFinishedEffects: readonly ActiveEffect[];
+  readonly optionalFinishedEffects: readonly ActiveEffect[];
   readonly types: readonly string[];
 } {
   return {
-    immediateEffects: Object.freeze([
-      ...(action.immediateEffects ?? action.costs ?? []),
+    requiredImmediateEffects: Object.freeze([
+      ...(action.requiredImmediateEffects ??
+        action.immediateEffects ??
+        action.costs ??
+        []),
     ]),
-    overTimeEffects: Object.freeze([
-      ...(action.overTimeEffects ?? action.costsOverTime ?? []),
+    optionalImmediateEffects: Object.freeze([
+      ...(action.optionalImmediateEffects ?? []),
     ]),
-    requiredEffects: Object.freeze([
-      ...(action.requiredEffects ?? action.results ?? []),
+    requiredOverTimeEffects: Object.freeze([
+      ...(action.requiredOverTimeEffects ??
+        action.overTimeEffects ??
+        action.costsOverTime ??
+        []),
     ]),
-    optionalEffects: Object.freeze([
-      ...(action.optionalEffects ?? action.sideEffects ?? []),
+    optionalOverTimeEffects: Object.freeze([
+      ...(action.optionalOverTimeEffects ?? []),
+    ]),
+    requiredFinishedEffects: Object.freeze([
+      ...(action.requiredFinishedEffects ??
+        action.requiredEffects ??
+        action.results ??
+        []),
+    ]),
+    optionalFinishedEffects: Object.freeze([
+      ...(action.optionalFinishedEffects ??
+        action.optionalEffects ??
+        action.sideEffects ??
+        []),
     ]),
     types: Object.freeze([...(action.types ?? [])]),
   };
@@ -74,9 +110,9 @@ export function recipeEffectsFromSnapshotJSON(action: {
 
 /**
  * Persisted continuous progress. `progress` is percent complete (0..100),
- * rounded to two decimals — same basis used to prorate `overTimeEffects`
- * (`payFraction = deltaProgress / 100`). Effective duration is recomputed
- * each tick so mid-action speed changes affect remaining work only.
+ * rounded to two decimals — same basis used to prorate required/optional
+ * over-time (`payFraction = deltaProgress / 100`). Effective duration is
+ * recomputed each tick so mid-action speed changes affect remaining work only.
  */
 export type ContinuousProgressRecord = {
   readonly progressKey: string;
@@ -92,9 +128,10 @@ export type ContinuousProgressRecord = {
    */
   readonly execution: 'manual' | 'automatic';
   /**
-   * When true, the next `advanceOneJob` must pay `immediateEffects` before
-   * progressing (set on `repeatWhileAvailable` re-arm; unset after first start
-   * pay in `startContinuousAction`).
+   * When true, the next `advanceOneJob` must pay `requiredImmediateEffects`
+   * (and soft `optionalImmediateEffects`) before progressing (set on
+   * `repeatWhileAvailable` re-arm; unset after first start pay in
+   * `startContinuousAction`).
    */
   readonly payImmediateOnNextAdvance?: boolean;
 };
@@ -113,13 +150,21 @@ export type ContinuousProgressRecordJSON = {
   sourceEntityId?: string;
   targetEntityId?: string;
   action: ContinuousActionSnapshot & {
-    /** @deprecated Prefer `immediateEffects`. */
+    /** @deprecated Prefer `requiredImmediateEffects`. */
+    immediateEffects?: readonly ActiveEffect[];
+    /** @deprecated Prefer `requiredImmediateEffects`. */
     costs?: readonly ActiveEffect[];
-    /** @deprecated Prefer `overTimeEffects`. */
+    /** @deprecated Prefer `requiredOverTimeEffects`. */
+    overTimeEffects?: readonly ActiveEffect[];
+    /** @deprecated Prefer `requiredOverTimeEffects`. */
     costsOverTime?: readonly ActiveEffect[];
-    /** @deprecated Prefer `requiredEffects`. */
+    /** @deprecated Prefer `requiredFinishedEffects`. */
+    requiredEffects?: readonly ActiveEffect[];
+    /** @deprecated Prefer `requiredFinishedEffects`. */
     results?: readonly ActiveEffect[];
-    /** @deprecated Prefer `optionalEffects`. */
+    /** @deprecated Prefer `optionalFinishedEffects`. */
+    optionalEffects?: readonly ActiveEffect[];
+    /** @deprecated Prefer `optionalFinishedEffects`. */
     sideEffects?: readonly ActiveEffect[];
   };
   /** Percent 0..100. Legacy saves may send progressTicks + effectiveDurationTicks. */
@@ -197,10 +242,12 @@ export function continuousProgressToJSON(
     action: {
       ...record.action,
       requirements: [...record.action.requirements],
-      immediateEffects: [...record.action.immediateEffects],
-      overTimeEffects: [...record.action.overTimeEffects],
-      requiredEffects: [...record.action.requiredEffects],
-      optionalEffects: [...record.action.optionalEffects],
+      requiredImmediateEffects: [...record.action.requiredImmediateEffects],
+      optionalImmediateEffects: [...record.action.optionalImmediateEffects],
+      requiredOverTimeEffects: [...record.action.requiredOverTimeEffects],
+      optionalOverTimeEffects: [...record.action.optionalOverTimeEffects],
+      requiredFinishedEffects: [...record.action.requiredFinishedEffects],
+      optionalFinishedEffects: [...record.action.optionalFinishedEffects],
       types: [...record.action.types],
       ...(record.action.repeatWhileAvailable === true
         ? { repeatWhileAvailable: true }
@@ -241,10 +288,12 @@ export function continuousProgressFromJSON(
           ? { sourceId: entry.action.sourceId }
           : {}),
         requirements: Object.freeze([...(entry.action.requirements ?? [])]),
-        immediateEffects: recipe.immediateEffects,
-        overTimeEffects: recipe.overTimeEffects,
-        requiredEffects: recipe.requiredEffects,
-        optionalEffects: recipe.optionalEffects,
+        requiredImmediateEffects: recipe.requiredImmediateEffects,
+        optionalImmediateEffects: recipe.optionalImmediateEffects,
+        requiredOverTimeEffects: recipe.requiredOverTimeEffects,
+        optionalOverTimeEffects: recipe.optionalOverTimeEffects,
+        requiredFinishedEffects: recipe.requiredFinishedEffects,
+        optionalFinishedEffects: recipe.optionalFinishedEffects,
         durationTicks: entry.action.durationTicks ?? 1,
         types: recipe.types,
         ...(entry.action.repeatWhileAvailable === true

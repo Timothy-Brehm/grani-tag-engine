@@ -28,8 +28,8 @@ function registryWith(
 }
 
 describe('stats/pools cross-links', () => {
-  it('exports 0.3.0.2', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.2');
+  it('exports 0.3.0.7', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.7');
   });
 
   it('live cross-link fromStat toPoolMax raises Mana max', () => {

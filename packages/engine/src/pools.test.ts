@@ -22,8 +22,8 @@ function registryWith(...defs: Parameters<EngineRegistry['registerEntityDefiniti
 }
 
 describe('pool reservation', () => {
-  it('exports 0.3.0.2', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.2');
+  it('exports 0.3.0.7', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.7');
   });
 
   it('refuses spend when Available is insufficient', () => {
@@ -134,8 +134,8 @@ describe('pool reservation', () => {
       name: 'Sawmill_Mill_Quick',
       durationTicks: 2,
       requirements: [],
-      immediateEffects: [],
-      overTimeEffects: [
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [
         {
           type: 'adjust-pool',
           name: 'logs',
@@ -144,7 +144,7 @@ describe('pool reservation', () => {
           scope: 'actor' as const,
         },
       ],
-      requiredEffects: [
+      requiredFinishedEffects: [
         {
           type: 'adjust-pool',
           name: 'boards',
@@ -153,7 +153,7 @@ describe('pool reservation', () => {
           scope: 'actor' as const,
         },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
     state = reduceEngineState(
       state,

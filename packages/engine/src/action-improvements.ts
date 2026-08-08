@@ -17,24 +17,46 @@ import {
 } from './action-match';
 
 export type RecipeEffectSlot =
-  | 'immediateEffects'
-  | 'overTimeEffects'
-  | 'requiredEffects'
-  | 'optionalEffects';
+  | 'requiredImmediateEffects'
+  | 'optionalImmediateEffects'
+  | 'requiredOverTimeEffects'
+  | 'optionalOverTimeEffects'
+  | 'requiredFinishedEffects'
+  | 'optionalFinishedEffects';
 
 export const REDUCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
-  immediateEffects: 'reduceImmediateEffect',
-  overTimeEffects: 'reduceOverTimeEffect',
-  requiredEffects: 'reduceRequiredEffect',
-  optionalEffects: 'reduceOptionalEffect',
+  requiredImmediateEffects: 'reduceImmediateEffect',
+  optionalImmediateEffects: 'reduceImmediateEffect',
+  requiredOverTimeEffects: 'reduceOverTimeEffect',
+  optionalOverTimeEffects: 'reduceOverTimeEffect',
+  requiredFinishedEffects: 'reduceFinishedEffect',
+  optionalFinishedEffects: 'reduceFinishedEffect',
 };
 
 export const ENHANCE_EFFECT_TYPE: Record<RecipeEffectSlot, string> = {
-  immediateEffects: 'enhanceImmediateEffect',
-  overTimeEffects: 'enhanceOverTimeEffect',
-  requiredEffects: 'enhanceRequiredEffect',
-  optionalEffects: 'enhanceOptionalEffect',
+  requiredImmediateEffects: 'enhanceImmediateEffect',
+  optionalImmediateEffects: 'enhanceImmediateEffect',
+  requiredOverTimeEffects: 'enhanceOverTimeEffect',
+  optionalOverTimeEffects: 'enhanceOverTimeEffect',
+  requiredFinishedEffects: 'enhanceFinishedEffect',
+  optionalFinishedEffects: 'enhanceFinishedEffect',
 };
+
+/** Legacy Finished magnitude types (dual-read with reduce/enhanceFinishedEffect). */
+const LEGACY_REDUCE_FINISHED = [
+  'reduceRequiredEffect',
+  'reduceOptionalEffect',
+] as const;
+const LEGACY_ENHANCE_FINISHED = [
+  'enhanceRequiredEffect',
+  'enhanceOptionalEffect',
+] as const;
+
+function isFinishedSlot(slot: RecipeEffectSlot): boolean {
+  return (
+    slot === 'requiredFinishedEffects' || slot === 'optionalFinishedEffects'
+  );
+}
 
 function listTagEffects(
   entity: EntityInstance | undefined,
@@ -244,7 +266,7 @@ export function materializeAdjustPools(
 
 function collectMods(
   actor: EntityInstance | undefined,
-  effectType: string,
+  effectTypes: readonly string[],
   actionName: string,
   actionTypes: readonly string[] | undefined,
   poolId: string,
@@ -253,20 +275,22 @@ function collectMods(
 ): { flat: number; percent: number } {
   let flat = 0;
   let percent = 0;
-  for (const effect of matchingActionEffects(
-    actor,
-    effectType,
-    actionName,
-    actionTypes,
-    registry,
-    entities,
-  )) {
-    if (!matchesPoolFilter(effect, poolId, registry)) {
-      continue;
+  for (const effectType of effectTypes) {
+    for (const effect of matchingActionEffects(
+      actor,
+      effectType,
+      actionName,
+      actionTypes,
+      registry,
+      entities,
+    )) {
+      if (!matchesPoolFilter(effect, poolId, registry)) {
+        continue;
+      }
+      const m = magnitudeFromEffect(effect);
+      flat += m.flat;
+      percent += m.percent;
     }
-    const m = magnitudeFromEffect(effect);
-    flat += m.flat;
-    percent += m.percent;
   }
   return { flat, percent };
 }
@@ -287,6 +311,13 @@ export function applySlotMagnitudeModifiers(
   const reduceType = REDUCE_EFFECT_TYPE[slot];
   const enhanceType = ENHANCE_EFFECT_TYPE[slot];
 
+  const reduceTypes = isFinishedSlot(slot)
+    ? [reduceType, ...LEGACY_REDUCE_FINISHED]
+    : [reduceType];
+  const enhanceTypes = isFinishedSlot(slot)
+    ? [enhanceType, ...LEGACY_ENHANCE_FINISHED]
+    : [enhanceType];
+
   return effects.map((effect) => {
     if (effect.type !== 'adjust-pool') {
       return effect;
@@ -299,7 +330,7 @@ export function applySlotMagnitudeModifiers(
 
     const red = collectMods(
       actor,
-      reduceType,
+      reduceTypes,
       actionName,
       actionTypes,
       poolId,
@@ -308,7 +339,7 @@ export function applySlotMagnitudeModifiers(
     );
     const enh = collectMods(
       actor,
-      enhanceType,
+      enhanceTypes,
       actionName,
       actionTypes,
       poolId,
@@ -378,7 +409,7 @@ export function applyCostBonuses(
 ): ActiveEffect[] {
   return applySlotMagnitudeModifiers(
     costs,
-    'immediateEffects',
+    'requiredImmediateEffects',
     actor,
     actionName,
     actionTypes,
@@ -398,7 +429,7 @@ export function materializeActionResults(
 ): ActiveEffect[] {
   return materializeSlotEffects(
     results,
-    'requiredEffects',
+    'requiredFinishedEffects',
     actor,
     actionName,
     actionTypes,

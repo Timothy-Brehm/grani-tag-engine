@@ -105,20 +105,20 @@ describe('generators and continuous actions', () => {
     ).toBeGreaterThan(pulsedAt!);
   });
 
-  it('treats omitted durationTicks as 1 and pays full overTimeEffects on that tick', () => {
+  it('treats omitted durationTicks as 1 and pays full requiredOverTimeEffects on that tick', () => {
     const action: ActionDefinition = {
       name: 'instant-gather',
       requirements: [{ type: 'free' }],
-      immediateEffects: [
+      requiredImmediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -1, pool: 'Stamina' },
       ],
-      overTimeEffects: [
+      requiredOverTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -2, pool: 'Stamina' },
       ],
-      requiredEffects: [
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 5, Stick: 0 });
     state = reduceEngineState(
@@ -134,21 +134,21 @@ describe('generators and continuous actions', () => {
     ).toBe(1);
   });
 
-  it('prorates overTimeEffects and pauses when the slice cannot be paid', () => {
+  it('prorates requiredOverTimeEffects and pauses when the slice cannot be paid', () => {
     const action: ActionDefinition = {
       name: 'gather-sticks',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      immediateEffects: [
+      requiredImmediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -1, pool: 'Stamina' },
       ],
-      overTimeEffects: [
+      requiredOverTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -10, pool: 'Stamina' },
       ],
-      requiredEffects: [
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 6, Stick: 0 });
     state = reduceEngineState(
@@ -205,11 +205,11 @@ describe('generators and continuous actions', () => {
       requirements: [
         { type: 'tag', tagName: 'allowed', exists: true },
       ],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'grant-tag', name: 'done', strength: 1 },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 5 }, [
       createTag({ name: 'allowed', effects: [] }),
@@ -242,16 +242,16 @@ describe('generators and continuous actions', () => {
       name: 'long',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'long-done', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'long-done', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     const instant: ActionDefinition = {
       name: 'quick',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'quick-done', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'quick-done', strength: 1 }],
+      optionalFinishedEffects: [],
     };
 
     let state = withHero({ Stamina: 5 });
@@ -299,14 +299,14 @@ describe('generators and continuous actions', () => {
       name: 'chop',
       durationTicks: 100,
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      overTimeEffects: [
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [
         { type: 'adjust-pool', name: 'work', strength: -4, pool: 'Stamina' },
       ],
-      requiredEffects: [
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 10 }, [
       createTag({
@@ -340,9 +340,9 @@ describe('generators and continuous actions', () => {
       name: 'slow',
       durationTicks: 5,
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'slow-done', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'slow-done', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -366,11 +366,11 @@ describe('generators and continuous actions', () => {
       name: 'work',
       durationTicks: 4,
       requirements: [{ type: 'free' }],
-      immediateEffects: [
+      requiredImmediateEffects: [
         { type: 'adjust-pool', name: 'start', strength: -2, pool: 'Stamina' },
       ],
-      requiredEffects: [{ type: 'grant-tag', name: 'worked', strength: 1 }],
-      optionalEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'worked', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -400,9 +400,9 @@ describe('generators and continuous actions', () => {
       name: 'too-long',
       durationTicks: 10_001,
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'nope', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'nope', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     const state = reduceEngineState(
       withHero({ Stamina: 5 }),
@@ -418,9 +418,9 @@ describe('generators and continuous actions', () => {
       name: 'haul',
       durationTicks: 10,
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'hauled', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'hauled', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     let state = withHero({ Stamina: 5 });
     state = reduceEngineState(
@@ -463,15 +463,107 @@ describe('generators and continuous actions', () => {
     expect(state.continuousProgress.has(key)).toBe(false);
   });
 
+  it('optionalOverTimeEffects: runs when Life full but Stamina needs repair', () => {
+    const action: ActionDefinition = {
+      name: 'rest-soft',
+      requirements: [{ type: 'free' }],
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [],
+      optionalOverTimeEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
+      ],
+      // Empty finished: productive-effect comes from optional OT (no dummy crumbs).
+      requiredFinishedEffects: [],
+      optionalFinishedEffects: [],
+      durationTicks: 5,
+      repeatWhileAvailable: true,
+    };
+    // Stick at max (stand-in for full Life), Stamina empty.
+    let state = withHero({ Stick: 5, Stamina: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'rest-soft',
+    });
+    expect(state.continuousActions.has(key)).toBe(true);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(5);
+    // Duration > 1: first over-time slice applies on the next tick.
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(1);
+
+    state = reduceEngineState(state, { type: 'tick', steps: 4 }, options);
+    // 5 ticks of +1 Stamina; empty requiredFinished is finishable.
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(5);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(5);
+  });
+
+  it('optionalOverTimeEffects: runs when Stamina full but Stick needs repair', () => {
+    const action: ActionDefinition = {
+      name: 'rest-life',
+      requirements: [{ type: 'free' }],
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [],
+      optionalOverTimeEffects: [
+        { type: 'adjust-pool', name: 'life', strength: 5, pool: 'Stick' },
+        { type: 'adjust-pool', name: 'stamina', strength: 5, pool: 'Stamina' },
+      ],
+      requiredFinishedEffects: [],
+      optionalFinishedEffects: [],
+      durationTicks: 5,
+    };
+    let state = withHero({ Stick: 0, Stamina: 10 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    expect(state.continuousActions.size).toBe(1);
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stick')).toBe(1);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Stamina')).toBe(10);
+  });
+
+  it('requiredOverTimeEffects still pause when a spend cannot be paid', () => {
+    const action: ActionDefinition = {
+      name: 'haul',
+      requirements: [{ type: 'free' }],
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [
+        { type: 'adjust-pool', name: 'stamina', strength: -20, pool: 'Stamina' },
+      ],
+      optionalOverTimeEffects: [
+        { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
+      ],
+      requiredFinishedEffects: [
+        { type: 'adjust-pool', name: 'stick', strength: 1, pool: 'Stick' },
+      ],
+      optionalFinishedEffects: [],
+      durationTicks: 2,
+    };
+    let state = withHero({ Stamina: 5, Stick: 0 });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    // First-slice check fails (−10 of −20 with only 5 Stamina) → never starts.
+    expect(state.continuousActions.size).toBe(0);
+  });
+
   it('applies results even when a side effect cannot happen', () => {
     const action: ActionDefinition = {
       name: 'engine-run',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'co2', strength: 1, pool: 'Stick' },
       ],
-      optionalEffects: [
+      optionalFinishedEffects: [
         { type: 'adjust-pool', name: 'miles', strength: 1, pool: 'Stamina' },
       ],
     };
@@ -490,11 +582,11 @@ describe('generators and continuous actions', () => {
     const action: ActionDefinition = {
       name: 'rest',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
       repeatWhileAvailable: true,
     };
     let state = withHero({ Stamina: 0 });
@@ -538,11 +630,11 @@ describe('generators and continuous actions', () => {
     const action: ActionDefinition = {
       name: 'sip',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
       repeatWhileAvailable: true,
     };
     let state = withHero({ Stamina: 0 });
@@ -561,11 +653,11 @@ describe('generators and continuous actions', () => {
     const action: ActionDefinition = {
       name: 'idle',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'adjust-pool', name: 'stamina', strength: 1, pool: 'Stamina' },
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
       repeatWhileAvailable: true,
     };
     let state = withHero({ Stamina: 0 });

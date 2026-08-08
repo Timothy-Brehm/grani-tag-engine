@@ -45,9 +45,9 @@ describe('registry builtins and actions', () => {
     const action: ActionDefinition = {
       name: 'grant',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'bonus', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'bonus', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     const ctx = playerContext([]);
     expect(isActionAvailable(registry, action, ctx)).toBe(true);
@@ -60,12 +60,12 @@ describe('registry builtins and actions', () => {
     const action: ActionDefinition = {
       name: 'maybe',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [
         { type: 'grant-tag', name: 'a', strength: 1 },
         { type: 'grant-tag', name: 'a', strength: 1 },
       ],
-      optionalEffects: [{ type: 'grant-tag', name: 'b', strength: 1 }],
+      optionalFinishedEffects: [{ type: 'grant-tag', name: 'b', strength: 1 }],
     };
     const next = executeActionSafe(registry, action, playerContext([]));
     const tags = next.engine.entities.get('player')!.tags;
@@ -86,9 +86,9 @@ describe('registry builtins and actions', () => {
     const action: ActionDefinition = {
       name: 'loot',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'remove-entity', name: 'Remove', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'remove-entity', name: 'Remove', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     expect(isActionAvailable(registry, action, ctx)).toBe(true);
     const next = executeAction(registry, action, ctx);
@@ -107,9 +107,9 @@ describe('registry builtins and actions', () => {
     const action: ActionDefinition = {
       name: 'from-catalog',
       requirements: [],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'fancy', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'fancy', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     const state = createPrimaryEngineState(
       createTaggedEntity({ id: 'player', tags: [] }),
@@ -189,10 +189,10 @@ describe('registry builtins and actions', () => {
     const action: ActionDefinition = {
       name: 'open',
       requirements: [{ type: 'free' }],
-      immediateEffects: [
+      requiredImmediateEffects: [
         { type: 'adjust-pool', name: 'stamina', strength: -1, pool: 'Life' },
       ],
-      requiredEffects: [
+      requiredFinishedEffects: [
         {
           type: 'grant-tag',
           name: 'opened',
@@ -200,7 +200,7 @@ describe('registry builtins and actions', () => {
           scope: 'source',
         } as never,
       ],
-      optionalEffects: [],
+      optionalFinishedEffects: [],
     };
 
     const next = executeAction(

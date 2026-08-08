@@ -141,9 +141,9 @@ describe('EngineState and reduceEngineState', () => {
     const action: ActionDefinition = {
       name: 'grant',
       requirements: [{ type: 'free' }],
-      immediateEffects: [],
-      requiredEffects: [{ type: 'grant-tag', name: 'bonus', strength: 1 }],
-      optionalEffects: [],
+      requiredImmediateEffects: [],
+      requiredFinishedEffects: [{ type: 'grant-tag', name: 'bonus', strength: 1 }],
+      optionalFinishedEffects: [],
     };
     const commands: EngineCommand[] = [
       { type: 'tick', steps: 2 },

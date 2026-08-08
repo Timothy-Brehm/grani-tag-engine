@@ -138,10 +138,14 @@ export type ActionDefinitionJSON = {
   repeatWhileAvailable?: boolean;
   novelty?: NoveltyAckJSON;
   requirements: RequirementJSON[];
-  immediateEffects: ActiveEffectJSON[];
-  overTimeEffects?: ActiveEffectJSON[];
-  requiredEffects: ActiveEffectJSON[];
-  optionalEffects: ActiveEffectJSON[];
+  requiredImmediateEffects: ActiveEffectJSON[];
+  /** Soft at start; never blocks availability. */
+  optionalImmediateEffects?: ActiveEffectJSON[];
+  requiredOverTimeEffects?: ActiveEffectJSON[];
+  /** Soft over-time; never pauses. */
+  optionalOverTimeEffects?: ActiveEffectJSON[];
+  requiredFinishedEffects: ActiveEffectJSON[];
+  optionalFinishedEffects: ActiveEffectJSON[];
 };
 
 export type EntityDefinitionJSON = {
