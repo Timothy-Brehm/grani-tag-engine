@@ -31,6 +31,7 @@ export type {
   ReachableSlice,
   PoolAnalysis,
   UpToGateReport,
+  MaterializedReachableSeed,
   BlockValidation,
   BlockAnnotation,
 } from './analyze';
@@ -39,6 +40,9 @@ export {
   analyzeReachable,
   analyzeInfinitePools,
   analyzeUpToGate,
+  materializeReachableSlice,
+  analyzeReachableMaterialized,
+  analyzeUpToGateMaterialized,
   validateBlock,
   annotateBlock,
 } from './analyze';

@@ -68,9 +68,11 @@ Order: all flats (reduce, then enhance), then all percents (reduce, then enhance
 
 `reduceFinishedEffect` / `enhanceFinishedEffect` replace per-slot Finished names. Loaders dual-read `reduceRequiredEffect`, `reduceOptionalEffect`, `enhanceRequiredEffect`, `enhanceOptionalEffect`.
 
-### Availability gates (new, `0.3.0.7`)
+### Availability gates (new, `0.3.0.7` / soft Finished fills `0.3.0.8`)
 
 Startable / continuable / finishable with **empty-or-payable** leftover hard effects and **productive-effect** at start/re-arm only. Prefer required costs in Immediate/OT; catalog soft-warns `finished-required-cost` for negative `adjust-pool` in `requiredFinishedEffects`. See [engine-composition.md](./design/engine-composition.md).
+
+**`0.3.0.8`:** finishable treats **positive** `adjust-pool` in `requiredFinishedEffects` as soft (not empty-or-payable gated) so grant-max + fill can share a Finished slot; fills still clamp at apply. Negative Finished adjust-pools remain hard gates. Idempotent `grant-tag` / `lock-tag` are also soft at finish. `hasProductiveEffect` counts **optional** Finished effects so unlock+fill harvests stay startable after the unlock tags are held.
 
 Replaces draft `action-cost-bonus` / `action-result-bonus` if you used those names on this branch.
 

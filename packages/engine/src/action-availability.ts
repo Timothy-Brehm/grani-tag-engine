@@ -89,8 +89,10 @@ export function hasProductiveEffect<THost>(
   action: ActionDefinition<Requirement, ActiveEffect, THost>,
   context: EngineContext<THost>,
 ): boolean {
-  const finishedAuthored = action.requiredFinishedEffects.length > 0;
-  if (finishedAuthored) {
+  const requiredFinishedAuthored = action.requiredFinishedEffects.length > 0;
+  const optionalFinishedAuthored =
+    (action.optionalFinishedEffects?.length ?? 0) > 0;
+  if (requiredFinishedAuthored || optionalFinishedAuthored) {
     const requiredFinished = liveSlot(
       action.requiredFinishedEffects,
       'requiredFinishedEffects',
@@ -98,7 +100,20 @@ export function hasProductiveEffect<THost>(
       context,
       registry,
     );
-    return anyEffectPossible(registry, requiredFinished, context);
+    const optionalFinished = liveSlot(
+      action.optionalFinishedEffects ?? [],
+      'optionalFinishedEffects',
+      action,
+      context,
+      registry,
+    );
+    // Repeatable gather/harvest: unlock tags sit in required Finished; the
+    // soft fill lives in optional Finished and must still count after unlock.
+    return anyEffectPossible(
+      registry,
+      [...requiredFinished, ...optionalFinished],
+      context,
+    );
   }
 
   const immediateAuthored =
@@ -322,7 +337,20 @@ export function isActionFinishable<THost>(
     context,
     registry,
   );
-  return emptyOrPayable(registry, requiredFinished, context);
+  // Positive adjust-pool fills often share a Finished slot with the grant-tag
+  // that raises pool-max; they become payable only after those grants apply.
+  // Gate hard Finished effects (costs / removes / etc.); soft fills are clamped
+  // at apply time. Idempotent grant/lock tags are soft — already held is fine.
+  const hardFinished = requiredFinished.filter((effect) => {
+    if (effect.type === 'adjust-pool') {
+      return effect.strength < 0;
+    }
+    if (effect.type === 'grant-tag' || effect.type === 'lock-tag') {
+      return false;
+    }
+    return true;
+  });
+  return emptyOrPayable(registry, hardFinished, context);
 }
 
 /**
