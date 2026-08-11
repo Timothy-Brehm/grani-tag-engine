@@ -5,11 +5,14 @@ import { ENGINE_VERSION } from '../../version';
 import {
   analyzeInfinitePools,
   analyzeReachable,
+  analyzeReachableMaterialized,
   analyzeUpToGate,
+  analyzeUpToGateMaterialized,
   annotateBlock,
   buildContentGraph,
   createDebugContentTool,
   ENGINE_DEBUG_TAG_NAME,
+  materializeReachableSlice,
   validateBlock,
 } from '../index';
 import { createEngineDocument } from '../../document';
@@ -17,8 +20,8 @@ import { createEngineState } from '../../state';
 import { instantiateEntity } from '../../entity';
 
 describe('content analyzer', () => {
-  it('exports 0.3.0.7', () => {
-    expect(ENGINE_VERSION).toBe('0.3.0.7');
+  it('exports 0.3.0.8', () => {
+    expect(ENGINE_VERSION).toBe('0.3.0.8');
   });
 
   it('analyzes up to a tier gate', () => {
@@ -67,6 +70,124 @@ describe('content analyzer', () => {
     expect(report!.before.tags.has('Tier1Choice')).toBe(false);
     expect(report!.actionsGrantingGate).toContain('hero::choose-left');
     expect(report!.lockedBehindGate.tags).toContain('PostTier');
+  });
+
+  it('materializes reachable slice into applyable seed', () => {
+    const registry = new EngineRegistry().createBuiltinAdaptors();
+    registry.registerPoolDefinition({ id: 'Stamina' });
+    registry.registerEntityDefinition({
+      id: 'hero',
+      initialTags: [
+        createTag({
+          name: 'Body',
+          effects: [
+            {
+              type: 'pool-max',
+              name: 'stam-max',
+              strength: 10,
+              pool: 'Stamina',
+            },
+            {
+              type: 'stat',
+              name: 'mob',
+              strength: 2,
+              stat: 'Mobility',
+            },
+          ],
+        }),
+        createTag({
+          name: 'ExtraStam',
+          effects: [
+            {
+              type: 'pool-max',
+              name: 'stam-max-2',
+              strength: 5,
+              pool: 'Stamina',
+            },
+          ],
+        }),
+      ],
+      actions: [
+        {
+          name: 'train',
+          requirements: [{ type: 'tag', tagName: 'Body', exists: true }],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
+            { type: 'grant-tag', name: 'ExtraStam', strength: 1 },
+          ],
+          optionalFinishedEffects: [],
+        },
+      ],
+    });
+
+    const graph = buildContentGraph(registry);
+    const slice = analyzeReachable(graph, {
+      seedTags: ['Body'],
+      seedEntityDefinitionIds: ['hero'],
+    });
+    const seed = materializeReachableSlice(graph, slice);
+    expect(seed.tags).toEqual(expect.arrayContaining(['Body', 'ExtraStam']));
+    expect(seed.entityDefinitionIds).toContain('hero');
+    expect(seed.actions).toContain('hero::train');
+    expect(seed.netStat.Mobility).toBe(2);
+    expect(seed.netPoolMax.Stamina).toBe(15);
+    expect(seed.poolCurrents.Stamina).toBe(15);
+
+    const viaHelper = analyzeReachableMaterialized(registry, {
+      seedTags: ['Body'],
+      seedEntityDefinitionIds: ['hero'],
+    });
+    expect(viaHelper.netPoolMax.Stamina).toBe(15);
+    expect(viaHelper.poolCurrents.Stamina).toBe(15);
+  });
+
+  it('materializes up-to-gate slice without gate tags', () => {
+    const registry = new EngineRegistry().createBuiltinAdaptors();
+    registry.registerGateDefinition({
+      id: 'tier1',
+      tagName: 'Tier1Choice',
+    });
+    registry.registerEntityDefinition({
+      id: 'hero',
+      initialTags: [
+        createTag({ name: 'Start', effects: [] }),
+        createTag({
+          name: 'Buff',
+          effects: [
+            { type: 'stat', name: 'pwr', strength: 3, stat: 'Power' },
+          ],
+        }),
+      ],
+      actions: [
+        {
+          name: 'buff-up',
+          requirements: [{ type: 'tag', tagName: 'Start', exists: true }],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
+            { type: 'grant-tag', name: 'Buff', strength: 1 },
+          ],
+          optionalFinishedEffects: [],
+        },
+        {
+          name: 'choose',
+          requirements: [{ type: 'tag', tagName: 'Buff', exists: true }],
+          requiredImmediateEffects: [],
+          requiredFinishedEffects: [
+            { type: 'grant-tag', name: 'Tier1Choice', strength: 1 },
+          ],
+          optionalFinishedEffects: [],
+        },
+      ],
+    });
+
+    const seed = analyzeUpToGateMaterialized(registry, 'tier1', {
+      seedTags: ['Start'],
+      seedEntityDefinitionIds: ['hero'],
+    });
+    expect(seed).toBeDefined();
+    expect(seed!.tags).toEqual(expect.arrayContaining(['Start', 'Buff']));
+    expect(seed!.tags).not.toContain('Tier1Choice');
+    expect(seed!.netStat.Power).toBe(3);
   });
 
   it('validates and annotates a self-contained block', () => {

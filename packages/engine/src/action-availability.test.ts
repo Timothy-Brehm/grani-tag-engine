@@ -62,6 +62,38 @@ describe('action availability helpers', () => {
       expect(isActionStartable(registry, action, ctx)).toBe(true);
     });
 
+    it('optional Finished fill still productive after unlock tags are held', () => {
+      const action: ActionDefinition = {
+        name: 'harvest',
+        requirements: [{ type: 'free' }],
+        requiredImmediateEffects: [
+          { type: 'adjust-pool', name: 'stam', strength: -0.1, pool: 'Stamina' },
+        ],
+        requiredFinishedEffects: [
+          { type: 'grant-tag', name: 'Pool_Initial_Berry', strength: 1 },
+        ],
+        optionalFinishedEffects: [
+          { type: 'adjust-pool', name: 'berry', strength: 1, pool: 'Berry' },
+        ],
+      };
+      // withPools already holds Pool_Initial_Berry (max tag) — unlock grant
+      // is not productive; optional fill still is while Berry has room.
+      const room = withPools(
+        { Stamina: 5, Berry: 1 },
+        { Stamina: 10, Berry: 5 },
+      );
+      expect(hasProductiveEffect(registry, action, room)).toBe(true);
+      expect(isActionStartable(registry, action, room)).toBe(true);
+      expect(isActionFinishable(registry, action, room, 0)).toBe(true);
+
+      const full = withPools(
+        { Stamina: 5, Berry: 5 },
+        { Stamina: 10, Berry: 5 },
+      );
+      expect(hasProductiveEffect(registry, action, full)).toBe(false);
+      expect(isActionStartable(registry, action, full)).toBe(false);
+    });
+
     it('immediate only → any Immediate canHappen', () => {
       const action: ActionDefinition = {
         name: 'pay-start',
@@ -221,8 +253,8 @@ describe('action availability helpers', () => {
       expect(idleState.continuousProgress.has(idleKey)).toBe(false);
     });
 
-    it('finishable blocked when requiredFinished cannot happen; empty finished OK', () => {
-      const blocked: ActionDefinition = {
+    it('finishable blocked by hard requiredFinished costs; soft fills ignored', () => {
+      const softFill: ActionDefinition = {
         name: 'fill',
         durationTicks: 2,
         requirements: [{ type: 'free' }],
@@ -233,8 +265,22 @@ describe('action availability helpers', () => {
         optionalFinishedEffects: [],
       };
       const full = withPools({ Life: 5 }, { Life: 5 });
-      expect(isActionFinishable(registry, blocked, full, 100)).toBe(false);
-      expect(isActionStartable(registry, blocked, full)).toBe(false);
+      // Positive Finished fills are soft at the gate (clamped at apply).
+      expect(isActionFinishable(registry, softFill, full, 100)).toBe(true);
+      expect(isActionStartable(registry, softFill, full)).toBe(false);
+
+      const hardCost: ActionDefinition = {
+        name: 'pay-on-finish',
+        durationTicks: 2,
+        requirements: [{ type: 'free' }],
+        requiredImmediateEffects: [],
+        requiredFinishedEffects: [
+          { type: 'adjust-pool', name: 'toll', strength: -1, pool: 'Life' },
+        ],
+        optionalFinishedEffects: [],
+      };
+      const empty = withPools({ Life: 0 }, { Life: 5 });
+      expect(isActionFinishable(registry, hardCost, empty, 100)).toBe(false);
 
       const emptyFinished: ActionDefinition = {
         name: 'timer',
@@ -262,26 +308,26 @@ describe('action availability helpers', () => {
       );
       state = upsertEntity(state, {
         ...state.entities.get('hero')!,
-        pools: { Life: 4 },
+        pools: { Life: 2 },
       });
       state = reduceEngineState(
         state,
-        { type: 'execute-action', action: blocked, actorEntityId: 'hero' },
+        { type: 'execute-action', action: hardCost, actorEntityId: 'hero' },
         options,
       );
-      // Fill Life mid-run so requiredFinished cannot happen at complete
+      // Drain Life mid-run so the hard Finished toll cannot happen at complete
       state = upsertEntity(state, {
         ...state.entities.get('hero')!,
-        pools: { Life: 5 },
+        pools: { Life: 0 },
       });
       const key = continuousProgressKey({
         actorEntityId: 'hero',
-        actionName: 'fill',
+        actionName: 'pay-on-finish',
       });
       state = reduceEngineState(state, { type: 'tick', steps: 2 }, options);
       expect(state.continuousActions.has(key)).toBe(false);
       expect(state.continuousProgress.get(key)?.progress).toBeGreaterThan(0);
-      expect(selectPoolCurrent(state.entities.get('hero')!, 'Life')).toBe(5);
+      expect(selectPoolCurrent(state.entities.get('hero')!, 'Life')).toBe(0);
     });
   });
 

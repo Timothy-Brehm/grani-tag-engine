@@ -93,6 +93,20 @@ export type UpToGateReport = {
   readonly pools: PoolAnalysis;
 };
 
+/**
+ * Applyable harness seed derived from a reachable slice: held tags, spawnable
+ * entity defs, aggregated max stats/pools, and pool currents filled to max.
+ */
+export type MaterializedReachableSeed = {
+  readonly tags: readonly string[];
+  readonly entityDefinitionIds: readonly string[];
+  readonly actions: readonly AnalyzerActionKey[];
+  readonly netStat: Readonly<Record<string, number>>;
+  readonly netPoolMax: Readonly<Record<string, number>>;
+  /** Pool currents filled to {@link netPoolMax} (harness “full pools”). */
+  readonly poolCurrents: Readonly<Record<string, number>>;
+};
+
 export type BlockValidation = {
   readonly blockId: string;
   readonly ok: boolean;
@@ -737,6 +751,73 @@ export function analyzeUpToGate(
     },
     pools: analyzeInfinitePools(graph, before),
   };
+}
+
+/**
+ * Turn a reachable slice into an applyable seed for debug harness / fixtures:
+ * tags held, entity defs to spawn, net max stats/pools, currents = max.
+ */
+export function materializeReachableSlice(
+  graph: ContentGraph,
+  slice: ReachableSlice,
+): MaterializedReachableSeed {
+  const netStat: Record<string, number> = {};
+  const netPoolMax: Record<string, number> = {};
+
+  for (const name of slice.tags) {
+    const tag = graph.tagsByName.get(name);
+    if (!tag) continue;
+    for (const effect of tag.effects) {
+      if (effect.type === 'stat' && typeof effect.stat === 'string') {
+        netStat[effect.stat] = (netStat[effect.stat] ?? 0) + effect.strength;
+      }
+      if (effect.type === 'pool-max' && typeof effect.pool === 'string') {
+        netPoolMax[effect.pool] =
+          (netPoolMax[effect.pool] ?? 0) + effect.strength;
+      }
+    }
+  }
+
+  const poolCurrents: Record<string, number> = {};
+  for (const [pool, max] of Object.entries(netPoolMax)) {
+    if (max > 0) {
+      poolCurrents[pool] = max;
+    }
+  }
+
+  return {
+    tags: Object.freeze([...slice.tags].sort()),
+    entityDefinitionIds: Object.freeze([...slice.entityDefs].sort()),
+    actions: Object.freeze([...slice.actions].sort()),
+    netStat: Object.freeze({ ...netStat }),
+    netPoolMax: Object.freeze({ ...netPoolMax }),
+    poolCurrents: Object.freeze({ ...poolCurrents }),
+  };
+}
+
+/** Reachable analysis plus {@link materializeReachableSlice}. */
+export function analyzeReachableMaterialized(
+  registry: EngineRegistry,
+  options: AnalyzeOptions = {},
+): MaterializedReachableSeed {
+  const graph = buildContentGraph(registry, options);
+  const slice = analyzeReachable(graph, options);
+  return materializeReachableSlice(graph, slice);
+}
+
+/**
+ * Materialize the reachable slice *before* crossing a gate (same boundary as
+ * {@link analyzeUpToGate}.before).
+ */
+export function analyzeUpToGateMaterialized(
+  registry: EngineRegistry,
+  gateId: string,
+  options: AnalyzeOptions = {},
+): MaterializedReachableSeed | undefined {
+  const report = analyzeUpToGate(registry, gateId, options);
+  if (!report) return undefined;
+  const graph = buildContentGraph(registry, options);
+  return materializeReachableSlice(graph, report.before);
 }
 
 function blockMemberTags(
