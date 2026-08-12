@@ -1,9 +1,17 @@
 import type { EntityScope } from './entity';
+import type { EffectApplyDuring } from './progress-window';
+
+export type { EffectApplyDuring } from './progress-window';
 
 export interface ActiveEffect {
   readonly type: string;
   readonly name: string;
   readonly strength: number;
+  /**
+   * Over-time only: limit when this effect applies within the cycle
+   * (first / last / middle as ticks or %). Ignored on Immediate / Finished.
+   */
+  readonly applyDuring?: EffectApplyDuring;
 }
 
 export type AdjustPoolEffect = ActiveEffect & {

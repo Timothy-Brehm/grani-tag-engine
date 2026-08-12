@@ -464,7 +464,7 @@ Hosts may author that grant as **“Locks”** as a **presentation hint** (toolt
 
 **Commands:** `select-slot-item` (assign a held tag—on any entity—into a selectable slot on the owner)
 
-**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `reserve-pool`, `reserve-stat`, `cross-link`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed` (optional `actionTypes`), `reduce*Effect` / `enhance*Effect` (per recipe slot; see [action-types.md](./action-types.md))
+**Tag passives** (from **active** tags): `stat`, `pool-max`, `generate-pool`, `pool-generate-floor`, `reserve-pool`, `reserve-stat`, `cross-link`, `continuous-slots`, `allow-instant-while-continuous`, `continuous-speed` (optional `actionTypes`), `reduce*Effect` / `enhance*Effect` (per recipe slot; see [action-types.md](./action-types.md))
 
 See [action-types.md](./action-types.md) for Types + apply-time improvements (speed / yield / cost relief).
 
@@ -480,7 +480,17 @@ Tag passive peer to `stat` / `pool-max`:
 { type: 'generate-pool', pool: 'Stamina', amount: 1, everyTicks: 5, strength: 1, name: '…' }
 ```
 
-On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and stamp `entity.metrics.generatorLastTick['tagName::pool']`. If the pool is full, **skip** and do **not** advance lastPulse.
+On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and stamp `entity.metrics.generatorLastTick['tagName::pool']`. If the pulse is skipped (full / empty / outside band), **do not** advance lastPulse.
+
+**Available bands** (optional on the same effect):
+
+| Field | Role |
+|-------|------|
+| `whileAvailableAbove` / `whileAvailableBelow` | Absolute Available bounds |
+| `whileAvailableAbovePercent` / `whileAvailableBelowPercent` | Bounds as % of effective Max (0..100) |
+| `pool-generate-floor` (separate passive) | Sums into the lower bound for **negative** regen (sealed storage) |
+
+Positive pulses require Available **≥** lower bound and **<** upper bound, and clamp so they never cross the upper edge. Negative pulses require Available **>** lower bound and clamp to it. See patterns 9–12 below.
 
 ### Continuous actions
 
@@ -496,6 +506,7 @@ On each `tick`, if due and the pool has room, apply `amount` (or `strength`) and
 - Slots: `continuous-slots` strength (default max active 1). Busy lock blocks duration-1 starts while any job is active unless `allow-instant-while-continuous`
 - Speed: `continuous-speed` with `addTicks` then `multiply`/`divide`, `generatorCount` progress per tick; filter by `actionName` and/or `actionTypes`; effective duration min 1
 - Magnitude mods: `reduce*Effect` / `enhance*Effect` per recipe **phase** — apply-time only (see [action-types.md](./action-types.md); [UPGRADING.md](../UPGRADING.md))
+- **OT progress windows:** optional `applyDuring` on over-time effects — `first` / `last` / `middle` as ticks or % of the cycle. Strength is the **total for the window**; each tick pays by overlap (partial ticks at boundaries). Half-open `[lo, hi)` except `last` includes completion (`[start, 100]`). Ignored on Immediate / Finished.
 - **Known limitation (TODO):** `continuous-slots` max is enforced at **start** only. If max drops mid-run (unequip / slot swap / losing the passive), already-active jobs are **not** paused or culled. Fix later: pause or refuse advance when `activeCount > newMax`.
 
 ---
@@ -722,6 +733,45 @@ Blocks often sit *inside* a tier region (a path’s benefits may be a block). Re
 - Catalog tag `badge_totalkills`: `label` / `displayText` / `image` for badge title and blurb; typically **no** stat/pool effects (pure presence).
 - Host lists tags matching `badge_*` (or an explicit badge list) wherever badges should appear.
 - Optional first-earn flash: `novelty: { seenTag: 'message_badge_totalkills' }` on the badge tag, with `message_badge_totalkills.displayText` for a modal; or omit novelty if appearing in the badge list is enough.
+
+### 9. Sealed + leaky storage — waterskins
+
+**Intent:** one `Water` pool; most capacity is sealed (no evaporate), one unit is leaky.
+
+**Composition:**
+- Nine sealed skins: each `pool-max` Water +1 and `pool-generate-floor` Water +1
+- One leaky skin: `pool-max` Water +1 only
+- Keep `Pool_WaterEvaporate` (`generate-pool` negative) — prefer **add** floor tags, do not remove evaporate
+
+**Assert:** max 10, floor 9; Available evaporates down to 9 and stops.
+
+### 10. Shield regen to 10% of max
+
+**Intent:** passive shield recharge that tops out at a fraction of Max.
+
+```ts
+{ type: 'generate-pool', pool: 'Shield', amount: 2, everyTicks: 1,
+  whileAvailableBelowPercent: 10, strength: 2, name: '…' }
+```
+
+### 11. Battery trickle in the middle band
+
+**Intent:** natural charge toward 50% only when already at least 5% (dead packs need a jump-start).
+
+```ts
+{ type: 'generate-pool', pool: 'Battery', amount: 5, everyTicks: 1,
+  whileAvailableAbovePercent: 5, whileAvailableBelowPercent: 50,
+  strength: 5, name: '…' }
+```
+
+### 12. Hover point — Stamina recover up / decay down
+
+**Intent:** natural rest toward 100; potion overcharge decays back to 100.
+
+| Tag | Effect |
+|-----|--------|
+| Recover | `generate-pool` +, `whileAvailableBelow: 100` |
+| Decay | `generate-pool` −, `whileAvailableAbove: 100` |
 
 ---
 

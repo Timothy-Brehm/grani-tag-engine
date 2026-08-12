@@ -3,6 +3,7 @@ export type {
   TagEffectJSON,
   TagJSON,
   RequirementJSON,
+  EffectApplyDuringJSON,
   ActiveEffectJSON,
   ActionDefinitionJSON,
   EntityDefinitionJSON,

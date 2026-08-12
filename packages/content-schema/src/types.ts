@@ -91,6 +91,14 @@ export type RequirementJSON =
       scope?: EntityScope;
     };
 
+export type EffectApplyDuringJSON =
+  | { mode: 'first'; ticks: number }
+  | { mode: 'first'; percent: number }
+  | { mode: 'last'; ticks: number }
+  | { mode: 'last'; percent: number }
+  | { mode: 'middle'; fromTicks: number; toTicks: number }
+  | { mode: 'middle'; fromPercent: number; toPercent: number };
+
 export type ActiveEffectJSON =
   | {
       type: 'adjust-pool';
@@ -100,18 +108,21 @@ export type ActiveEffectJSON =
       poolTypes?: string[];
       createPool?: boolean;
       scope?: EntityScope;
+      applyDuring?: EffectApplyDuringJSON;
     }
   | {
       type: 'grant-tag';
       name: string;
       strength: number;
       scope?: EntityScope;
+      applyDuring?: EffectApplyDuringJSON;
     }
   | {
       type: 'lock-tag';
       name: string;
       strength: number;
       scope?: EntityScope;
+      applyDuring?: EffectApplyDuringJSON;
     }
   | {
       type: 'spawn-entity';
@@ -119,12 +130,14 @@ export type ActiveEffectJSON =
       strength: number;
       definitionId: string;
       entityId?: string;
+      applyDuring?: EffectApplyDuringJSON;
     }
   | {
       type: 'remove-entity';
       name: string;
       strength: number;
       scope?: EntityScope;
+      applyDuring?: EffectApplyDuringJSON;
     };
 
 export type ActionDefinitionJSON = {

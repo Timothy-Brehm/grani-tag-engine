@@ -195,8 +195,12 @@ function firstOverTimeFractionPayable<THost>(
   return canPayRequiredOverTimeSlice(
     registry,
     action,
-    deltaProgress / 100,
-    false,
+    {
+      progressBefore: 0,
+      progressAfter: deltaProgress,
+      durationTicks: D,
+      includeNonPool: false,
+    },
     context,
   );
 }
@@ -290,11 +294,31 @@ export function isActionContinuable<THost>(
     return false;
   }
 
+  const actorEntityId =
+    context.actorEntityId ?? context.engine.primaryEntityId;
+  const actor = context.engine.entities.get(actorEntityId);
+  if (!actor) {
+    return false;
+  }
+  const baseDuration = actionDurationTicks(action);
+  const D = selectEffectiveDurationTicks(
+    actor,
+    action.name,
+    baseDuration,
+    registry,
+    context.engine.entities,
+    action.types,
+  );
+
   return canPayRequiredOverTimeSlice(
     registry,
     action,
-    deltaProgress / 100,
-    false,
+    {
+      progressBefore: progress,
+      progressAfter: roundContinuousProgress(progress + deltaProgress),
+      durationTicks: D,
+      includeNonPool: false,
+    },
     context,
   );
 }
@@ -317,17 +341,37 @@ export function isActionFinishable<THost>(
   }
 
   const settleFraction = Math.max(0, (100 - progress) / 100);
-  if (
-    settleFraction > 1e-9 &&
-    !canPayRequiredOverTimeSlice(
+  if (settleFraction > 1e-9) {
+    const actorEntityId =
+      context.actorEntityId ?? context.engine.primaryEntityId;
+    const actor = context.engine.entities.get(actorEntityId);
+    if (!actor) {
+      return false;
+    }
+    const baseDuration = actionDurationTicks(action);
+    const D = selectEffectiveDurationTicks(
+      actor,
+      action.name,
+      baseDuration,
       registry,
-      action,
-      settleFraction,
-      true,
-      context,
-    )
-  ) {
-    return false;
+      context.engine.entities,
+      action.types,
+    );
+    if (
+      !canPayRequiredOverTimeSlice(
+        registry,
+        action,
+        {
+          progressBefore: progress,
+          progressAfter: 100,
+          durationTicks: D,
+          includeNonPool: true,
+        },
+        context,
+      )
+    ) {
+      return false;
+    }
   }
 
   const requiredFinished = liveSlot(

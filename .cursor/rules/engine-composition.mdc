@@ -43,8 +43,8 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
    | required finished | `requiredFinishedEffects` | On complete | Empty-or-payable (all); then always applied |
    | optional finished | `optionalFinishedEffects` | On complete | Only if `canHappen` |
 
-   `durationTicks` omitted ⇒ 1. `repeatWhileAvailable` re-arms at 0% after complete while still **startable** (one cycle per later tick). Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`.
-8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Resource regen uses `generate-pool` / `cross-link` `toGeneratePool` tag passives, not fake idle entities. Growing pool capacity as a repeatable action over time uses a **product tag** on a `cross-link` to track the total addition to the unbound pool. This is in addition to standard tags that increase capacity for one-off boosts.
+   `durationTicks` omitted ⇒ 1. `repeatWhileAvailable` re-arms at 0% after complete while still **startable** (one cycle per later tick). Magnitude filters: `actionName` / `actionTypes`, optional `pool` / `poolTypes`. OT effects may set **`applyDuring`** (`first` / `last` / `middle`, ticks or %) — windowed strength is total for the window; partial ticks at boundaries.
+8. **Processes reuse actions** — automation should run the same recipes, not idle minting (when processes exist). Resource regen uses `generate-pool` / `cross-link` `toGeneratePool` tag passives, not fake idle entities. Band regen with `whileAvailableAbove`/`Below` (absolute or `…Percent` of Max); sealed floors via **`pool-generate-floor`**. Growing pool capacity as a repeatable action over time uses a **product tag** on a `cross-link` to track the total addition to the unbound pool. This is in addition to standard tags that increase capacity for one-off boosts.
 9. **Host owns presentation** — no React, cards, sheets, or layout in the core package (badges read engine novelty flags).
 10. **Stay genre-neutral** — APIs must work for colony, wizard, life-sim, etc.; keep theme in host content. Specific option lists live in the host. Composition docs show **reusable patterns** (how to combine builtins), not engine-owned theme packs—for example:
     - tiers
@@ -53,6 +53,7 @@ When changing engine APIs, builtins, schemas, or advising how a host should mode
     - pool reservation / constrained selection
     - assignable capacities (converter commit/provide)
     - stats/pools cross-links + capacity steps
+    - generate-pool bands / sealed floors / OT `applyDuring` windows
     - engine generation tools (pathing analyzer, debug-content, …)
 
 ## Vocabulary

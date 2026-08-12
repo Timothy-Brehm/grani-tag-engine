@@ -76,6 +76,14 @@ Startable / continuable / finishable with **empty-or-payable** leftover hard eff
 
 Replaces draft `action-cost-bonus` / `action-result-bonus` if you used those names on this branch.
 
+### OT progress windows + generate-pool bands (new)
+
+**`ActiveEffect.applyDuring`** (over-time slots only): `{ mode: 'first'|'last'|'middle', … }` with ticks or percent. Strength is total for the window; each tick pays by progress overlap (partial ticks at boundaries).
+
+**`buildOverTimeSlice` / `canPayRequiredOverTimeSlice` signature change:** pass an `OverTimeProgressSlice` `{ progressBefore, progressAfter, durationTicks, includeNonPool }` instead of `(fraction, includeNonPool)`.
+
+**`generate-pool` bands:** `whileAvailableAbove` / `Below` (absolute) and `…Percent` (of Max); plus `pool-generate-floor` passives for sealed capacity under negative regen. See [engine-composition.md](./design/engine-composition.md) patterns 9–12.
+
 ### Types (new, optional)
 
 `types?: string[]` on actions, pools, stats. Type-filtered passives / expand (`poolTypes`, `statTypes`, `actionTypes`). See `docs/design/action-types.md`.
