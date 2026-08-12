@@ -33,6 +33,8 @@ Effects may target **ids** (`pool: 'Water'`) and/or **Types** (`poolTypes: ['Liq
 | `requiredFinishedEffects` | On complete | Always applied |
 | `optionalFinishedEffects` | On complete | Only if `canHappen` |
 
+Optional on OT effects: `applyDuring` — `first` / `last` / `middle` (ticks or % of cycle). Windowed strength is the total for that window; mid-tick boundaries pay partial amounts. Ignored on Immediate / Finished.
+
 Any signed `adjust-pool` may appear in any slot (symmetry). Host fiction may call them costs/benefits.
 
 ---

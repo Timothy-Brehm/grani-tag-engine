@@ -136,7 +136,25 @@ export type {
   ReservePoolEffect,
   ReserveStatEffect,
   SpawnEntityEffect,
+  EffectApplyDuring,
 } from './effect';
+
+export type {
+  OverTimeProgressSlice,
+  ResolvedProgressWindow,
+} from './progress-window';
+export {
+  resolveApplyDuring,
+  progressWindowOverlap,
+  progressWindowWidth,
+  overTimePayFractionForEffect,
+} from './progress-window';
+
+export type { GeneratePoolBand, GeneratePoolBandFields } from './generate-pool-band';
+export {
+  resolveGeneratePoolBand,
+  clampGeneratePoolAmount,
+} from './generate-pool-band';
 
 export type { ActionDefinition, RequirementCheck } from './action';
 

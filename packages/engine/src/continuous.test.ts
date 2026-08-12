@@ -683,4 +683,255 @@ describe('generators and continuous actions', () => {
     expect(state.continuousActions.has(key)).toBe(false);
     expect(state.continuousProgress.has(key)).toBe(true);
   });
+
+  it('applyDuring first percent: partial tick at boundary pays proportional OT', () => {
+    // D=10; first 75%; window total Stamina −75 ⇒ 10 per full tick, 5 on 70→80.
+    const action: ActionDefinition = {
+      name: 'windowed-work',
+      durationTicks: 10,
+      requirements: [{ type: 'free' }],
+      requiredImmediateEffects: [],
+      requiredOverTimeEffects: [
+        {
+          type: 'adjust-pool',
+          name: 'work',
+          strength: -75,
+          pool: 'Stamina',
+          applyDuring: { mode: 'first', percent: 75 },
+        },
+      ],
+      requiredFinishedEffects: [],
+      optionalFinishedEffects: [],
+    };
+    const hero = createTaggedEntity({
+      id: 'hero',
+      tags: [
+        createTag({
+          name: 'Pool_Initial_Stamina',
+          effects: [
+            {
+              type: 'pool-max',
+              name: 'Stamina',
+              strength: 100,
+              pool: 'Stamina',
+            },
+          ],
+        }),
+      ],
+    });
+    let state = createPrimaryEngineState({
+      ...hero,
+      pools: { Stamina: 100 },
+    });
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'windowed-work',
+    });
+    for (let i = 0; i < 7; i += 1) {
+      state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    }
+    expect(continuousProgressPercent(state.continuousProgress.get(key)!)).toBe(
+      70,
+    );
+    const before = selectPoolCurrent(state.entities.get('hero')!, 'Stamina');
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    const after = selectPoolCurrent(state.entities.get('hero')!, 'Stamina');
+    expect(before - after).toBeCloseTo(5, 5);
+    expect(continuousProgressPercent(state.continuousProgress.get(key)!)).toBe(
+      80,
+    );
+  });
+
+  it('ten waterskins one leaky: evaporate stops at sealed floor', () => {
+    const sealed = Array.from({ length: 9 }, (_, i) =>
+      createTag({
+        name: `Item_Waterskin_Sealed_${i}`,
+        effects: [
+          { type: 'pool-max', name: 'Water', strength: 1, pool: 'Water' },
+          {
+            type: 'pool-generate-floor',
+            name: 'Water',
+            strength: 1,
+            pool: 'Water',
+          },
+        ],
+      }),
+    );
+    const leaky = createTag({
+      name: 'Item_Waterskin_Leaky',
+      effects: [
+        { type: 'pool-max', name: 'Water', strength: 1, pool: 'Water' },
+      ],
+    });
+    const evaporate = createTag({
+      name: 'Pool_WaterEvaporate',
+      effects: [
+        {
+          type: 'generate-pool',
+          name: 'evaporate',
+          strength: -0.5,
+          pool: 'Water',
+          amount: -0.5,
+          everyTicks: 1,
+        },
+      ],
+    });
+    const hero = createTaggedEntity({
+      id: 'hero',
+      tags: [...sealed, leaky, evaporate],
+    });
+    let state = createPrimaryEngineState({
+      ...hero,
+      pools: { Water: 10 },
+    });
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Water')).toBe(9.5);
+    state = reduceEngineState(state, { type: 'tick', steps: 20 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Water')).toBe(9);
+  });
+
+  it('shield regenerates up to 10% of max', () => {
+    const hero = createTaggedEntity({
+      id: 'hero',
+      tags: [
+        createTag({
+          name: 'Pool_Initial_Shield',
+          effects: [
+            {
+              type: 'pool-max',
+              name: 'Shield',
+              strength: 100,
+              pool: 'Shield',
+            },
+          ],
+        }),
+        createTag({
+          name: 'Shield_PassiveRegen',
+          effects: [
+            {
+              type: 'generate-pool',
+              name: 'shield-regen',
+              strength: 2,
+              pool: 'Shield',
+              amount: 2,
+              everyTicks: 1,
+              whileAvailableBelowPercent: 10,
+            },
+          ],
+        }),
+      ],
+    });
+    let state = createPrimaryEngineState({
+      ...hero,
+      pools: { Shield: 0 },
+    });
+    state = reduceEngineState(state, { type: 'tick', steps: 20 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Shield')).toBe(10);
+  });
+
+  it('battery trickle charges 5%–50% only', () => {
+    const batteryTags = [
+      createTag({
+        name: 'Pool_Initial_Battery',
+        effects: [
+          {
+            type: 'pool-max',
+            name: 'Battery',
+            strength: 100,
+            pool: 'Battery',
+          },
+        ],
+      }),
+      createTag({
+        name: 'Battery_TrickleCharge',
+        effects: [
+          {
+            type: 'generate-pool',
+            name: 'trickle',
+            strength: 5,
+            pool: 'Battery',
+            amount: 5,
+            everyTicks: 1,
+            whileAvailableAbovePercent: 5,
+            whileAvailableBelowPercent: 50,
+          },
+        ],
+      }),
+    ];
+    let dead = createPrimaryEngineState({
+      ...createTaggedEntity({ id: 'hero', tags: batteryTags }),
+      pools: { Battery: 0 },
+    });
+    dead = reduceEngineState(dead, { type: 'tick', steps: 5 }, options);
+    expect(selectPoolCurrent(dead.entities.get('hero')!, 'Battery')).toBe(0);
+
+    let state = createPrimaryEngineState({
+      ...createTaggedEntity({ id: 'hero', tags: batteryTags }),
+      pools: { Battery: 5 },
+    });
+    state = reduceEngineState(state, { type: 'tick', steps: 20 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Battery')).toBe(50);
+  });
+
+  it('stamina hover at 100: recover up and decay from overcharge', () => {
+    const tags = [
+      createTag({
+        name: 'Pool_Initial_Stamina',
+        effects: [
+          {
+            type: 'pool-max',
+            name: 'Stamina',
+            strength: 200,
+            pool: 'Stamina',
+          },
+        ],
+      }),
+      createTag({
+        name: 'Stamina_RecoverToHover',
+        effects: [
+          {
+            type: 'generate-pool',
+            name: 'recover',
+            strength: 5,
+            pool: 'Stamina',
+            amount: 5,
+            everyTicks: 1,
+            whileAvailableBelow: 100,
+          },
+        ],
+      }),
+      createTag({
+        name: 'Stamina_DecayFromOvercharge',
+        effects: [
+          {
+            type: 'generate-pool',
+            name: 'decay',
+            strength: -5,
+            pool: 'Stamina',
+            amount: -5,
+            everyTicks: 1,
+            whileAvailableAbove: 100,
+          },
+        ],
+      }),
+    ];
+    let low = createPrimaryEngineState({
+      ...createTaggedEntity({ id: 'hero', tags }),
+      pools: { Stamina: 80 },
+    });
+    low = reduceEngineState(low, { type: 'tick', steps: 10 }, options);
+    expect(selectPoolCurrent(low.entities.get('hero')!, 'Stamina')).toBe(100);
+
+    let high = createPrimaryEngineState({
+      ...createTaggedEntity({ id: 'hero', tags }),
+      pools: { Stamina: 130 },
+    });
+    high = reduceEngineState(high, { type: 'tick', steps: 10 }, options);
+    expect(selectPoolCurrent(high.entities.get('hero')!, 'Stamina')).toBe(100);
+  });
 });

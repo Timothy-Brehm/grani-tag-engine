@@ -42,6 +42,29 @@ export interface TagEffect {
    * Default false for passives.
    */
   readonly createPool?: boolean;
+  /**
+   * On `generate-pool`: only pulse while Available is above this absolute value.
+   * Negative pulses clamp so Available never goes below this bound.
+   */
+  readonly whileAvailableAbove?: number;
+  /**
+   * On `generate-pool`: only pulse while Available is below this absolute value.
+   * Positive pulses clamp so Available never goes above this bound.
+   */
+  readonly whileAvailableBelow?: number;
+  /**
+   * On `generate-pool`: like {@link whileAvailableAbove} but as % of effective Max (0..100).
+   */
+  readonly whileAvailableAbovePercent?: number;
+  /**
+   * On `generate-pool`: like {@link whileAvailableBelow} but as % of effective Max (0..100).
+   */
+  readonly whileAvailableBelowPercent?: number;
+  /**
+   * On `pool-generate-floor`: contributes `strength` to the sealed floor for `pool`.
+   * Negative `generate-pool` pulses respect the summed floor.
+   */
+  // (type discriminator is effect.type === 'pool-generate-floor')
   /** Optional action name filter (`*` or omit = all names). */
   readonly actionName?: string;
   /** Optional action Types filter (intersection). */

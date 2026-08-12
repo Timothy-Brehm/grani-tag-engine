@@ -176,6 +176,48 @@
         }
       ]
     },
+    "EffectApplyDuring": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["mode", "ticks"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["first", "last"] },
+            "ticks": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["mode", "percent"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["first", "last"] },
+            "percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["mode", "fromTicks", "toTicks"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "const": "middle" },
+            "fromTicks": { "type": "number", "minimum": 0 },
+            "toTicks": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["mode", "fromPercent", "toPercent"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "const": "middle" },
+            "fromPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+            "toPercent": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        }
+      ]
+    },
     "ActiveEffect": {
       "type": "object",
       "required": ["type", "name", "strength"],
@@ -191,7 +233,8 @@
               "items": { "type": "string" }
             },
             "createPool": { "type": "boolean" },
-            "scope": { "$ref": "#/definitions/EntityScope" }
+            "scope": { "$ref": "#/definitions/EntityScope" },
+            "applyDuring": { "$ref": "#/definitions/EffectApplyDuring" }
           },
           "required": ["type", "name", "strength"],
           "anyOf": [
@@ -205,7 +248,8 @@
             "type": { "const": "grant-tag" },
             "name": { "type": "string" },
             "strength": { "type": "number" },
-            "scope": { "$ref": "#/definitions/EntityScope" }
+            "scope": { "$ref": "#/definitions/EntityScope" },
+            "applyDuring": { "$ref": "#/definitions/EffectApplyDuring" }
           },
           "required": ["type", "name", "strength"],
           "additionalProperties": false
@@ -215,7 +259,8 @@
             "type": { "const": "lock-tag" },
             "name": { "type": "string" },
             "strength": { "type": "number" },
-            "scope": { "$ref": "#/definitions/EntityScope" }
+            "scope": { "$ref": "#/definitions/EntityScope" },
+            "applyDuring": { "$ref": "#/definitions/EffectApplyDuring" }
           },
           "required": ["type", "name", "strength"],
           "additionalProperties": false
@@ -226,7 +271,8 @@
             "name": { "type": "string" },
             "strength": { "type": "number" },
             "definitionId": { "type": "string" },
-            "entityId": { "type": "string" }
+            "entityId": { "type": "string" },
+            "applyDuring": { "$ref": "#/definitions/EffectApplyDuring" }
           },
           "required": ["type", "name", "strength", "definitionId"],
           "additionalProperties": false
@@ -236,7 +282,8 @@
             "type": { "const": "remove-entity" },
             "name": { "type": "string" },
             "strength": { "type": "number" },
-            "scope": { "$ref": "#/definitions/EntityScope" }
+            "scope": { "$ref": "#/definitions/EntityScope" },
+            "applyDuring": { "$ref": "#/definitions/EffectApplyDuring" }
           },
           "required": ["type", "name", "strength"],
           "additionalProperties": false

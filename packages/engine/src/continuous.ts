@@ -36,6 +36,14 @@ import {
   isActionFinishable,
   isActionStartable,
 } from './action-availability';
+import {
+  clampGeneratePoolAmount,
+  resolveGeneratePoolBand,
+} from './generate-pool-band';
+import {
+  overTimePayFractionForEffect,
+  type OverTimeProgressSlice,
+} from './progress-window';
 
 import {
   continuousProgressKey,
@@ -47,6 +55,8 @@ import {
   type ContinuousProgressMap,
   type ContinuousProgressRecord,
 } from './continuous-types';
+
+export type { OverTimeProgressSlice } from './progress-window';
 
 export type {
   ContinuousActionSnapshot,
@@ -367,26 +377,27 @@ function applyOptionalEffectList<THost>(
 }
 
 /**
- * Build the over-time cost slice for a progress fraction.
+ * Build the over-time cost slice for a progress step.
+ * Per-effect pay fraction: unwindowed = Δprogress/100; windowed = overlap/windowWidth.
  * `adjust-pool` is strength-scaled; other types apply only when `includeNonPool`
- * (used on cycle completion settle).
+ * and the effect’s window overlaps this step (completion settle).
  */
 export function buildOverTimeSlice(
   effects: readonly ActiveEffect[],
-  fraction: number,
-  includeNonPool: boolean,
+  slice: OverTimeProgressSlice,
 ): ActiveEffect[] {
-  if (fraction <= 0) {
-    return [];
-  }
   const out: ActiveEffect[] = [];
   for (const effect of effects) {
+    const fraction = overTimePayFractionForEffect(effect.applyDuring, slice);
     if (effect.type === 'adjust-pool') {
+      if (fraction <= 0) {
+        continue;
+      }
       const scaled = scaleEffectStrength(effect, fraction);
       if (scaled.strength !== 0) {
         out.push(scaled);
       }
-    } else if (includeNonPool) {
+    } else if (slice.includeNonPool && fraction > 0) {
       out.push(effect);
     }
   }
@@ -403,16 +414,11 @@ export function canPayRequiredOverTimeSlice<THost>(
     readonly types?: readonly string[];
     readonly requiredOverTimeEffects?: readonly ActiveEffect[];
   },
-  fraction: number,
-  includeNonPool: boolean,
+  slice: OverTimeProgressSlice,
   context: EngineContext<THost>,
 ): boolean {
   const requiredSlice = liveSlotEffects(
-    buildOverTimeSlice(
-      action.requiredOverTimeEffects ?? [],
-      fraction,
-      includeNonPool,
-    ),
+    buildOverTimeSlice(action.requiredOverTimeEffects ?? [], slice),
     'requiredOverTimeEffects',
     action,
     context,
@@ -428,27 +434,14 @@ export function canPayRequiredOverTimeSlice<THost>(
 function tryApplyOverTimeProgress<THost>(
   registry: EngineRegistry<THost>,
   action: ActionDefinition<Requirement, ActiveEffect, unknown>,
-  fraction: number,
-  includeNonPool: boolean,
+  slice: OverTimeProgressSlice,
   context: EngineContext<THost>,
 ): EngineContext<THost> | null {
-  if (
-    !canPayRequiredOverTimeSlice(
-      registry,
-      action,
-      fraction,
-      includeNonPool,
-      context,
-    )
-  ) {
+  if (!canPayRequiredOverTimeSlice(registry, action, slice, context)) {
     return null;
   }
   const requiredSlice = liveSlotEffects(
-    buildOverTimeSlice(
-      action.requiredOverTimeEffects ?? [],
-      fraction,
-      includeNonPool,
-    ),
+    buildOverTimeSlice(action.requiredOverTimeEffects ?? [], slice),
     'requiredOverTimeEffects',
     action,
     context,
@@ -459,11 +452,7 @@ function tryApplyOverTimeProgress<THost>(
     next = applyEffectList(registry, requiredSlice, next);
   }
   const optionalSlice = liveSlotEffects(
-    buildOverTimeSlice(
-      action.optionalOverTimeEffects ?? [],
-      fraction,
-      includeNonPool,
-    ),
+    buildOverTimeSlice(action.optionalOverTimeEffects ?? [], slice),
     'optionalOverTimeEffects',
     action,
     next,
@@ -890,14 +879,18 @@ function advanceOneJob<THost>(
     return pauseContinuousAction(state, progressKey);
   }
 
-  const payFraction = willComplete
-    ? roundContinuousProgress(100 - record.progress) / 100
-    : deltaProgress / 100;
+  const progressAfter = willComplete
+    ? 100
+    : roundContinuousProgress(record.progress + deltaProgress);
   const applied = tryApplyOverTimeProgress(
     options.registry,
     action,
-    payFraction,
-    willComplete,
+    {
+      progressBefore: record.progress,
+      progressAfter,
+      durationTicks: D,
+      includeNonPool: willComplete,
+    },
     ctx,
   );
   if (!applied) {
@@ -905,9 +898,7 @@ function advanceOneJob<THost>(
   }
   ctx = applied;
 
-  const nextProgress = willComplete
-    ? 100
-    : roundContinuousProgress(record.progress + deltaProgress);
+  const nextProgress = progressAfter;
 
   let nextState = withContinuousState(ctx.engine, {
     continuousProgress: upsertProgress(ctx.engine.continuousProgress, {
@@ -986,11 +977,28 @@ function completeContinuousJob<THost>(
 
   const settleFraction = Math.max(0, (100 - record.progress) / 100);
   if (settleFraction > 1e-9) {
+    const actorEntityId = record.actorEntityId;
+    const actorEnt = ctx.engine.entities.get(actorEntityId);
+    const baseDuration = actionDurationTicks(action);
+    const D = actorEnt
+      ? selectEffectiveDurationTicks(
+          actorEnt,
+          action.name,
+          baseDuration,
+          options.registry,
+          ctx.engine.entities,
+          action.types,
+        )
+      : baseDuration;
     const settled = tryApplyOverTimeProgress(
       options.registry,
       action,
-      settleFraction,
-      true,
+      {
+        progressBefore: record.progress,
+        progressAfter: 100,
+        durationTicks: D,
+        includeNonPool: true,
+      },
       ctx,
     );
     if (settled) {
@@ -1150,11 +1158,39 @@ export function pulseGenerators(
       changed = true;
     };
 
+    const sumPoolGenerateFloor = (pool: string): number => {
+      let sum = 0;
+      for (const tag of selectActiveTags(
+        entity!,
+        registry,
+        entities,
+        activeOpts,
+      )) {
+        for (const effect of tag.effects) {
+          if (
+            effect.type === 'pool-generate-floor' &&
+            effect.pool === pool &&
+            typeof effect.strength === 'number' &&
+            Number.isFinite(effect.strength)
+          ) {
+            sum += effect.strength;
+          }
+        }
+      }
+      return sum;
+    };
+
     const tryPulseAvailable = (
       pool: string,
       amount: number,
       key: string,
       createPool: boolean,
+      bandFields: {
+        readonly whileAvailableAbove?: number;
+        readonly whileAvailableBelow?: number;
+        readonly whileAvailableAbovePercent?: number;
+        readonly whileAvailableBelowPercent?: number;
+      } = {},
     ): boolean => {
       const cur = selectPoolAvailable(entity!, pool);
       const availableMax = selectPoolAvailableMax(
@@ -1164,17 +1200,26 @@ export function pulseGenerators(
         registry,
         universalTags,
       );
-      if (amount > 0 && cur >= availableMax) {
-        return false;
-      }
-      if (amount < 0 && cur <= 0) {
+      const floorSum = sumPoolGenerateFloor(pool);
+      const band = resolveGeneratePoolBand(
+        bandFields,
+        availableMax,
+        amount < 0 ? floorSum : 0,
+      );
+      // Also respect natural empty/full when no tighter band.
+      const effectiveHi = Number.isFinite(band.hi)
+        ? Math.min(band.hi, availableMax)
+        : availableMax;
+      const effectiveBand = { lo: band.lo, hi: effectiveHi };
+      const clamped = clampGeneratePoolAmount(cur, amount, effectiveBand);
+      if (clamped === 0) {
         return false;
       }
       const adjusted = tryAdjustEntityPool(
         next,
         entity!,
         pool,
-        amount,
+        clamped,
         registry,
         universalTags,
         next.tick,
@@ -1242,6 +1287,12 @@ export function pulseGenerators(
               amount,
               key,
               effect.createPool === true,
+              {
+                whileAvailableAbove: effect.whileAvailableAbove,
+                whileAvailableBelow: effect.whileAvailableBelow,
+                whileAvailableAbovePercent: effect.whileAvailableAbovePercent,
+                whileAvailableBelowPercent: effect.whileAvailableBelowPercent,
+              },
             );
           }
           continue;
@@ -1275,6 +1326,12 @@ export function pulseGenerators(
               pulseAmount,
               key,
               effect.createPool === true,
+              {
+                whileAvailableAbove: effect.whileAvailableAbove,
+                whileAvailableBelow: effect.whileAvailableBelow,
+                whileAvailableAbovePercent: effect.whileAvailableAbovePercent,
+                whileAvailableBelowPercent: effect.whileAvailableBelowPercent,
+              },
             );
           }
         }
