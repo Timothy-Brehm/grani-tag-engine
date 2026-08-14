@@ -198,6 +198,72 @@ describe('generators and continuous actions', () => {
     expect(state.continuousActions.has(key)).toBe(false);
   });
 
+  it('resumes at 0% progress without re-paying Immediate after OT pause', () => {
+    const action: ActionDefinition = {
+      name: 'build-with-rocks',
+      durationTicks: 10,
+      requirements: [{ type: 'free' }],
+      requiredImmediateEffects: [
+        { type: 'adjust-pool', name: 'start', strength: -3, pool: 'Rock' },
+      ],
+      requiredOverTimeEffects: [
+        { type: 'adjust-pool', name: 'work', strength: -10, pool: 'Rock' },
+      ],
+      requiredFinishedEffects: [
+        { type: 'grant-tag', name: 'built', strength: 1 },
+      ],
+      optionalFinishedEffects: [],
+    };
+    let state = withHero({ Rock: 3 }, [
+      createTag({
+        name: 'Pool_Initial_Rock',
+        effects: [
+          {
+            type: 'pool-max',
+            name: 'Rock',
+            strength: 3,
+            pool: 'Rock',
+          },
+        ],
+      }),
+    ]);
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    const key = continuousProgressKey({
+      actorEntityId: 'hero',
+      actionName: 'build-with-rocks',
+    });
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Rock')).toBe(0);
+    expect(state.continuousProgress.get(key)?.progress).toBe(0);
+
+    // First OT slice cannot be paid → pause while still at 0%.
+    state = reduceEngineState(state, { type: 'tick', steps: 1 }, options);
+    expect(state.continuousActions.has(key)).toBe(false);
+    expect(state.continuousProgress.get(key)?.progress).toBe(0);
+
+    state = reduceEngineState(
+      state,
+      { type: 'adjust-pool', entityId: 'hero', pool: 'Rock', delta: 3 },
+      options,
+    );
+    state = reduceEngineState(
+      state,
+      { type: 'execute-action', action, actorEntityId: 'hero' },
+      options,
+    );
+    // Resume must not re-charge the −3 Immediate.
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Rock')).toBe(3);
+    expect(state.continuousProgress.get(key)?.progress).toBe(0);
+    expect(state.continuousActions.has(key)).toBe(true);
+
+    state = reduceEngineState(state, { type: 'tick', steps: 3 }, options);
+    expect(selectPoolCurrent(state.entities.get('hero')!, 'Rock')).toBe(0);
+    expect(state.continuousProgress.get(key)?.progress).toBe(30);
+  });
+
   it('auto-stops when requirements fail and keeps progress', () => {
     const action: ActionDefinition = {
       name: 'gated',

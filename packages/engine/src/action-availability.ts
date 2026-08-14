@@ -420,7 +420,8 @@ export function isActionAvailable<THost>(
     return isActionFinishable(registry, action, context, progress);
   }
 
-  if (progress > 0 && progress < 100) {
+  // Saved progress at 0% still means mid-cycle (Immediate already paid).
+  if (existing !== undefined && progress < 100) {
     const deltaProgress = thisTickDeltaProgress(
       registry,
       action,

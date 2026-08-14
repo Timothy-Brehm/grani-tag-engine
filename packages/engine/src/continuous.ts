@@ -543,10 +543,11 @@ export function startContinuousAction<THost>(
   );
 
   const existing = state.continuousProgress.get(progressKey);
+  // Include progress === 0: start costs were already paid, but the first OT
+  // slice could not run (e.g. pool emptied by Immediate). Resume must not
+  // re-charge Immediate.
   const midCycle =
-    existing !== undefined &&
-    existing.progress > 0 &&
-    existing.progress < 100;
+    existing !== undefined && existing.progress < 100;
 
   const effectiveDuration = selectEffectiveDurationTicks(
     actor,
